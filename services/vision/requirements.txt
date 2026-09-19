@@ -1,0 +1,5 @@
+# This sidecar intentionally excludes PaddleOCR, SAM 2, Qwen Image Layered, PyTorch,
+# and all model/checkpoint packages. VISION-01 through VISION-03 only report readiness.
+fastapi==0.141.1
+httpx==0.28.1
+uvicorn==0.53.0
