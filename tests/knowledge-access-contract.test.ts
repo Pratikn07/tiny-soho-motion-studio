@@ -11,6 +11,9 @@ describe("Tiny Soho private knowledge-reader migration proposal", () => {
     expect(proposal).toContain("CREATE ROLE tiny_soho_studio_reader");
     expect(proposal).toContain("REVOKE ALL PRIVILEGES ON TABLE");
     expect(proposal).toMatch(/FROM anon, authenticated;/);
+    expect(proposal).not.toMatch(/FROM\s+PUBLIC\s*;/i);
+    expect(proposal).toMatch(/ALTER ROLE tiny_soho_studio_reader\s+LOGIN\s+NOSUPERUSER\s+NOCREATEDB\s+NOCREATEROLE\s+NOINHERIT\s+NOBYPASSRLS\s+NOREPLICATION\s*;/is);
+    expect(proposal).not.toMatch(/PASSWORD\s+(?!NULL\b)/i);
     expect(proposal).not.toMatch(/GRANT\s+SELECT[\s\S]*?TO\s+(anon|authenticated)/i);
     expect(proposal).not.toMatch(/CREATE POLICY[\s\S]*?TO\s+(anon|authenticated)/i);
     expect(proposal).toMatch(/CREATE POLICY[\s\S]*?TO tiny_soho_studio_reader USING \(true\);/i);

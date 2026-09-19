@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { configuredKnowledgeSource, formatDirectorEvidence, retrieveCreativeKnowledge, type KnowledgeSource } from "@/lib/knowledge";
+import { configuredKnowledgeSource, formatDirectorEvidence, knowledgeConfigured, retrieveCreativeKnowledge, type KnowledgeSource } from "@/lib/knowledge";
 
 const source: KnowledgeSource = {
   async searchTechniques() {
@@ -43,20 +43,11 @@ describe("creative knowledge retrieval", () => {
     expect(result).toMatchObject({ status: "not-configured", evidence: [] });
   });
 
-  it("fails closed for the retired publishable-key reader", () => {
+  it("legacy Supabase environment variables cannot reactivate knowledge retrieval", () => {
     process.env.TINY_SOHO_SUPABASE_URL = "https://knowledge.example.supabase.co";
     process.env.TINY_SOHO_SUPABASE_PUBLISHABLE_KEY = "test-publishable-key";
 
     expect(configuredKnowledgeSource()).toBeNull();
-  });
-
-  it("refuses a service_role credential or non-Supabase host", () => {
-    process.env.TINY_SOHO_SUPABASE_URL = "https://not-supabase.example";
-    process.env.TINY_SOHO_SUPABASE_PUBLISHABLE_KEY = "test-publishable-key";
-    expect(configuredKnowledgeSource()).toBeNull();
-
-    process.env.TINY_SOHO_SUPABASE_URL = "https://knowledge.example.supabase.co";
-    process.env.TINY_SOHO_SUPABASE_PUBLISHABLE_KEY = "sb_secret_test";
-    expect(configuredKnowledgeSource()).toBeNull();
+    expect(knowledgeConfigured()).toBe(false);
   });
 });

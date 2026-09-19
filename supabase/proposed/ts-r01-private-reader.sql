@@ -2,11 +2,11 @@
 -- supabase/migrations until the user explicitly approves this exact change.
 --
 -- Prerequisites for TS-R02:
---   1. Confirm every active ingestion writer uses postgres or service_role.
---   2. Add a password for tiny_soho_studio_reader outside source control.
+--   1. Confirm the active ingestion writer and its current privileges.
+--   2. Configure secure reader authentication outside source control.
 --   3. Implement the local server-only direct Postgres reader and test it in staging.
 --
--- This proposal intentionally leaves postgres and service_role writer grants intact.
+-- This proposal intentionally does not change unconfirmed writer access.
 BEGIN;
 
 DO $$
@@ -25,24 +25,16 @@ BEGIN
 END
 $$;
 
-GRANT USAGE ON SCHEMA public TO tiny_soho_studio_reader;
+ALTER ROLE tiny_soho_studio_reader
+  LOGIN
+  NOSUPERUSER
+  NOCREATEDB
+  NOCREATEROLE
+  NOINHERIT
+  NOBYPASSRLS
+  NOREPLICATION;
 
-REVOKE ALL PRIVILEGES ON TABLE
-  public.ts_carousel_slides,
-  public.ts_edit_events,
-  public.ts_principle_techniques,
-  public.ts_principles,
-  public.ts_published_videos,
-  public.ts_recipe_techniques,
-  public.ts_recipes,
-  public.ts_reel_techniques,
-  public.ts_reels,
-  public.ts_segments,
-  public.ts_shots,
-  public.ts_slide_techniques,
-  public.ts_techniques,
-  public.ts_tool_guides
-FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO tiny_soho_studio_reader;
 
 REVOKE ALL PRIVILEGES ON TABLE
   public.ts_carousel_slides,
