@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseVisionArtifactId } from "./artifacts";
 
 const DEFAULT_SIDECAR_URL = "http://127.0.0.1:8765";
 const REQUEST_TIMEOUT_MS = 1_500;
@@ -30,6 +31,7 @@ const sidecarCapabilitiesSchema = z.object({
 export type VisionSidecarUnavailable = { status: "unavailable"; reason: string };
 export type VisionHealth = z.infer<typeof healthSchema> | VisionSidecarUnavailable;
 export type VisionCapabilities = z.infer<typeof sidecarCapabilitiesSchema> | VisionSidecarUnavailable;
+export type VisionArtifact = { status: "ready"; body: ReadableStream<Uint8Array>; contentType: string } | { status: "not-found" } | VisionSidecarUnavailable;
 
 export function resolveVisionSidecarUrl(value = process.env.TINY_SOHO_VISION_SIDECAR_URL || DEFAULT_SIDECAR_URL):
   | { ok: true; url: string }
@@ -70,4 +72,22 @@ export function getVisionHealth(configuredUrl?: string): Promise<VisionHealth> {
 
 export function getVisionCapabilities(configuredUrl?: string): Promise<VisionCapabilities> {
   return requestSidecar("/v1/capabilities", sidecarCapabilitiesSchema, configuredUrl);
+}
+
+export async function getVisionArtifact(artifactId: string, configuredUrl?: string): Promise<VisionArtifact> {
+  if (!parseVisionArtifactId(artifactId)) return { status: "not-found" };
+  const resolved = resolveVisionSidecarUrl(configuredUrl);
+  if (!resolved.ok) return { status: "unavailable", reason: resolved.reason };
+  try {
+    const response = await fetch(`${resolved.url}/v1/artifacts/${artifactId}`, {
+      headers: { accept: "application/octet-stream" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (response.status === 404) return { status: "not-found" };
+    if (!response.ok || !response.body) return { status: "unavailable", reason: `Vision sidecar returned HTTP ${response.status}.` };
+    return { status: "ready", body: response.body, contentType: response.headers.get("content-type") || "application/octet-stream" };
+  } catch {
+    return { status: "unavailable", reason: "Vision sidecar is not running or did not respond in time." };
+  }
 }

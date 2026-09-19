@@ -7,9 +7,12 @@ from pathlib import Path
 from typing import Literal
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl, TypeAdapter, model_validator
 
+from .artifacts.manager import ArtifactManager, ArtifactNotFound
+from .config import VisionConfig
 from .hardware import detect_hardware
 from .runtime.registry import RuntimeRegistry
 from .schemas.common import RuntimeStatus
@@ -113,6 +116,12 @@ def sidecar_port() -> int:
 
 
 app = FastAPI(title="Tiny Soho Vision", version=SERVICE_VERSION, docs_url=None, redoc_url=None)
+vision_config = VisionConfig.from_env()
+artifact_manager = ArtifactManager(
+    vision_config.cache_dir,
+    ttl_seconds=vision_config.artifact_ttl_seconds,
+    max_bytes=vision_config.max_upload_bytes,
+)
 runtime_registry = RuntimeRegistry.default()
 
 
@@ -136,6 +145,15 @@ def capabilities() -> CapabilitiesResponse:
         ],
         hardware=HardwareStatus.model_validate(detect_hardware()),
     )
+
+
+@app.get("/v1/artifacts/{artifact_id}")
+def artifact(artifact_id: str) -> FileResponse:
+    try:
+        metadata = artifact_manager.metadata(artifact_id)
+        return FileResponse(artifact_manager.file_path(metadata.id), media_type=metadata.mimeType, filename=f"{metadata.id}.bin")
+    except ArtifactNotFound as error:
+        raise HTTPException(status_code=404, detail="Unknown artifact.") from error
 
 
 def main() -> None:

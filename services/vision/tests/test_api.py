@@ -98,6 +98,22 @@ class VisionSidecarContractTests(unittest.TestCase):
             {"available": False, "deviceCount": 0, "reason": "CUDA is not available."},
         )
 
+    def test_artifact_endpoint_serves_only_an_opaque_artifact_id(self) -> None:
+        app_module = load_module("services.vision.app")
+        self.assertTrue(hasattr(app_module, "artifact_manager"), "Sidecar must expose its opaque artifact manager.")
+        artifact_manager = getattr(app_module, "artifact_manager", None)
+        if artifact_manager is None:
+            return
+        metadata = artifact_manager.write_bytes(kind="mask", mime_type="image/png", data=b"sidecar-artifact")
+
+        response = get(app_module.app, f"/v1/artifacts/{metadata.id}")
+        traversal_response = get(app_module.app, "/v1/artifacts/../../etc/passwd")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"sidecar-artifact")
+        self.assertEqual(response.headers["content-type"], "image/png")
+        self.assertEqual(traversal_response.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()
