@@ -276,6 +276,7 @@ async def overlay(image: UploadFile = File(...), regions: str = Form(...)) -> Ov
         width=result.width,
         height=result.height,
         protectedRegionIds=result.protectedRegionIds,
+        paddingPixels=result.paddingPixels,
     )
 
 

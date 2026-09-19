@@ -18,6 +18,7 @@ describe("motion package bridge", () => {
         width: 100,
         height: 80,
         protectedRegionIds: ["headline"],
+        mode: "original-region-patch",
       },
       plan,
     });
@@ -29,5 +30,7 @@ describe("motion package bridge", () => {
     expect(prompt).toContain("Typography is composited locally");
     expect(draft).toMatchObject({ submitted: false, mode: "mock" });
     expect(draft.prompt).toBe(prompt);
+    expect(pkg.generationPlate.artifactId).toBe(pkg.sourceImage.artifactId);
+    expect(pkg.provenance.overlayMode).toBe("original-region-patch");
   });
 });

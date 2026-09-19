@@ -50,6 +50,8 @@ class TrustedOverlayTests(unittest.TestCase):
             self.assertEqual(image.size, (100, 80))
             self.assertEqual(image.getpixel((50, 40)), (255, 128, 0, 255))
             self.assertEqual(image.getpixel((5, 5))[3], 0)
+            self.assertGreater(image.getpixel((38, 40))[3], 0)
+        self.assertEqual(overlay.paddingPixels, 2)
 
     def test_overlay_artifact_uses_an_owned_source_artifact_id_not_a_browser_path(self) -> None:
         artifacts_module = load_module("services.vision.artifacts.manager")
@@ -69,4 +71,5 @@ class TrustedOverlayTests(unittest.TestCase):
             self.assertRegex(overlay.artifactId, r"^[0-9a-f-]{36}$")
             self.assertNotEqual(overlay.artifactId, source.id)
             self.assertEqual(overlay.sourceArtifactId, source.id)
+            self.assertEqual(overlay.mode, "original-region-patch")
             self.assertEqual(manager.metadata(overlay.artifactId).kind, "typography-overlay")

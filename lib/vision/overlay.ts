@@ -8,6 +8,8 @@ export const typographyOverlayResultSchema = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   protectedRegionIds: z.array(z.string().min(1)),
+  paddingPixels: z.number().int().nonnegative(),
+  mode: z.literal("original-region-patch"),
 });
 
 export const typographyOverlayRegionsSchema = z.array(ocrRegionSchema);

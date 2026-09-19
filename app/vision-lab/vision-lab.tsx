@@ -9,7 +9,7 @@ import { planJson, stateFromResponse, type VisionLabState } from "./model";
 type OcrRegion = { id: string; text: string; boundingBox: { x: number; y: number; width: number; height: number } };
 type OcrResult = { image: { width: number; height: number }; regions: OcrRegion[]; typographySafetyMaskArtifactId: string | null };
 type SegmentationResult = { masks: { artifactId: string; boundingBox: { x: number; y: number; width: number; height: number } }[] };
-type OverlayResult = { artifactId: string; sourceArtifactId: string; width: number; height: number; protectedRegionIds: string[] };
+type OverlayResult = { artifactId: string; sourceArtifactId: string; width: number; height: number; protectedRegionIds: string[]; paddingPixels: number; mode: "original-region-patch" };
 
 const stateLabel: Record<VisionLabState, string> = {
   idle: "Choose a local image to begin.",

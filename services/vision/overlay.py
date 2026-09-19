@@ -4,10 +4,12 @@ from dataclasses import dataclass
 from io import BytesIO
 
 from PIL import Image, ImageDraw
+from PIL import ImageFilter
 
 from .artifacts.manager import ArtifactManager
 from .image_input import DecodedImage, decode_image
 from .schemas.ocr import OcrRegion
+from .typography import default_padding_pixels
 
 
 @dataclass(frozen=True)
@@ -16,6 +18,7 @@ class TypographyOverlay:
     width: int
     height: int
     protectedRegionIds: list[str]
+    paddingPixels: int
 
 
 @dataclass(frozen=True)
@@ -25,9 +28,11 @@ class OverlayArtifact:
     width: int
     height: int
     protectedRegionIds: list[str]
+    paddingPixels: int
+    mode: str = "original-region-patch"
 
 
-def create_typography_overlay(source: DecodedImage, regions: list[OcrRegion]) -> TypographyOverlay:
+def create_typography_overlay(source: DecodedImage, regions: list[OcrRegion], *, padding_pixels: int | None = None) -> TypographyOverlay:
     with Image.open(BytesIO(source.data)) as original:
         source_rgba = original.convert("RGBA")
     mask = Image.new("L", source_rgba.size, 0)
@@ -35,6 +40,9 @@ def create_typography_overlay(source: DecodedImage, regions: list[OcrRegion]) ->
     for region in regions:
         points = [(round(point.x * source_rgba.width), round(point.y * source_rgba.height)) for point in region.polygon]
         draw.polygon(points, fill=255)
+    padding = default_padding_pixels(source_rgba.width, source_rgba.height) if padding_pixels is None else padding_pixels
+    if padding > 0:
+        mask = mask.filter(ImageFilter.MaxFilter(size=padding * 2 + 1))
     overlay = Image.new("RGBA", source_rgba.size, (0, 0, 0, 0))
     overlay.paste(source_rgba, (0, 0), mask)
     buffer = BytesIO()
@@ -44,6 +52,7 @@ def create_typography_overlay(source: DecodedImage, regions: list[OcrRegion]) ->
         width=source_rgba.width,
         height=source_rgba.height,
         protectedRegionIds=[region.id for region in regions],
+        paddingPixels=padding,
     )
 
 
@@ -63,4 +72,5 @@ def create_overlay_artifact(manager: ArtifactManager, source_artifact_id: str, r
         width=overlay.width,
         height=overlay.height,
         protectedRegionIds=overlay.protectedRegionIds,
+        paddingPixels=overlay.paddingPixels,
     )
