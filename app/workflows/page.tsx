@@ -4,49 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 import { ReactFlow, Background, Controls, addEdge, useEdgesState, useNodesState, type Connection } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-type Project = { id: string; name: string };
-type Workflow = { id: string; name: string; graph: string };
-
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers || {}) } });
-  const body = await response.json();
-  if (!response.ok) throw new Error(body.error || "Request failed");
-  return body;
-}
-
-const initialNodes = [
-  { id: "input", position: { x: 40, y: 110 }, data: { label: "Asset input" }, type: "input" },
-  { id: "shot", position: { x: 290, y: 110 }, data: { label: "Generate video" }, type: "default" },
-  { id: "export", position: { x: 540, y: 110 }, data: { label: "Local export" }, type: "output" },
-];
-const initialEdges = [{ id: "input-shot", source: "input", target: "shot" }, { id: "shot-export", source: "shot", target: "export" }];
+type Project = { id: string; name: string }; type Asset = { id: string; name: string; mime: string }; type Model = { id: string; label: string; media: string; eligible: boolean }; type Workflow = { id: string; name: string; graph: string };
+async function api<T>(url: string, init?: RequestInit): Promise<T> { const response = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers || {}) } }); const body = await response.json(); if (!response.ok) throw new Error(body.error || "Request failed"); return body; }
+const initialNodes = [{ id: "input", position: { x: 40, y: 110 }, data: { label: "Asset input" }, type: "input" }, { id: "shot", position: { x: 330, y: 110 }, data: { label: "Generate video" }, type: "output" }];
+const initialEdges = [{ id: "input-shot", source: "input", target: "shot" }];
 
 export default function WorkflowEditor() {
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState("");
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [selected, setSelected] = useState("");
-  const [notice, setNotice] = useState("Build a local workflow, then run an immutable snapshot.");
-
-  useEffect(() => { void Promise.all([api<Project[]>("/api/projects"), api<Workflow[]>("/api/workflows")]).then(([p, w]) => { setProjects(p); setProjectId(p[0]?.id || ""); setWorkflows(w); }); }, []);
+  const [nodes, , onNodesChange] = useNodesState(initialNodes); const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges); const [projects, setProjects] = useState<Project[]>([]); const [projectId, setProjectId] = useState(""); const [assets, setAssets] = useState<Asset[]>([]); const [models, setModels] = useState<Model[]>([]); const [assetId, setAssetId] = useState(""); const [modelId, setModelId] = useState("alibaba:wan2.7-i2v"); const [prompt, setPrompt] = useState("Gentle ambient movement"); const [workflows, setWorkflows] = useState<Workflow[]>([]); const [selected, setSelected] = useState(""); const [notice, setNotice] = useState("Connect explicit local inputs, then run an immutable workflow snapshot.");
+  const refresh = async () => { const [projectList, workflowList, modelList] = await Promise.all([api<Project[]>("/api/projects"), api<Workflow[]>("/api/workflows"), api<Model[]>("/api/models")]); setProjects(projectList); setWorkflows(workflowList); setModels(modelList.filter((model) => model.media === "video")); const nextProject = projectId || projectList[0]?.id || ""; if (nextProject && nextProject !== projectId) setProjectId(nextProject); if (nextProject) { const library = await api<Asset[]>(`/api/assets?projectId=${nextProject}`); const images = library.filter((asset) => asset.mime.startsWith("image/")); setAssets(images); if (!assetId && images[0]) setAssetId(images[0].id); } };
+  useEffect(() => { void refresh().catch((error) => setNotice(error instanceof Error ? error.message : "Unable to load workflows.")); }, [projectId]);
   const connect = useCallback((connection: Connection) => setEdges((current) => addEdge(connection, current)), [setEdges]);
-  const save = async () => {
-    try {
-      const graph = {
-        nodes: nodes.map((node) => ({ id: node.id, type: node.id === "shot" ? "generate-video" : node.id === "input" ? "asset" : "export", data: node.id === "shot" ? { modelId: "alibaba:wan2.7-i2v", prompt: "Gentle ambient movement", inputAssetIds: [], inputRoles: [] } : {} })),
-        edges: edges.map((edge) => ({ source: edge.source, target: edge.target })),
-      };
-      const workflow = await api<Workflow>("/api/workflows", { method: "POST", body: JSON.stringify({ name: "Custom visual workflow", graph }) });
-      setWorkflows((current) => [workflow, ...current]); setSelected(workflow.id); setNotice("Saved a versioned workflow graph.");
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Workflow could not be saved"); }
-  };
-  const run = async () => {
-    if (!selected || !projectId) return;
-    try { const result = await api<any>(`/api/workflows/${selected}/runs`, { method: "POST", body: JSON.stringify({ projectId }) }); setNotice(`Run ${result.run.id.slice(-8)} created ${result.createdJobs.length} checkpointed job(s).`); }
-    catch (error) { setNotice(error instanceof Error ? error.message : "Run could not start"); }
-  };
-
-  return <main className="board"><a href="/">← Studio</a><h1>Visual workflow builder</h1><p>Connect approved local steps. Generation nodes create durable jobs once; the worker resumes their run state after a restart.</p><label>Project<select value={projectId} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><div style={{ height: 360, border: "1px solid #ddd7cd", borderRadius: 14, background: "#fffdf8" }}><ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={connect} fitView><Background/><Controls/></ReactFlow></div><div style={{ display: "flex", gap: 10, marginTop: 18, alignItems: "center" }}><button className="batch" onClick={save}>Save workflow version</button><select value={selected} onChange={(event) => setSelected(event.target.value)}><option value="">Choose saved workflow</option>{workflows.map((workflow) => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select><button className="batch" onClick={run} disabled={!selected || !projectId}>Run selected workflow</button></div><p className="board-notice">{notice}</p></main>;
+  const save = async () => { try { const graph = { nodes: nodes.map((node) => ({ id: node.id, type: node.id === "input" ? "asset" : "generate-video", data: node.id === "input" ? { assetId } : { modelId, prompt } })), edges: edges.map((edge) => ({ source: edge.source, target: edge.target, ...(edge.source === "input" && edge.target === "shot" ? { targetRole: "start-image" } : {}) })) }; const workflow = await api<Workflow>("/api/workflows", { method: "POST", body: JSON.stringify({ name: "Asset to animated clip", graph }) }); setWorkflows((current) => [workflow, ...current]); setSelected(workflow.id); setNotice("Saved a versioned graph with an explicit start-image edge."); } catch (error) { setNotice(error instanceof Error ? error.message : "Workflow could not be saved."); } };
+  const run = async () => { if (!selected || !projectId) return; try { const result = await api<{ run: { id: string }; createdJobs: { id: string }[] }>(`/api/workflows/${selected}/runs`, { method: "POST", body: JSON.stringify({ projectId }) }); setNotice(`Run ${result.run.id.slice(-8)} created ${result.createdJobs.length} checkpointed job(s).`); } catch (error) { setNotice(error instanceof Error ? error.message : "Run could not start."); } };
+  return <main className="board"><a href="/">← Studio</a><h1>Visual workflow builder</h1><p>Generation nodes wait for completed incoming edges. The asset-to-shot edge is explicitly mapped to a start image; unsupported nodes remain pending instead of being falsely marked complete.</p><label>Project<select value={projectId} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label>Input image<select value={assetId} onChange={(event) => setAssetId(event.target.value)}><option value="">Choose an image</option>{assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label><label>Video model<select value={modelId} onChange={(event) => setModelId(event.target.value)}>{models.map((model) => <option key={model.id} value={model.id}>{model.label}{model.eligible ? "" : " — blocked"}</option>)}</select></label><label>Prompt<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} /></label><div style={{ height: 300, border: "1px solid #ddd7cd", borderRadius: 14, background: "#fffdf8" }}><ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={connect} fitView><Background /><Controls /></ReactFlow></div><div style={{ display: "flex", gap: 10, marginTop: 18, alignItems: "center" }}><button className="batch" onClick={save} disabled={!assetId}>Save workflow version</button><select value={selected} onChange={(event) => setSelected(event.target.value)}><option value="">Choose saved workflow</option>{workflows.map((workflow) => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select><button className="batch" onClick={run} disabled={!selected || !projectId}>Run selected workflow</button></div><p className="board-notice">{notice}</p></main>;
 }

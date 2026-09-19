@@ -1,30 +1,86 @@
+import { normalizeMediaRole, type MediaRole } from "./models";
+import { queueGeneration, type GenerationMedia } from "./generation";
 import type { createStore } from "./store";
 
 type Node = { id: string; type: string; data?: Record<string, unknown> };
-type Graph = { nodes: Node[]; edges: { source: string; target: string }[] };
-type State = { status: "running" | "completed" | "failed"; nodes: Record<string, { status: string; jobId?: string; outputAssetId?: string; error?: string }> };
+type Edge = { source: string; target: string; targetRole?: MediaRole };
+type Graph = { nodes: Node[]; edges: Edge[] };
+type NodeState = { status: "queued" | "completed" | "failed" | "pending"; jobId?: string; outputAssetId?: string; error?: string };
+type State = { status: "running" | "completed" | "failed"; nodes: Record<string, NodeState> };
 
 export function validateWorkflow(graph: Graph) {
   if (!Array.isArray(graph.nodes) || graph.nodes.length > 100) throw new Error("Workflow must have at most 100 nodes.");
+  if (!Array.isArray(graph.edges)) throw new Error("Workflow edges are required.");
   const ids = new Set(graph.nodes.map((node) => node.id));
-  if (ids.size !== graph.nodes.length || graph.edges.some((edge) => !ids.has(edge.source) || !ids.has(edge.target))) throw new Error("Workflow has invalid node references.");
+  if (ids.size !== graph.nodes.length || graph.nodes.some((node) => !node.id) || graph.edges.some((edge) => !ids.has(edge.source) || !ids.has(edge.target))) throw new Error("Workflow has invalid node references.");
   const seen = new Set<string>(); const active = new Set<string>(); const next = new Map<string, string[]>(); graph.edges.forEach((edge) => next.set(edge.source, [...(next.get(edge.source) || []), edge.target]));
   const visit = (node: string): boolean => { if (active.has(node)) return true; if (seen.has(node)) return false; seen.add(node); active.add(node); const cycle = (next.get(node) || []).some(visit); active.delete(node); return cycle; };
   if (graph.nodes.some((node) => visit(node.id))) throw new Error("Workflow cannot contain a cycle.");
 }
 
+const mediaFromData = (data: Record<string, unknown>) => {
+  if (Array.isArray(data.media)) return data.media.map((item) => {
+    if (!item || typeof item !== "object" || typeof (item as { assetId?: unknown }).assetId !== "string" || typeof (item as { role?: unknown }).role !== "string") throw new Error("Workflow media must include an asset and role.");
+    return { assetId: (item as { assetId: string }).assetId, role: normalizeMediaRole((item as { role: string }).role) };
+  });
+  const assetIds = Array.isArray(data.inputAssetIds) ? data.inputAssetIds : []; const roles = Array.isArray(data.inputRoles) ? data.inputRoles : [];
+  if (assetIds.length !== roles.length) throw new Error("Workflow input assets need matching roles.");
+  return assetIds.map((assetId, index) => {
+    if (typeof assetId !== "string" || typeof roles[index] !== "string") throw new Error("Workflow input assets need matching roles.");
+    return { assetId, role: normalizeMediaRole(roles[index]) };
+  });
+};
+
+function refreshJobs(store: ReturnType<typeof createStore>, state: State) {
+  for (const node of Object.values(state.nodes)) {
+    if (!node.jobId || node.status === "completed" || node.status === "failed") continue;
+    const job = store.getJob(node.jobId);
+    if (job?.status === "completed") { node.status = "completed"; node.outputAssetId = job.outputAssetId || undefined; }
+    else if (["failed", "needs_attention", "canceled"].includes(job?.status || "")) { node.status = "failed"; node.error = job?.error || job?.status; }
+  }
+}
+
 export function executeWorkflowRun(store: ReturnType<typeof createStore>, runId: string, eligibleModels: Set<string>) {
   const run = store.getWorkflowRun(runId); if (!run) throw new Error("Workflow run not found"); const graph = JSON.parse(run.graph) as Graph; validateWorkflow(graph); const state = JSON.parse(run.state) as State; const createdJobs: { id: string }[] = [];
-  for (const node of graph.nodes) {
-    const saved = state.nodes[node.id]; if (saved?.status === "completed" || saved?.jobId) continue;
-    if (node.type === "generate-video" || node.type === "generate-image") {
-      const data = node.data || {}; const modelId = String(data.modelId || ""); if (!eligibleModels.has(modelId)) { state.nodes[node.id] = { status: "failed", error: "Free Quota Only is not confirmed for this model." }; state.status = "failed"; continue; }
-      const job = store.createJob({ projectId: run.projectId, idempotencyKey: `${run.id}:${node.id}`, modelId, task: node.type === "generate-image" ? "text-to-image" : "image-to-video", prompt: String(data.prompt || ""), inputAssetIds: Array.isArray(data.inputAssetIds) ? data.inputAssetIds as string[] : [], options: { ...(data.options as object || {}), inputRoles: Array.isArray(data.inputRoles) ? data.inputRoles : [] } });
-      state.nodes[node.id] = { status: job.status, jobId: job.id }; createdJobs.push({ id: job.id }); continue;
+  refreshJobs(store, state);
+  let progressed = true;
+  while (progressed) {
+    progressed = false;
+    for (const node of graph.nodes) {
+      const saved = state.nodes[node.id]; if (saved) continue;
+      const incoming = graph.edges.filter((edge) => edge.target === node.id); const parents = incoming.map((edge) => state.nodes[edge.source]);
+      if (parents.some((parent) => parent?.status === "failed")) { state.nodes[node.id] = { status: "failed", error: "An upstream workflow node failed." }; progressed = true; continue; }
+      if (parents.some((parent) => parent?.status !== "completed")) continue;
+      const data = node.data || {};
+      try {
+        if (node.type === "asset") {
+          const assetId = typeof data.assetId === "string" ? data.assetId : ""; const asset = assetId ? store.getAsset(assetId) : null;
+          if (!asset) throw new Error("Asset nodes require a local asset.");
+          if (asset.projectId && asset.projectId !== run.projectId) throw new Error("Asset nodes must use an asset from the run project.");
+          state.nodes[node.id] = { status: "completed", outputAssetId: asset.id };
+        } else if (node.type === "prompt-template" || node.type === "noop") {
+          state.nodes[node.id] = { status: "completed" };
+        } else if (node.type === "generate-video" || node.type === "generate-image") {
+          const media: GenerationMedia[] = mediaFromData(data);
+          for (const edge of incoming) {
+            const source = state.nodes[edge.source];
+            if (!source?.outputAssetId) continue;
+            if (!edge.targetRole) throw new Error("Workflow asset edges require an explicit target media role.");
+            media.push({ assetId: source.outputAssetId, role: normalizeMediaRole(edge.targetRole) });
+          }
+          const job = queueGeneration(store, { projectId: run.projectId, idempotencyKey: `${run.id}:${node.id}`, modelId: String(data.modelId || ""), prompt: String(data.prompt || ""), media, options: (data.options as Record<string, unknown> | undefined) || {} }, eligibleModels);
+          state.nodes[node.id] = { status: job.status === "completed" ? "completed" : "queued", jobId: job.id, outputAssetId: job.outputAssetId || undefined }; createdJobs.push({ id: job.id });
+        } else {
+          state.nodes[node.id] = { status: "pending", error: `${node.type} requires an executor before this workflow can complete.` };
+        }
+      } catch (error) {
+        state.nodes[node.id] = { status: "failed", error: error instanceof Error ? error.message : "Workflow node failed." };
+      }
+      progressed = true;
     }
-    state.nodes[node.id] = { status: "completed" };
   }
-  for (const node of graph.nodes) { const nodeState = state.nodes[node.id]; if (!nodeState?.jobId) continue; const job = store.getJob(nodeState.jobId); if (job?.status === "completed") state.nodes[node.id] = { status: "completed", jobId: job.id, outputAssetId: job.outputAssetId || undefined }; else if (["failed", "needs_attention", "canceled"].includes(job?.status || "")) { state.nodes[node.id] = { status: "failed", jobId: job!.id, error: job!.error || job!.status }; state.status = "failed"; } }
-  if (Object.values(state.nodes).length === graph.nodes.length && Object.values(state.nodes).every((node) => node.status === "completed")) state.status = "completed";
+  if (Object.values(state.nodes).some((node) => node.status === "failed")) state.status = "failed";
+  else if (graph.nodes.every((node) => state.nodes[node.id]?.status === "completed")) state.status = "completed";
+  else state.status = "running";
   store.updateWorkflowRun(runId, state); return { createdJobs, state };
 }

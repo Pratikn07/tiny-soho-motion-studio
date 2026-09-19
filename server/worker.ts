@@ -24,8 +24,10 @@ async function tick() {
   const job = db.claimNextJob();
   if (!job) return;
   try {
-    const assets = JSON.parse(job.inputAssetIds) as string[];
-    const inputs = await Promise.all(assets.map(async (assetId) => { const asset = db.getAsset(assetId); if (!asset) throw new Error("Referenced asset is missing."); return { mime: asset.mime, bytes: await fs.readFile(asset.path), role: (JSON.parse(job.options).inputRoles?.[assets.indexOf(assetId)] || "first-frame") as string }; }));
+    const assets = JSON.parse(job.inputAssetIds) as string[]; const options = JSON.parse(job.options) as { media?: Array<{ assetId?: string; role?: string }>; inputRoles?: string[] };
+    const roles = options.media?.map((media) => media.role) || options.inputRoles;
+    if (!roles || roles.length !== assets.length || roles.some((role) => typeof role !== "string")) throw new Error("Job is missing explicit media roles and cannot be submitted safely.");
+    const inputs = await Promise.all(assets.map(async (assetId, index) => { const asset = db.getAsset(assetId); if (!asset) throw new Error("Referenced asset is missing."); return { mime: asset.mime, bytes: await fs.readFile(asset.path), role: roles[index] as string }; }));
     const result = await submitAlibabaJob(job, inputs);
     if (result.outputUrl) { db.updateJob(job.id, { status: "downloading" }); await outputFor(job, result.outputUrl); } else db.updateJob(job.id, { status: "submitted", providerTaskId: result.providerTaskId });
   } catch (error) { db.updateJob(job.id, { status: "failed", error: error instanceof Error ? error.message : "Submission failed" }); }
