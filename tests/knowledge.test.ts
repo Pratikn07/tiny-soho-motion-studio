@@ -43,19 +43,11 @@ describe("creative knowledge retrieval", () => {
     expect(result).toMatchObject({ status: "not-configured", evidence: [] });
   });
 
-  it("uses only allowlisted read endpoints when configured", async () => {
+  it("fails closed for the retired publishable-key reader", () => {
     process.env.TINY_SOHO_SUPABASE_URL = "https://knowledge.example.supabase.co";
     process.env.TINY_SOHO_SUPABASE_PUBLISHABLE_KEY = "test-publishable-key";
-    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } }));
-    vi.stubGlobal("fetch", fetchMock);
 
-    await retrieveCreativeKnowledge("slow product motion", configuredKnowledgeSource());
-
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    for (const [url, init] of fetchMock.mock.calls) {
-      expect(String(url)).toMatch(/^https:\/\/knowledge\.example\.supabase\.co\/rest\/v1\/ts_(techniques|segments|shots|carousel_slides|tool_guides)\?/);
-      expect(init).toMatchObject({ headers: { apikey: "test-publishable-key", Authorization: "Bearer test-publishable-key" } });
-    }
+    expect(configuredKnowledgeSource()).toBeNull();
   });
 
   it("refuses a service_role credential or non-Supabase host", () => {

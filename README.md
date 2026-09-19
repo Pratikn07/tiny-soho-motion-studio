@@ -13,22 +13,15 @@ npm run dev
 
 Open [http://127.0.0.1:3001](http://127.0.0.1:3001).
 
-`npm run setup` checks FFmpeg and asks for your Singapore workspace ID and DashScope key. It can also configure optional Tiny Soho creative-knowledge retrieval. It writes a local, gitignored `.env` with owner-only permissions. Do not put keys in the browser or source code.
+`npm run setup` checks FFmpeg and asks for your Singapore workspace ID and DashScope key. It writes a local, gitignored `.env` with owner-only permissions. Do not put keys in the browser or source code.
 
 ## Optional Tiny Soho creative knowledge
 
-The Director can retrieve and cite matching Tiny Soho techniques, segments, shots, carousel slides, and tool guides before it drafts a proposal. Retrieval is server-only: the browser never receives the Supabase URL or key, and the immutable proposal records the exact evidence used.
+Creative-knowledge retrieval is temporarily disabled while its Supabase read boundary is remediated. The previous publishable-key Data API reader is deliberately fail-closed: a local browser app must not imply that an anonymous table reader is private simply because the key stays on the Next.js server.
 
-Before enabling it, apply [the read-only policy migration](supabase/migrations/20260918202000_tiny_soho_knowledge_read_only.sql) to the connected Supabase project. It removes anonymous and authenticated mutation privileges from all `ts_*` knowledge tables, removes their unrestricted `pipeline all` RLS policies, and retains only anonymous `SELECT` access for the local read path. Existing `postgres` and `service_role` ingestion privileges are not changed.
+TS-R01 selected a dedicated, server-only database reader role. The exact **unapplied** proposal and the audit basis are in [the knowledge-access decision](docs/architecture/tiny-soho-knowledge-access.md). Do not run it or add Supabase credentials to `.env` until TS-R02 implements the private reader and you explicitly approve the production migration.
 
-Then run `npm run setup` and answer `y` to the knowledge-retrieval prompt. It stores only these server environment values locally:
-
-```text
-TINY_SOHO_SUPABASE_URL
-TINY_SOHO_SUPABASE_PUBLISHABLE_KEY
-```
-
-Use a Supabase publishable key only—never a `service_role` key. If the connection is absent, unavailable, or has no matching evidence, the Director says so and does not invent a citation.
+Until then, the Director continues to draft without external Tiny Soho evidence and never fabricates citations.
 
 ## Before generating
 
