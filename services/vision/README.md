@@ -34,3 +34,7 @@ separately. It is provenance metadata only; it does not enable inference.
 installed by the base requirements or CI. The current adapter remains
 unavailable until an operator supplies a separately reviewed checkpoint with a
 verified license. No code path downloads checkpoints automatically.
+
+`requirements/sam2.txt` is also opt-in and excluded from base CI. It may only
+be used after an operator has supplied a reviewed checkpoint through
+`TINY_SOHO_SAM2_CHECKPOINT_PATH`; the sidecar never fetches it.

@@ -7,19 +7,21 @@ from pathlib import Path
 from typing import Literal
 
 import uvicorn
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl, TypeAdapter, model_validator
 
 from .artifacts.manager import ArtifactManager, ArtifactNotFound
 from .adapters.base import VisionCapabilityUnavailable
 from .adapters.paddle_ocr import default_paddle_ocr_adapter
+from .adapters.sam2 import default_sam2_adapter
 from .config import VisionConfig
 from .hardware import detect_hardware
 from .image_input import ImageInputError, decode_upload
 from .runtime.registry import RuntimeRegistry
 from .schemas.common import RuntimeStatus
 from .schemas.ocr import OcrResult
+from .schemas.segmentation import SegmentationMask, SegmentationPrompts, SegmentationResult
 from .typography import create_typography_safety_mask
 
 
@@ -129,6 +131,7 @@ artifact_manager = ArtifactManager(
 )
 runtime_registry = RuntimeRegistry.default()
 ocr_adapter = default_paddle_ocr_adapter(vision_config.paddle_ocr_enabled)
+segmentation_adapter = default_sam2_adapter(vision_config.sam2_enabled, vision_config.sam2_checkpoint_path)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -179,6 +182,37 @@ async def ocr(image: UploadFile = File(...)) -> OcrResult:
     mask = create_typography_safety_mask(decoded.width, decoded.height, result.regions)
     metadata = artifact_manager.write_bytes(kind="typography-safety-mask", mime_type="image/png", data=mask.png)
     return result.model_copy(update={"typographySafetyMaskArtifactId": metadata.id})
+
+
+@app.post("/v1/segment", response_model=SegmentationResult)
+async def segment(image: UploadFile = File(...), prompts: str = Form(...)) -> SegmentationResult:
+    try:
+        decoded = await decode_upload(
+            image,
+            max_bytes=vision_config.max_upload_bytes,
+            max_pixels=vision_config.max_image_pixels,
+        )
+        parsed_prompts = SegmentationPrompts.model_validate(json.loads(prompts))
+    except (ImageInputError, ValueError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    try:
+        predictions = await segmentation_adapter.segment(decoded, parsed_prompts)
+    except VisionCapabilityUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    masks = []
+    for prediction in predictions:
+        metadata = artifact_manager.write_bytes(kind="segmentation-mask", mime_type="image/png", data=prediction.png)
+        masks.append(SegmentationMask(
+            id=prediction.id,
+            artifactId=metadata.id,
+            boundingBox=prediction.boundingBox,
+            score=prediction.score,
+        ))
+    return SegmentationResult(
+        image={"width": decoded.width, "height": decoded.height},
+        masks=masks,
+        engine=segmentation_adapter.engine,
+    )
 
 
 def main() -> None:

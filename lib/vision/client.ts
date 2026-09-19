@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parseVisionArtifactId } from "./artifacts";
-import { ocrResultSchema, type OcrResult } from "./contracts";
+import { ocrResultSchema, segmentationResultSchema, type OcrResult, type SegmentationResult } from "./contracts";
 
 const DEFAULT_SIDECAR_URL = "http://127.0.0.1:8765";
 const REQUEST_TIMEOUT_MS = 1_500;
@@ -92,6 +92,10 @@ async function submitVisionUpload<T>(path: string, formData: FormData, schema: z
 
 export function runVisionOcr(formData: FormData, configuredUrl?: string): Promise<OcrResult | VisionSidecarUnavailable> {
   return submitVisionUpload("/v1/ocr", formData, ocrResultSchema, configuredUrl);
+}
+
+export function runVisionSegmentation(formData: FormData, configuredUrl?: string): Promise<SegmentationResult | VisionSidecarUnavailable> {
+  return submitVisionUpload("/v1/segment", formData, segmentationResultSchema, configuredUrl);
 }
 
 export async function getVisionArtifact(artifactId: string, configuredUrl?: string): Promise<VisionArtifact> {

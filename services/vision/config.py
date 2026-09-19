@@ -24,6 +24,7 @@ class VisionConfig:
     max_image_pixels: int
     paddle_ocr_enabled: bool
     sam2_enabled: bool
+    sam2_checkpoint_path: Path | None
     qwen_layers_enabled: bool
 
     @classmethod
@@ -36,5 +37,10 @@ class VisionConfig:
             max_image_pixels=_positive_int(os.environ.get("TINY_SOHO_VISION_MAX_IMAGE_PIXELS", "40000000"), "TINY_SOHO_VISION_MAX_IMAGE_PIXELS"),
             paddle_ocr_enabled=os.environ.get("TINY_SOHO_PADDLE_OCR_ENABLED") == "1",
             sam2_enabled=os.environ.get("TINY_SOHO_SAM2_ENABLED") == "1",
+            sam2_checkpoint_path=_optional_path(os.environ.get("TINY_SOHO_SAM2_CHECKPOINT_PATH")),
             qwen_layers_enabled=os.environ.get("TINY_SOHO_QWEN_LAYERS_ENABLED") == "1",
         )
+
+
+def _optional_path(value: str | None) -> Path | None:
+    return Path(value).expanduser() if value else None

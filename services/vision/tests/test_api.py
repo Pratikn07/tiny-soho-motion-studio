@@ -160,6 +160,48 @@ class VisionSidecarContractTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_segment_endpoint_stores_only_an_opaque_mask_artifact(self) -> None:
+        app_module = load_module("services.vision.app")
+        adapter_module = load_module("services.vision.adapters.sam2")
+        original_adapter = getattr(app_module, "segmentation_adapter", None)
+        app_module.segmentation_adapter = adapter_module.FakeSegmentationAdapter()
+        try:
+            async def request() -> httpx.Response:
+                transport = httpx.ASGITransport(app=app_module.app)
+                async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                    return await client.post(
+                        "/v1/segment",
+                        files={"image": ("slide.png", ONE_PIXEL_PNG, "image/png")},
+                        data={"prompts": '{"positivePoints":[{"x":0.5,"y":0.5}]}'},
+                    )
+
+            response = asyncio.run(request())
+        finally:
+            app_module.segmentation_adapter = original_adapter
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertNotIn("pixels", payload)
+        self.assertRegex(payload["masks"][0]["artifactId"], r"^[0-9a-f-]{36}$")
+        artifact = get(app_module.app, f"/v1/artifacts/{payload['masks'][0]['artifactId']}")
+        self.assertEqual(artifact.status_code, 200)
+        self.assertEqual(artifact.headers["content-type"], "image/png")
+
+    def test_segment_endpoint_reports_an_unavailable_backend_without_implicit_download(self) -> None:
+        app_module = load_module("services.vision.app")
+
+        async def request() -> httpx.Response:
+            transport = httpx.ASGITransport(app=app_module.app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                return await client.post(
+                    "/v1/segment",
+                    files={"image": ("slide.png", ONE_PIXEL_PNG, "image/png")},
+                    data={"prompts": '{"positivePoints":[{"x":0.5,"y":0.5}]}'},
+                )
+
+        response = asyncio.run(request())
+        self.assertEqual(response.status_code, 503)
+
 
 if __name__ == "__main__":
     unittest.main()
