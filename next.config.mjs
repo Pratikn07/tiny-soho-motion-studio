@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['studio', 'ai-agent', 'workflow-builder', 'design-agent'],
+  experimental: { serverActions: { bodySizeLimit: '25mb' } },
+  poweredByHeader: false,
 };
 
 export default nextConfig;
