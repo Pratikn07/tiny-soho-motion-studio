@@ -3,12 +3,12 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from PIL import ImageChops
+from PIL import Image, ImageDraw
 
 from .base import VisionCapabilityUnavailable
 from ..image_input import DecodedImage
-from ..layers import alpha_coverage, centered_subject_mask, decoded_rgba, encode_rgba
-from ..schemas.layers import LayerBackend, LayerPrediction
+from ..layers import alpha_coverage, decoded_rgba, encode_rgba
+from ..schemas.layers import LayerBackend, LayerOptions, LayerPrediction
 
 
 class FakeQwenLayersBackend:
@@ -16,19 +16,26 @@ class FakeQwenLayersBackend:
 
     backend = LayerBackend(provider="FakeQwenLayersBackend", model="deterministic-rgba", version="1")
 
-    async def decompose(self, image: DecodedImage, prompt: str | None = None) -> list[LayerPrediction]:
+    async def decompose(self, image: DecodedImage, options: LayerOptions = LayerOptions()) -> list[LayerPrediction]:
         source = decoded_rgba(image)
-        subject_alpha = centered_subject_mask(source.width, source.height)
-        background_alpha = ImageChops.invert(subject_alpha)
-
-        background = source.copy()
-        background.putalpha(background_alpha)
-        subject = source.copy()
-        subject.putalpha(subject_alpha)
-        return [
-            LayerPrediction(id="background", png=encode_rgba(background), zIndex=0, alphaCoverage=alpha_coverage(background)),
-            LayerPrediction(id="subject", png=encode_rgba(subject), zIndex=1, alphaCoverage=alpha_coverage(subject)),
-        ]
+        columns = options.requestedLayerCount // 2
+        predictions = []
+        for index in range(options.requestedLayerCount):
+            column, row = index % columns, index // columns
+            left, right = (column * source.width) // columns, ((column + 1) * source.width) // columns
+            top, bottom = (row * source.height) // 2, ((row + 1) * source.height) // 2
+            alpha = Image.new("L", source.size, 0)
+            if right > left and bottom > top:
+                ImageDraw.Draw(alpha).rectangle((left, top, right - 1, bottom - 1), fill=255)
+            layer = source.copy()
+            layer.putalpha(alpha)
+            predictions.append(LayerPrediction(
+                id=f"layer-{index + 1}",
+                png=encode_rgba(layer),
+                zIndex=index,
+                alphaCoverage=alpha_coverage(layer),
+            ))
+        return predictions
 
 
 class QwenLocalCudaBackend:
@@ -37,7 +44,7 @@ class QwenLocalCudaBackend:
     def __init__(self, reason: str) -> None:
         self._reason = reason
 
-    async def decompose(self, image: DecodedImage, prompt: str | None = None) -> list[LayerPrediction]:
+    async def decompose(self, image: DecodedImage, options: LayerOptions = LayerOptions()) -> list[LayerPrediction]:
         raise VisionCapabilityUnavailable(self._reason)
 
 

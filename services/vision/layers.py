@@ -6,7 +6,7 @@ from typing import Sequence
 from PIL import Image, ImageChops, ImageDraw
 
 from .image_input import DecodedImage
-from .schemas.layers import EvidenceOverlap, LayerPrediction, RecompositionDiagnostics
+from .schemas.layers import EvidenceOverlap, LayerClassification, LayerPrediction, RecompositionDiagnostics
 
 
 def alpha_coverage(image: Image.Image) -> float:
@@ -33,11 +33,13 @@ def recomposition_diagnostics(image: DecodedImage, layers: Sequence[LayerPredict
                 return RecompositionDiagnostics(
                     recompositionMatchesInput=False,
                     overlap=classify_evidence_overlap([], []),
+                    classifications=classify_layers(layers),
                 )
             composed.alpha_composite(overlay)
     return RecompositionDiagnostics(
         recompositionMatchesInput=ImageChops.difference(composed, decoded_rgba(image)).getbbox() is None,
         overlap=classify_evidence_overlap([], []),
+        classifications=classify_layers(layers),
     )
 
 
@@ -45,6 +47,21 @@ def classify_evidence_overlap(ocr_regions: Sequence[object], segmentation_bounds
     if not ocr_regions and not segmentation_bounds:
         return EvidenceOverlap(classification="not-evaluated", nonAuthoritative=True)
     return EvidenceOverlap(classification="potential-overlap", nonAuthoritative=True)
+
+
+def classify_layers(layers: Sequence[LayerPrediction]) -> list[LayerClassification]:
+    """Explicitly unknown until OCR/SAM evidence is supplied; z-order is never semantics."""
+    return [
+        LayerClassification(
+            layerId=layer.id,
+            textOverlap=0,
+            subjectOverlap=0,
+            inferredRole="unknown",
+            confidence=0,
+            nonAuthoritative=True,
+        )
+        for layer in layers
+    ]
 
 
 def centered_subject_mask(width: int, height: int) -> Image.Image:

@@ -211,7 +211,7 @@ class VisionSidecarContractTests(unittest.TestCase):
             async def request() -> httpx.Response:
                 transport = httpx.ASGITransport(app=app_module.app)
                 async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-                    return await client.post("/v1/layers", files={"image": ("slide.png", ONE_PIXEL_PNG, "image/png")})
+                    return await client.post("/v1/layers", files={"image": ("slide.png", ONE_PIXEL_PNG, "image/png")}, data={"requestedLayerCount": "4", "seed": "17"})
 
             response = asyncio.run(request())
         finally:
@@ -219,7 +219,8 @@ class VisionSidecarContractTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual([layer["zIndex"] for layer in payload["layers"]], [0, 1])
+        self.assertEqual([layer["zIndex"] for layer in payload["layers"]], [0, 1, 2, 3])
+        self.assertEqual(payload["options"], {"prompt": None, "requestedLayerCount": 4, "seed": 17})
         self.assertNotIn("pixels", payload)
         self.assertTrue(payload["diagnostics"]["recompositionMatchesInput"])
         for layer in payload["layers"]:

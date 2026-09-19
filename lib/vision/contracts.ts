@@ -73,8 +73,21 @@ export const layerResultSchema = z.object({
       classification: z.enum(["not-evaluated", "potential-overlap", "no-overlap"]),
       nonAuthoritative: z.literal(true),
     }),
+    classifications: z.array(z.object({
+      layerId: z.string().min(1),
+      textOverlap: z.number().min(0).max(1),
+      subjectOverlap: z.number().min(0).max(1),
+      inferredRole: z.enum(["text-like", "subject-like", "background-like", "visual", "unknown"]),
+      confidence: z.number().min(0).max(1),
+      nonAuthoritative: z.literal(true),
+    })),
   }),
   backend: z.object({ provider: z.string().min(1), model: z.string().min(1), version: z.string().min(1) }),
+  options: z.object({
+    prompt: z.string().max(1000).nullable(),
+    requestedLayerCount: z.union([z.literal(4), z.literal(6), z.literal(8)]),
+    seed: z.number().int().nullable(),
+  }),
 }).superRefine((result, context) => {
   for (const [index, layer] of result.layers.entries()) {
     if (layer.zIndex !== index) context.addIssue({ code: z.ZodIssueCode.custom, path: ["layers", index, "zIndex"], message: "Layers must have consecutive ascending z-indexes." });

@@ -23,7 +23,7 @@ from .runtime.registry import RuntimeRegistry
 from .schemas.common import RuntimeStatus
 from .schemas.ocr import OcrRegion, OcrResult
 from .schemas.segmentation import SegmentationMask, SegmentationPrompts, SegmentationResult
-from .schemas.layers import LayerArtifact, LayerResult
+from .schemas.layers import LayerArtifact, LayerOptions, LayerResult
 from .layers import recomposition_diagnostics
 from .overlay import OverlayArtifact, create_typography_overlay
 from .composition import CompositionArtifact, CompositionError, CompositionRequest, CompositionUnavailable, compose_typography_artifacts
@@ -222,9 +222,16 @@ async def segment(image: UploadFile = File(...), prompts: str = Form(...)) -> Se
 
 
 @app.post("/v1/layers", response_model=LayerResult)
-async def layers(image: UploadFile = File(...), prompt: str | None = Form(default=None)) -> LayerResult:
-    if prompt is not None and len(prompt) > 1000:
-        raise HTTPException(status_code=400, detail="Layer prompt exceeds the 1000 character limit.")
+async def layers(
+    image: UploadFile = File(...),
+    prompt: str | None = Form(default=None),
+    requestedLayerCount: int = Form(default=4),
+    seed: int | None = Form(default=None),
+) -> LayerResult:
+    try:
+        options = LayerOptions(prompt=prompt, requestedLayerCount=requestedLayerCount, seed=seed)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Layer options are invalid.") from error
     try:
         decoded = await decode_upload(
             image,
@@ -234,7 +241,7 @@ async def layers(image: UploadFile = File(...), prompt: str | None = Form(defaul
     except ImageInputError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     try:
-        predictions = await layers_backend.decompose(decoded, prompt=prompt)
+        predictions = await layers_backend.decompose(decoded, options)
     except VisionCapabilityUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     persisted_layers = []
@@ -253,6 +260,7 @@ async def layers(image: UploadFile = File(...), prompt: str | None = Form(defaul
         layers=persisted_layers,
         diagnostics=recomposition_diagnostics(decoded, predictions),
         backend=layers_backend.backend,
+        options=options,
     )
 
 

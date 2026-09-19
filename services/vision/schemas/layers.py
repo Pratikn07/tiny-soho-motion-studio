@@ -17,6 +17,12 @@ class LayerBackend(BaseModel):
     version: str = Field(min_length=1)
 
 
+class LayerOptions(BaseModel):
+    prompt: str | None = Field(default=None, max_length=1000)
+    requestedLayerCount: Literal[4, 6, 8] = 4
+    seed: int | None = None
+
+
 class LayerArtifact(BaseModel):
     id: str = Field(min_length=1)
     artifactId: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f-]{27}$")
@@ -31,9 +37,19 @@ class EvidenceOverlap(BaseModel):
     nonAuthoritative: Literal[True]
 
 
+class LayerClassification(BaseModel):
+    layerId: str = Field(min_length=1)
+    textOverlap: float = Field(ge=0, le=1)
+    subjectOverlap: float = Field(ge=0, le=1)
+    inferredRole: Literal["text-like", "subject-like", "background-like", "visual", "unknown"]
+    confidence: float = Field(ge=0, le=1)
+    nonAuthoritative: Literal[True]
+
+
 class RecompositionDiagnostics(BaseModel):
     recompositionMatchesInput: bool
     overlap: EvidenceOverlap
+    classifications: list[LayerClassification]
 
 
 class LayerResult(BaseModel):
@@ -41,6 +57,7 @@ class LayerResult(BaseModel):
     layers: list[LayerArtifact] = Field(min_length=1)
     diagnostics: RecompositionDiagnostics
     backend: LayerBackend
+    options: LayerOptions
 
 
 @dataclass(frozen=True)

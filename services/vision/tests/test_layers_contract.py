@@ -36,11 +36,13 @@ class LayersContractTests(unittest.TestCase):
         layers_module = load_module("services.vision.layers")
         decoded = image_module.decode_image(image_bytes(), "image/png", max_bytes=4096, max_pixels=10_000)
 
-        layers = asyncio.run(adapter_module.FakeQwenLayersBackend().decompose(decoded, prompt="separate the product"))
+        schema_module = load_module("services.vision.schemas.layers")
+        options = schema_module.LayerOptions(prompt="separate the product", requestedLayerCount=4, seed=17)
+        layers = asyncio.run(adapter_module.FakeQwenLayersBackend().decompose(decoded, options))
         diagnostics = layers_module.recomposition_diagnostics(decoded, layers)
 
-        self.assertEqual([layer.id for layer in layers], ["background", "subject"])
-        self.assertEqual([layer.zIndex for layer in layers], [0, 1])
+        self.assertEqual(len(layers), 4)
+        self.assertEqual([layer.zIndex for layer in layers], [0, 1, 2, 3])
         self.assertGreater(layers[0].alphaCoverage, 0)
         self.assertGreater(layers[1].alphaCoverage, 0)
         self.assertLess(layers[1].alphaCoverage, 1)
@@ -48,6 +50,7 @@ class LayersContractTests(unittest.TestCase):
             self.assertEqual(foreground.mode, "RGBA")
             self.assertEqual(foreground.size, (100, 80))
         self.assertTrue(diagnostics.recompositionMatchesInput)
+        self.assertEqual([classification.inferredRole for classification in diagnostics.classifications], ["unknown"] * 4)
 
     def test_fake_layer_overlap_is_explicitly_non_authoritative(self) -> None:
         layers_module = load_module("services.vision.layers")
