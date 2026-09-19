@@ -68,4 +68,5 @@ class TrustedOverlayTests(unittest.TestCase):
 
             self.assertRegex(overlay.artifactId, r"^[0-9a-f-]{36}$")
             self.assertNotEqual(overlay.artifactId, source.id)
+            self.assertEqual(overlay.sourceArtifactId, source.id)
             self.assertEqual(manager.metadata(overlay.artifactId).kind, "typography-overlay")

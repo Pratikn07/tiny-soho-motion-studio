@@ -252,6 +252,7 @@ class VisionSidecarContractTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertRegex(payload["artifactId"], r"^[0-9a-f-]{36}$")
+        self.assertRegex(payload["sourceArtifactId"], r"^[0-9a-f-]{36}$")
         self.assertEqual(payload["width"], 1)
         self.assertEqual(payload["height"], 1)
 

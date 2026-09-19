@@ -21,6 +21,7 @@ class TypographyOverlay:
 @dataclass(frozen=True)
 class OverlayArtifact:
     artifactId: str
+    sourceArtifactId: str
     width: int
     height: int
     protectedRegionIds: list[str]
@@ -58,6 +59,7 @@ def create_overlay_artifact(manager: ArtifactManager, source_artifact_id: str, r
     metadata = manager.write_bytes(kind="typography-overlay", mime_type="image/png", data=overlay.png)
     return OverlayArtifact(
         artifactId=metadata.id,
+        sourceArtifactId=source_metadata.id,
         width=overlay.width,
         height=overlay.height,
         protectedRegionIds=overlay.protectedRegionIds,

@@ -268,9 +268,11 @@ async def overlay(image: UploadFile = File(...), regions: str = Form(...)) -> Ov
     except (ImageInputError, ValueError, json.JSONDecodeError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     result = create_typography_overlay(decoded, parsed_regions)
+    source_metadata = artifact_manager.write_bytes(kind="source-image", mime_type=decoded.mimeType, data=decoded.data)
     metadata = artifact_manager.write_bytes(kind="typography-overlay", mime_type="image/png", data=result.png)
     return OverlayArtifact(
         artifactId=metadata.id,
+        sourceArtifactId=source_metadata.id,
         width=result.width,
         height=result.height,
         protectedRegionIds=result.protectedRegionIds,
