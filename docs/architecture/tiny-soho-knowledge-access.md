@@ -16,6 +16,12 @@ The TS-R01 audit identified legacy access broader than the private-reader target
 
 No database change may be applied until the active ingestion writer is identified and a staging validation confirms that the proposed least-privilege path preserves required ingestion behavior.
 
+## TS-R02A discovery status
+
+Status: blocked. The current discovery pass has not established an evidence-backed active ingestion writer, deployment path, or credential class for the Tiny Soho knowledge tables. Detailed investigation evidence remains outside this public repository.
+
+Do not create the private reader, move the proposal into migrations, re-enable retrieval, or alter database privileges until that evidence and a staging validation are available. TS-R02A made no production database change.
+
 ## TS-R02 entry criteria
 
 1. Confirm the active ingestion writer role and deployment path.
