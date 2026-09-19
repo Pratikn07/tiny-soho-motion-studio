@@ -59,3 +59,17 @@ class LayersContractTests(unittest.TestCase):
 
         self.assertEqual(overlap.classification, "not-evaluated")
         self.assertTrue(overlap.nonAuthoritative)
+
+    def test_alpha_evidence_classification_is_heuristic_not_layer_order_semantics(self) -> None:
+        layers_module = load_module("services.vision.layers")
+        schema_module = load_module("services.vision.schemas.layers")
+        png = BytesIO()
+        Image.new("RGBA", (10, 10), (255, 255, 255, 255)).save(png, format="PNG")
+        layer = schema_module.LayerPrediction(id="layer-1", png=png.getvalue(), zIndex=0, alphaCoverage=1)
+        text_mask = Image.new("L", (10, 10), 255)
+
+        classification = layers_module.classify_layers([layer], typography_mask=text_mask)[0]
+
+        self.assertEqual(classification.inferredRole, "text-like")
+        self.assertEqual(classification.textOverlap, 1)
+        self.assertTrue(classification.nonAuthoritative)

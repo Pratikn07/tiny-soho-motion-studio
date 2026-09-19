@@ -20,6 +20,7 @@ from .config import VisionConfig
 from .hardware import detect_hardware
 from .image_input import ImageInputError, decode_upload
 from .runtime.registry import RuntimeRegistry
+from .runtime.locks import InferenceLocks
 from .schemas.common import RuntimeStatus
 from .schemas.ocr import OcrRegion, OcrResult
 from .schemas.segmentation import SegmentationMask, SegmentationPrompts, SegmentationResult
@@ -135,6 +136,7 @@ artifact_manager = ArtifactManager(
     max_bytes=vision_config.max_upload_bytes,
 )
 runtime_registry = RuntimeRegistry.default()
+inference_locks = InferenceLocks()
 ocr_adapter = default_paddle_ocr_adapter(vision_config.paddle_ocr_enabled)
 segmentation_adapter = default_sam2_adapter(vision_config.sam2_enabled, vision_config.sam2_checkpoint_path)
 layers_backend = default_qwen_layers_backend(vision_config.qwen_layers_enabled, vision_config.qwen_layers_model_path)
@@ -182,7 +184,8 @@ async def ocr(image: UploadFile = File(...)) -> OcrResult:
     except ImageInputError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     try:
-        result = await ocr_adapter.recognize(decoded)
+        async with inference_locks.get("image.ocr"):
+            result = await ocr_adapter.recognize(decoded)
     except VisionCapabilityUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     mask = create_typography_safety_mask(decoded.width, decoded.height, result.regions)
@@ -202,7 +205,8 @@ async def segment(image: UploadFile = File(...), prompts: str = Form(...)) -> Se
     except (ImageInputError, ValueError, json.JSONDecodeError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     try:
-        predictions = await segmentation_adapter.segment(decoded, parsed_prompts)
+        async with inference_locks.get("image.segment"):
+            predictions = await segmentation_adapter.segment(decoded, parsed_prompts)
     except VisionCapabilityUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     masks = []
@@ -241,7 +245,8 @@ async def layers(
     except ImageInputError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     try:
-        predictions = await layers_backend.decompose(decoded, options)
+        async with inference_locks.get("image.layers"):
+            predictions = await layers_backend.decompose(decoded, options)
     except VisionCapabilityUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     persisted_layers = []
