@@ -26,7 +26,7 @@ class CompositionTests(unittest.TestCase):
 
         self.assertIsInstance(command, list)
         self.assertEqual(command[0], "/usr/local/bin/ffmpeg")
-        self.assertTrue(any("overlay=0:0:format=auto" in argument for argument in command))
+        self.assertTrue(any("overlay=0:0:format=auto:shortest=1" in argument for argument in command))
         self.assertIn("0:a?", command)
         self.assertNotIn("shell", " ".join(command).lower())
         self.assertIn("-shortest", command)

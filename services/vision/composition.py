@@ -40,7 +40,7 @@ def build_overlay_command(video_path: Path, overlay_path: Path, output_path: Pat
         "-i", str(video_path),
         "-loop", "1",
         "-i", str(overlay_path),
-        "-filter_complex", "[0:v][1:v]overlay=0:0:format=auto[v]",
+        "-filter_complex", "[0:v][1:v]overlay=0:0:format=auto:shortest=1[v]",
         "-map", "[v]",
         "-map", "0:a?",
         "-c:v", "libx264",
