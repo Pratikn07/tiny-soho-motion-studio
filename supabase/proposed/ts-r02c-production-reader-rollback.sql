@@ -1,9 +1,10 @@
--- PROPOSED ONLY — TS-R02C production private-reader rollback draft.
+-- PROPOSED ONLY — TS-R02D reviewed production private-reader rollback draft.
 --
 -- DO NOT execute without a separate production approval. First set
 -- TINY_SOHO_KNOWLEDGE_ENABLED=false everywhere and verify that no application
 -- process is connected as tiny_soho_studio_reader. This revokes the dedicated
--- reader only; it deliberately does not restore any legacy Supabase reader.
+-- reader only. It deliberately does not restore legacy pipeline policies,
+-- anon/authenticated table grants, or PUBLIC execution of rls_auto_enable().
 BEGIN;
 
 DROP POLICY IF EXISTS "tiny_soho_studio_reader_select" ON public.ts_techniques;

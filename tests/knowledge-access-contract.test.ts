@@ -52,4 +52,27 @@ describe("Tiny Soho production drafts", () => {
     expect(rollback).toContain("PROPOSED ONLY");
     expect(rollback).toContain("DROP ROLE tiny_soho_studio_reader");
   });
+
+  it("guards the reviewed production state before removing only the known legacy exposure", () => {
+    const migration = readFileSync(productionDraftPath, "utf8");
+
+    expect(migration).toMatch(/rolname = 'service_role'\s+AND rolbypassrls/is);
+    expect(migration).toMatch(/relrowsecurity/is);
+    expect(migration).toMatch(/aclexplode\(coalesce\(relation\.relacl/is);
+    expect(migration).toMatch(/grantee = 0/is);
+    expect(migration).toMatch(/aclexplode\(coalesce\(function_row\.proacl/is);
+    expect(migration).not.toMatch(/has_function_privilege\('PUBLIC'/i);
+    expect(migration).toContain("DROP POLICY IF EXISTS \"pipeline all\" ON public.ts_techniques;");
+    expect(migration).toContain("DROP POLICY IF EXISTS \"pipeline all\" ON public.ts_segments;");
+    expect(migration).toContain("DROP POLICY IF EXISTS \"pipeline all\" ON public.ts_shots;");
+    expect(migration).toContain("DROP POLICY IF EXISTS \"pipeline all\" ON public.ts_tool_guides;");
+    expect(migration).toMatch(/REVOKE ALL PRIVILEGES ON TABLE[\s\S]*?FROM anon, authenticated;/i);
+    expect(migration).toContain("REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated;");
+    expect(migration).toMatch(/JOIN pg_roles AS member_role ON member_role\.oid = membership\.member[\s\S]*?member_role\.rolname = 'tiny_soho_studio_reader'/is);
+    expect(migration).toMatch(/membership\.member = \(SELECT oid FROM pg_roles WHERE rolname = session_user\)[\s\S]*?membership\.admin_option[\s\S]*?NOT membership\.inherit_option[\s\S]*?NOT membership\.set_option/is);
+    expect(migration).toMatch(/unexpected SECURITY DEFINER function exposure/i);
+    expect(migration).toMatch(/has_function_privilege\('tiny_soho_studio_reader'/i);
+    expect(migration).toMatch(/has_table_privilege\('tiny_soho_studio_reader', relation\.oid, 'MAINTAIN'\)/i);
+    expect(migration).toContain("relation.relname LIKE 'ts\\_%' ESCAPE '\\'");
+  });
 });
