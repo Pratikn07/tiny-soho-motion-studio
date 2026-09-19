@@ -13,7 +13,22 @@ npm run dev
 
 Open [http://127.0.0.1:3001](http://127.0.0.1:3001).
 
-`npm run setup` checks FFmpeg and asks for your Singapore workspace ID and DashScope key. It writes a local, gitignored `.env` with owner-only permissions. Do not put keys in the browser or source code.
+`npm run setup` checks FFmpeg and asks for your Singapore workspace ID and DashScope key. It can also configure optional Tiny Soho creative-knowledge retrieval. It writes a local, gitignored `.env` with owner-only permissions. Do not put keys in the browser or source code.
+
+## Optional Tiny Soho creative knowledge
+
+The Director can retrieve and cite matching Tiny Soho techniques, segments, shots, carousel slides, and tool guides before it drafts a proposal. Retrieval is server-only: the browser never receives the Supabase URL or key, and the immutable proposal records the exact evidence used.
+
+Before enabling it, apply [the read-only policy migration](supabase/migrations/20260918202000_tiny_soho_knowledge_read_only.sql) to the connected Supabase project. It removes anonymous and authenticated mutation privileges from all `ts_*` knowledge tables, removes their unrestricted `pipeline all` RLS policies, and retains only anonymous `SELECT` access for the local read path. Existing `postgres` and `service_role` ingestion privileges are not changed.
+
+Then run `npm run setup` and answer `y` to the knowledge-retrieval prompt. It stores only these server environment values locally:
+
+```text
+TINY_SOHO_SUPABASE_URL
+TINY_SOHO_SUPABASE_PUBLISHABLE_KEY
+```
+
+Use a Supabase publishable key only—never a `service_role` key. If the connection is absent, unavailable, or has no matching evidence, the Director says so and does not invent a citation.
 
 ## Before generating
 

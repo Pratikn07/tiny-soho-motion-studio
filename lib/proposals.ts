@@ -2,14 +2,18 @@ import { z } from "zod";
 import { getModel } from "./models";
 import { preflightGeneration, queueGeneration, type GenerationDraft } from "./generation";
 import type { createStore } from "./store";
+import type { CreativeEvidence, KnowledgeStatus } from "./knowledge";
 
 const mediaSchema = z.object({ assetId: z.string().min(1), role: z.string().min(1) }).strict();
 const shotSchema = z.object({
   prompt: z.string().trim().min(1).max(5000), modelId: z.string().min(1), duration: z.number().int().optional(), resolution: z.string().optional(), aspectRatio: z.string().optional(),
   media: z.array(mediaSchema).max(20).optional(), inputAssetIds: z.array(z.string().min(1)).max(20).optional(), inputRoles: z.array(z.string().min(1)).max(20).optional(), options: z.record(z.string(), z.unknown()).optional(),
 }).strict();
-const proposalSchema = z.object({ version: z.number().int().optional(), projectId: z.string().optional(), title: z.string().max(200).optional(), motionMode: z.string().max(100).optional(), note: z.string().max(1000).optional(), shots: z.array(shotSchema).min(1).max(20) }).strict();
+const evidenceItemSchema = z.object({ source: z.enum(["technique", "segment", "shot", "carousel-slide", "tool-guide"]), sourceId: z.string().min(1), title: z.string().max(300), summary: z.string().max(2000), score: z.number().finite(), confidence: z.number().finite().nullable() }).strict();
+const knowledgeSchema = z.object({ status: z.enum(["available", "no-match", "not-configured", "unavailable"]), evidence: z.array(evidenceItemSchema).max(8), warning: z.string().max(500).optional() }).strict();
+const proposalSchema = z.object({ version: z.number().int().optional(), projectId: z.string().optional(), title: z.string().max(200).optional(), motionMode: z.string().max(100).optional(), note: z.string().max(1000).optional(), evidence: knowledgeSchema.optional(), shots: z.array(shotSchema).min(1).max(20) }).strict();
 export type DirectorProposal = z.infer<typeof proposalSchema>;
+export type ProposalKnowledge = { status: KnowledgeStatus; evidence: CreativeEvidence[]; warning?: string };
 
 export function validateDirectorProposal(value: unknown): DirectorProposal {
   const proposal = proposalSchema.parse(value);
