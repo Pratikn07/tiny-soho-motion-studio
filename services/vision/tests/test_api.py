@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import importlib
 import platform
 import sys
@@ -13,6 +14,10 @@ import httpx
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
+
+ONE_PIXEL_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+)
 
 
 def load_module(module_name: str):
@@ -27,6 +32,15 @@ def get(app, path: str) -> httpx.Response:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             return await client.get(path)
+
+    return asyncio.run(request())
+
+
+def post_image(app, path: str, data: bytes, mime_type: str) -> httpx.Response:
+    async def request() -> httpx.Response:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.post(path, files={"image": ("slide.png", data, mime_type)})
 
     return asyncio.run(request())
 
@@ -113,6 +127,38 @@ class VisionSidecarContractTests(unittest.TestCase):
         self.assertEqual(response.content, b"sidecar-artifact")
         self.assertEqual(response.headers["content-type"], "image/png")
         self.assertEqual(traversal_response.status_code, 404)
+
+    def test_ocr_endpoint_returns_normalized_regions_and_an_opaque_safety_mask(self) -> None:
+        app_module = load_module("services.vision.app")
+        ocr_module = load_module("services.vision.adapters.paddle_ocr")
+        schema_module = load_module("services.vision.schemas.ocr")
+        original_adapter = getattr(app_module, "ocr_adapter", None)
+        app_module.ocr_adapter = ocr_module.FakeOcrAdapter([
+            schema_module.OcrRegion(
+                id="headline",
+                text="Hello",
+                detectionConfidence=0.99,
+                recognitionConfidence=0.20,
+                polygon=[{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 1, "y": 1}, {"x": 0, "y": 1}],
+                boundingBox={"x": 0, "y": 0, "width": 1, "height": 1},
+            )
+        ])
+        try:
+            response = post_image(app_module.app, "/v1/ocr", ONE_PIXEL_PNG, "image/png")
+        finally:
+            app_module.ocr_adapter = original_adapter
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["regions"][0]["recognitionConfidence"], 0.20)
+        self.assertRegex(payload["typographySafetyMaskArtifactId"], r"^[0-9a-f-]{36}$")
+
+    def test_ocr_endpoint_rejects_an_undecodable_upload(self) -> None:
+        app_module = load_module("services.vision.app")
+
+        response = post_image(app_module.app, "/v1/ocr", b"not an image", "image/png")
+
+        self.assertEqual(response.status_code, 400)
 
 
 if __name__ == "__main__":

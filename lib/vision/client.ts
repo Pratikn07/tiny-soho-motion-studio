@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { parseVisionArtifactId } from "./artifacts";
+import { ocrResultSchema, type OcrResult } from "./contracts";
 
 const DEFAULT_SIDECAR_URL = "http://127.0.0.1:8765";
 const REQUEST_TIMEOUT_MS = 1_500;
+const INFERENCE_REQUEST_TIMEOUT_MS = 60_000;
 
 const acceleratorSchema = z.object({
   available: z.boolean(),
@@ -72,6 +74,24 @@ export function getVisionHealth(configuredUrl?: string): Promise<VisionHealth> {
 
 export function getVisionCapabilities(configuredUrl?: string): Promise<VisionCapabilities> {
   return requestSidecar("/v1/capabilities", sidecarCapabilitiesSchema, configuredUrl);
+}
+
+async function submitVisionUpload<T>(path: string, formData: FormData, schema: z.ZodType<T>, configuredUrl?: string): Promise<T | VisionSidecarUnavailable> {
+  const resolved = resolveVisionSidecarUrl(configuredUrl);
+  if (!resolved.ok) return { status: "unavailable", reason: resolved.reason };
+  try {
+    const response = await fetch(`${resolved.url}${path}`, { body: formData, method: "POST", cache: "no-store", signal: AbortSignal.timeout(INFERENCE_REQUEST_TIMEOUT_MS) });
+    if (!response.ok) return { status: "unavailable", reason: `Vision sidecar returned HTTP ${response.status}.` };
+    const parsed = schema.safeParse(await response.json());
+    if (!parsed.success) return { status: "unavailable", reason: "Vision sidecar returned an invalid response." };
+    return parsed.data;
+  } catch {
+    return { status: "unavailable", reason: "Vision sidecar is not running or did not respond in time." };
+  }
+}
+
+export function runVisionOcr(formData: FormData, configuredUrl?: string): Promise<OcrResult | VisionSidecarUnavailable> {
+  return submitVisionUpload("/v1/ocr", formData, ocrResultSchema, configuredUrl);
 }
 
 export async function getVisionArtifact(artifactId: string, configuredUrl?: string): Promise<VisionArtifact> {

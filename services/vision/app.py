@@ -7,15 +7,20 @@ from pathlib import Path
 from typing import Literal
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl, TypeAdapter, model_validator
 
 from .artifacts.manager import ArtifactManager, ArtifactNotFound
+from .adapters.base import VisionCapabilityUnavailable
+from .adapters.paddle_ocr import default_paddle_ocr_adapter
 from .config import VisionConfig
 from .hardware import detect_hardware
+from .image_input import ImageInputError, decode_upload
 from .runtime.registry import RuntimeRegistry
 from .schemas.common import RuntimeStatus
+from .schemas.ocr import OcrResult
+from .typography import create_typography_safety_mask
 
 
 SERVICE_NAME = "tiny-soho-vision"
@@ -123,6 +128,7 @@ artifact_manager = ArtifactManager(
     max_bytes=vision_config.max_upload_bytes,
 )
 runtime_registry = RuntimeRegistry.default()
+ocr_adapter = default_paddle_ocr_adapter(vision_config.paddle_ocr_enabled)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -154,6 +160,25 @@ def artifact(artifact_id: str) -> FileResponse:
         return FileResponse(artifact_manager.file_path(metadata.id), media_type=metadata.mimeType, filename=f"{metadata.id}.bin")
     except ArtifactNotFound as error:
         raise HTTPException(status_code=404, detail="Unknown artifact.") from error
+
+
+@app.post("/v1/ocr", response_model=OcrResult)
+async def ocr(image: UploadFile = File(...)) -> OcrResult:
+    try:
+        decoded = await decode_upload(
+            image,
+            max_bytes=vision_config.max_upload_bytes,
+            max_pixels=vision_config.max_image_pixels,
+        )
+    except ImageInputError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    try:
+        result = await ocr_adapter.recognize(decoded)
+    except VisionCapabilityUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    mask = create_typography_safety_mask(decoded.width, decoded.height, result.regions)
+    metadata = artifact_manager.write_bytes(kind="typography-safety-mask", mime_type="image/png", data=mask.png)
+    return result.model_copy(update={"typographySafetyMaskArtifactId": metadata.id})
 
 
 def main() -> None:

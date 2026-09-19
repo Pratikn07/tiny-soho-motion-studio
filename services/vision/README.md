@@ -27,3 +27,10 @@ operate if this process is stopped.
 The shared manifest is [`lib/capabilities/manifest.json`](../../lib/capabilities/manifest.json).
 It pins upstream source commits and records code and model/checkpoint licensing
 separately. It is provenance metadata only; it does not enable inference.
+
+## Optional OCR runtime
+
+`requirements/ocr.txt` pins the optional PaddleOCR package and is never
+installed by the base requirements or CI. The current adapter remains
+unavailable until an operator supplies a separately reviewed checkpoint with a
+verified license. No code path downloads checkpoints automatically.

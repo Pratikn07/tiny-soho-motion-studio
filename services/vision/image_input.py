@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
 
+from fastapi import UploadFile
 from PIL import Image, UnidentifiedImageError
 
 
@@ -49,3 +50,8 @@ def decode_image(data: bytes, mime_type: str, *, max_bytes: int, max_pixels: int
             raise
         raise ImageInputError("Image bytes could not be decoded.") from error
     return DecodedImage(data=data, mimeType=mime_type, width=width, height=height)
+
+
+async def decode_upload(upload: UploadFile, *, max_bytes: int, max_pixels: int) -> DecodedImage:
+    data = await upload.read(max_bytes + 1)
+    return decode_image(data, upload.content_type or "", max_bytes=max_bytes, max_pixels=max_pixels)
