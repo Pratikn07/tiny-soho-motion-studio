@@ -25,10 +25,6 @@ async function main() {
   let env = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "PORT=3001\n";
   if (!valueFor(env, "ALIBABA_WORKSPACE_ID")) env = upsert(env, "ALIBABA_WORKSPACE_ID", await rl.question("Alibaba Singapore workspace ID: "));
   if (!valueFor(env, "DASHSCOPE_API_KEY")) env = upsert(env, "DASHSCOPE_API_KEY", await hiddenQuestion("DashScope API key (hidden): "));
-  if (!valueFor(env, "TINY_SOHO_SUPABASE_URL") && (await rl.question("Configure Tiny Soho creative-knowledge retrieval now? (y/N): ")).trim().toLowerCase() === "y") {
-    env = upsert(env, "TINY_SOHO_SUPABASE_URL", await rl.question("Supabase project URL: "));
-    env = upsert(env, "TINY_SOHO_SUPABASE_PUBLISHABLE_KEY", await hiddenQuestion("Supabase publishable key (hidden): "));
-  }
   fs.writeFileSync(envPath, env, { mode: 0o600 });
   fs.chmodSync(envPath, 0o600);
   console.log("Saved .env with owner-only permissions. In Alibaba Model Studio, enable Free Quota Only for each model before confirming it in Settings.");
