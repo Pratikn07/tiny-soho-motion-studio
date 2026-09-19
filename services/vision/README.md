@@ -1,9 +1,9 @@
 # Tiny Soho Vision sidecar
 
-This is a local-only FastAPI preflight service. VISION-01 through VISION-03
-intentionally ship no PaddleOCR, Qwen Image Layered, SAM 2, PyTorch, or model
-checkpoint dependency. Starting the service neither installs packages nor
-downloads model weights.
+This is a local-only FastAPI vision service. The base installation intentionally
+ships no PaddleOCR, Qwen Image Layered, SAM 2, PyTorch, or model checkpoint
+dependency. Starting the service neither installs packages nor downloads model
+weights.
 
 ## Run locally
 
@@ -48,3 +48,6 @@ CUDA runtime; the sidecar never fetches weights.
 their server-side paths, validates their dimensions with FFprobe, then invokes
 FFmpeg with an argument array; it never accepts browser filesystem paths or a
 shell command.
+
+For the full artifact lifecycle, optional-runtime policy, and typography-safe
+motion flow, see [`docs/vision/architecture.md`](../../docs/vision/architecture.md).

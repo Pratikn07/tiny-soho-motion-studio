@@ -30,7 +30,7 @@
       "name": "Qwen Image Layered",
       "upstreamRepository": "https://github.com/QwenLM/Qwen-Image-Layered",
       "pinnedCommit": "54c4fe47e76d745775e03fc66ee38457280ed9ea",
-      "packageVersion": "source-pinned",
+      "packageVersion": "optional runtime requirements; not installed",
       "codeLicense": "Apache-2.0",
       "checkpointIdentifier": "Qwen-Image-Layered",
       "checkpointSource": "https://github.com/QwenLM/Qwen-Image-Layered",
