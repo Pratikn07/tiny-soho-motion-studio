@@ -26,6 +26,7 @@ from .schemas.segmentation import SegmentationMask, SegmentationPrompts, Segment
 from .schemas.layers import LayerArtifact, LayerResult
 from .layers import recomposition_diagnostics
 from .overlay import OverlayArtifact, create_typography_overlay
+from .composition import CompositionArtifact, CompositionError, CompositionRequest, CompositionUnavailable, compose_typography_artifacts
 from .typography import create_typography_safety_mask
 
 
@@ -274,6 +275,22 @@ async def overlay(image: UploadFile = File(...), regions: str = Form(...)) -> Ov
         height=result.height,
         protectedRegionIds=result.protectedRegionIds,
     )
+
+
+@app.post("/v1/compose", response_model=CompositionArtifact)
+def compose(request: CompositionRequest) -> CompositionArtifact:
+    try:
+        return compose_typography_artifacts(
+            artifact_manager,
+            request.videoArtifactId,
+            request.overlayArtifactId,
+            ffmpeg_path=vision_config.ffmpeg_path,
+            ffprobe_path=vision_config.ffprobe_path,
+        )
+    except CompositionUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except CompositionError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 def main() -> None:

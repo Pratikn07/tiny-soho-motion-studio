@@ -27,6 +27,8 @@ class VisionConfig:
     sam2_checkpoint_path: Path | None
     qwen_layers_enabled: bool
     qwen_layers_model_path: Path | None
+    ffmpeg_path: str
+    ffprobe_path: str
 
     @classmethod
     def from_env(cls) -> "VisionConfig":
@@ -41,6 +43,8 @@ class VisionConfig:
             sam2_checkpoint_path=_optional_path(os.environ.get("TINY_SOHO_SAM2_CHECKPOINT_PATH")),
             qwen_layers_enabled=os.environ.get("TINY_SOHO_QWEN_LAYERS_ENABLED") == "1",
             qwen_layers_model_path=_optional_path(os.environ.get("TINY_SOHO_QWEN_LAYERS_MODEL_PATH")),
+            ffmpeg_path=os.environ.get("FFMPEG_PATH", "ffmpeg"),
+            ffprobe_path=os.environ.get("FFPROBE_PATH", "ffprobe"),
         )
 
 

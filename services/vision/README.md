@@ -43,3 +43,8 @@ be used after an operator has supplied a reviewed checkpoint through
 Layered is deliberately unavailable until an operator configures a reviewed
 local model directory through `TINY_SOHO_QWEN_LAYERS_MODEL_PATH` on a suitable
 CUDA runtime; the sidecar never fetches weights.
+
+`POST /v1/compose` accepts only owned MP4 and PNG artifact IDs. It resolves
+their server-side paths, validates their dimensions with FFprobe, then invokes
+FFmpeg with an argument array; it never accepts browser filesystem paths or a
+shell command.
