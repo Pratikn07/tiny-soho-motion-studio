@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { parseVisionArtifactId } from "./artifacts";
 import { layerResultSchema, ocrResultSchema, segmentationResultSchema, type LayerResult, type OcrResult, type SegmentationResult } from "./contracts";
+import { typographyOverlayResultSchema, type TypographyOverlayResult } from "./overlay";
 
 const DEFAULT_SIDECAR_URL = "http://127.0.0.1:8765";
 const REQUEST_TIMEOUT_MS = 1_500;
@@ -100,6 +101,10 @@ export function runVisionSegmentation(formData: FormData, configuredUrl?: string
 
 export function runVisionLayers(formData: FormData, configuredUrl?: string): Promise<LayerResult | VisionSidecarUnavailable> {
   return submitVisionUpload("/v1/layers", formData, layerResultSchema, configuredUrl);
+}
+
+export function createVisionTypographyOverlay(formData: FormData, configuredUrl?: string): Promise<TypographyOverlayResult | VisionSidecarUnavailable> {
+  return submitVisionUpload("/v1/overlay", formData, typographyOverlayResultSchema, configuredUrl);
 }
 
 export async function getVisionArtifact(artifactId: string, configuredUrl?: string): Promise<VisionArtifact> {

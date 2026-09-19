@@ -21,10 +21,11 @@ from .hardware import detect_hardware
 from .image_input import ImageInputError, decode_upload
 from .runtime.registry import RuntimeRegistry
 from .schemas.common import RuntimeStatus
-from .schemas.ocr import OcrResult
+from .schemas.ocr import OcrRegion, OcrResult
 from .schemas.segmentation import SegmentationMask, SegmentationPrompts, SegmentationResult
 from .schemas.layers import LayerArtifact, LayerResult
 from .layers import recomposition_diagnostics
+from .overlay import OverlayArtifact, create_typography_overlay
 from .typography import create_typography_safety_mask
 
 
@@ -251,6 +252,27 @@ async def layers(image: UploadFile = File(...), prompt: str | None = Form(defaul
         layers=persisted_layers,
         diagnostics=recomposition_diagnostics(decoded, predictions),
         backend=layers_backend.backend,
+    )
+
+
+@app.post("/v1/overlay", response_model=OverlayArtifact)
+async def overlay(image: UploadFile = File(...), regions: str = Form(...)) -> OverlayArtifact:
+    try:
+        decoded = await decode_upload(
+            image,
+            max_bytes=vision_config.max_upload_bytes,
+            max_pixels=vision_config.max_image_pixels,
+        )
+        parsed_regions = TypeAdapter(list[OcrRegion]).validate_python(json.loads(regions))
+    except (ImageInputError, ValueError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    result = create_typography_overlay(decoded, parsed_regions)
+    metadata = artifact_manager.write_bytes(kind="typography-overlay", mime_type="image/png", data=result.png)
+    return OverlayArtifact(
+        artifactId=metadata.id,
+        width=result.width,
+        height=result.height,
+        protectedRegionIds=result.protectedRegionIds,
     )
 
 

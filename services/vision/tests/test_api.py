@@ -235,6 +235,26 @@ class VisionSidecarContractTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 503)
 
+    def test_overlay_endpoint_returns_an_opaque_local_overlay_artifact(self) -> None:
+        app_module = load_module("services.vision.app")
+
+        async def request() -> httpx.Response:
+            transport = httpx.ASGITransport(app=app_module.app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                return await client.post(
+                    "/v1/overlay",
+                    files={"image": ("slide.png", ONE_PIXEL_PNG, "image/png")},
+                    data={"regions": '[{"id":"copy","text":"copy","polygon":[{"x":0,"y":0},{"x":1,"y":0},{"x":1,"y":1}],"boundingBox":{"x":0,"y":0,"width":1,"height":1}}]'},
+                )
+
+        response = asyncio.run(request())
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertRegex(payload["artifactId"], r"^[0-9a-f-]{36}$")
+        self.assertEqual(payload["width"], 1)
+        self.assertEqual(payload["height"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
