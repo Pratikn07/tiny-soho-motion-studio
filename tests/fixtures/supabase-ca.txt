@@ -1,0 +1,3 @@
+-----BEGIN CERTIFICATE-----
+test-only-fixture
+-----END CERTIFICATE-----
