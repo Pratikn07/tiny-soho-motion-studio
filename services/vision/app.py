@@ -11,6 +11,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel, HttpUrl, TypeAdapter, model_validator
 
 from .hardware import detect_hardware
+from .runtime.registry import RuntimeRegistry
+from .schemas.common import RuntimeStatus
 
 
 SERVICE_NAME = "tiny-soho-vision"
@@ -46,6 +48,7 @@ class Capability(BaseModel):
     outputs: list[str]
     upstream: Upstream | None
     unavailableReason: str | None = None
+    runtimeStatus: RuntimeStatus | None = None
 
     @model_validator(mode="after")
     def unavailable_capabilities_have_a_reason(self) -> "Capability":
@@ -110,6 +113,7 @@ def sidecar_port() -> int:
 
 
 app = FastAPI(title="Tiny Soho Vision", version=SERVICE_VERSION, docs_url=None, redoc_url=None)
+runtime_registry = RuntimeRegistry.default()
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -126,7 +130,10 @@ def health() -> HealthResponse:
 @app.get("/v1/capabilities", response_model=CapabilitiesResponse)
 def capabilities() -> CapabilitiesResponse:
     return CapabilitiesResponse(
-        capabilities=load_capabilities(),
+        capabilities=[
+            capability.model_copy(update={"runtimeStatus": RuntimeStatus.model_validate(runtime_registry.status(capability.id).as_dict())})
+            for capability in load_capabilities()
+        ],
         hardware=HardwareStatus.model_validate(detect_hardware()),
     )
 

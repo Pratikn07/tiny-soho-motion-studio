@@ -81,6 +81,10 @@ class VisionSidecarContractTests(unittest.TestCase):
         self.assertEqual(payload["capabilities"][0]["status"], "planned")
         self.assertEqual(payload["capabilities"][3]["status"], "unavailable")
         self.assertIn("No model runtime", payload["capabilities"][1]["hardwareRequirements"]["notes"])
+        runtime_status = payload["capabilities"][0].get("runtimeStatus", {})
+        self.assertEqual(runtime_status.get("state"), "unloaded")
+        self.assertFalse(runtime_status.get("available"))
+        self.assertIn("not configured", runtime_status.get("reason", ""))
 
     def test_hardware_preflight_uses_real_cpu_facts_and_never_requires_torch(self) -> None:
         hardware_module = load_module("services.vision.hardware")

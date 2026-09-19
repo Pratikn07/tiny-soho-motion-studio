@@ -42,3 +42,10 @@ coverage/
 *.tsbuildinfo
 __pycache__/
 *.py[cod]
+*.pt
+*.pth
+*.safetensors
+services/vision/model-cache/
+services/vision/artifact-cache/
+services/vision/.huggingface/
+services/vision/.paddleocr/

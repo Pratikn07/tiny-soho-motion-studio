@@ -14,6 +14,14 @@ const upstreamSchema = z.object({
   modelLicense: z.string().min(1),
 });
 
+export const capabilityRuntimeStatusSchema = z.object({
+  capabilityId: z.string().min(1),
+  backend: z.string().min(1),
+  state: z.enum(["unloaded", "loading", "ready", "error"]),
+  available: z.boolean(),
+  reason: z.string().min(1).nullable(),
+});
+
 export const capabilitySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -26,6 +34,7 @@ export const capabilitySchema = z.object({
   outputs: z.array(z.string().min(1)).min(1),
   upstream: upstreamSchema.nullable(),
   unavailableReason: z.string().min(1).optional(),
+  runtimeStatus: capabilityRuntimeStatusSchema.optional(),
 }).superRefine((capability, context) => {
   if (capability.status === "unavailable" && !capability.unavailableReason) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: "Unavailable capabilities require an unavailable reason." });
@@ -36,3 +45,4 @@ export const capabilityListSchema = z.array(capabilitySchema);
 
 export type Capability = z.infer<typeof capabilitySchema>;
 export type HardwareRequirements = z.infer<typeof hardwareRequirementSchema>;
+export type CapabilityRuntimeStatus = z.infer<typeof capabilityRuntimeStatusSchema>;

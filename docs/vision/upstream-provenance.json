@@ -1,0 +1,41 @@
+{
+  "verifiedAt": "2026-09-18",
+  "dependencies": [
+    {
+      "capability": "image.ocr",
+      "name": "PaddleOCR",
+      "upstreamRepository": "https://github.com/PaddlePaddle/PaddleOCR",
+      "pinnedCommit": "dab3fe35379033fdcb2d0e9572fac0b36c9a9ebf",
+      "packageVersion": "not installed",
+      "codeLicense": "Apache-2.0",
+      "checkpointIdentifier": null,
+      "checkpointSource": null,
+      "checkpointLicense": "Unverified; no checkpoint selected or downloaded.",
+      "status": "blocked-on-checkpoint-license"
+    },
+    {
+      "capability": "image.segment",
+      "name": "SAM 2",
+      "upstreamRepository": "https://github.com/facebookresearch/sam2",
+      "pinnedCommit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+      "packageVersion": "1.0",
+      "codeLicense": "Apache-2.0",
+      "checkpointIdentifier": "sam2.1_hiera_tiny.pt",
+      "checkpointSource": "https://github.com/facebookresearch/sam2/tree/main/checkpoints",
+      "checkpointLicense": "Apache-2.0",
+      "status": "not installed"
+    },
+    {
+      "capability": "image.layers",
+      "name": "Qwen Image Layered",
+      "upstreamRepository": "https://github.com/QwenLM/Qwen-Image-Layered",
+      "pinnedCommit": "54c4fe47e76d745775e03fc66ee38457280ed9ea",
+      "packageVersion": "source-pinned",
+      "codeLicense": "Apache-2.0",
+      "checkpointIdentifier": "Qwen-Image-Layered",
+      "checkpointSource": "https://github.com/QwenLM/Qwen-Image-Layered",
+      "checkpointLicense": "Apache-2.0",
+      "status": "not installed"
+    }
+  ]
+}
