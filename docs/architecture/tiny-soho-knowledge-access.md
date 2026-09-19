@@ -18,16 +18,24 @@ No database change may be applied until the active ingestion writer is identifie
 
 ## TS-R02A discovery status
 
-Status: blocked. The current discovery pass has not established an evidence-backed active ingestion writer, deployment path, or credential class for the Tiny Soho knowledge tables. Detailed investigation evidence remains outside this public repository.
+Status: provisionally identified. Evidence outside this public repository identifies an external scheduled/manual ingestion process using a service-role-class credential. A live read-only check also corrected one supplied audit claim: RLS is enabled on every target table, including `ts_carousel_slides` and `ts_slide_techniques`; those two tables currently have no policies.
 
-Do not create the private reader, move the proposal into migrations, re-enable retrieval, or alter database privileges until that evidence and a staging validation are available. TS-R02A made no production database change.
+No production database privilege, policy, or retrieval change was made during discovery.
+
+## TS-R02C staging validation
+
+Status: completed in a separate, no-production-data Supabase staging project. The staging harness mirrors the five tables used by retrieval, provisions `tiny_soho_studio_reader`, and uses a synthetic technique fixture only. The role was verified to allow `SELECT` on `ts_techniques`, `ts_segments`, `ts_shots`, `ts_carousel_slides`, and `ts_tool_guides`; it was denied unrelated reads, all tested mutations and DDL, privileged role switching, and every accessible `SECURITY DEFINER` function.
+
+The application reader is server-only and disabled by default. It requires all of the following before it can connect: `TINY_SOHO_KNOWLEDGE_ENABLED=true`, a direct PostgreSQL URL whose user is exactly `tiny_soho_studio_reader`, and an absolute `TINY_SOHO_KNOWLEDGE_DATABASE_CA_PATH`. It uses CA-pinned TLS verification, a two-connection pool, a three-second connect/statement timeout, static allowlisted SQL, bound search values, and read-only transactions. `sslmode` is deliberately rejected in the URL because the Node driver can let a URL-level SSL mode override the explicit CA configuration.
+
+The staging bootstrap is [ts-r02c-staging-reader.sql](../../supabase/staging/ts-r02c-staging-reader.sql). It is not a production migration. The [production draft](../../supabase/proposed/ts-r02c-production-reader.sql) and [rollback draft](../../supabase/proposed/ts-r02c-production-reader-rollback.sql) remain unapplied proposals.
+
+The 2026-09-18 production preflight found legacy public read access on the five target tables and a publicly executable `SECURITY DEFINER` function. The draft fails closed on both conditions, so it was not applied and retrieval remains disabled. Remediation of those existing production exposures must be separately approved and validated with the external writer before the dedicated reader can be enabled.
 
 ## TS-R02 entry criteria
 
-1. Confirm the active ingestion writer role and deployment path.
-2. Provision secure authentication for `tiny_soho_studio_reader` outside source control.
-3. Implement and test the private direct-reader adapter locally or in staging; do not reuse a `service_role` credential for read-only access.
-4. Obtain explicit approval for the proposed migration.
-5. Apply it through the approved Supabase migration path, then verify policies, grants, anonymous denial, private-reader retrieval, and ingestion.
+1. Keep `TINY_SOHO_KNOWLEDGE_ENABLED=false` in every production environment.
+2. Remediate the preflight blockers without interrupting the external writer, through an explicitly approved migration and secure credential provisioning path.
+3. Verify policies, grants, public-role denial, private-reader retrieval, and ingestion before enabling the feature.
 
 The Supabase security advisors also report findings outside this `ts_*` scope. They are not remediated by this ticket.
