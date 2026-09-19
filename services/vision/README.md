@@ -38,3 +38,8 @@ verified license. No code path downloads checkpoints automatically.
 `requirements/sam2.txt` is also opt-in and excluded from base CI. It may only
 be used after an operator has supplied a reviewed checkpoint through
 `TINY_SOHO_SAM2_CHECKPOINT_PATH`; the sidecar never fetches it.
+
+`requirements/qwen.txt` is opt-in and excluded from base CI. Qwen Image
+Layered is deliberately unavailable until an operator configures a reviewed
+local model directory through `TINY_SOHO_QWEN_LAYERS_MODEL_PATH` on a suitable
+CUDA runtime; the sidecar never fetches weights.

@@ -202,6 +202,39 @@ class VisionSidecarContractTests(unittest.TestCase):
         response = asyncio.run(request())
         self.assertEqual(response.status_code, 503)
 
+    def test_layers_endpoint_returns_only_opaque_rgba_artifacts_and_diagnostics(self) -> None:
+        app_module = load_module("services.vision.app")
+        adapter_module = load_module("services.vision.adapters.qwen_layers")
+        original_backend = getattr(app_module, "layers_backend", None)
+        app_module.layers_backend = adapter_module.FakeQwenLayersBackend()
+        try:
+            async def request() -> httpx.Response:
+                transport = httpx.ASGITransport(app=app_module.app)
+                async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                    return await client.post("/v1/layers", files={"image": ("slide.png", ONE_PIXEL_PNG, "image/png")})
+
+            response = asyncio.run(request())
+        finally:
+            app_module.layers_backend = original_backend
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual([layer["zIndex"] for layer in payload["layers"]], [0, 1])
+        self.assertNotIn("pixels", payload)
+        self.assertTrue(payload["diagnostics"]["recompositionMatchesInput"])
+        for layer in payload["layers"]:
+            self.assertRegex(layer["artifactId"], r"^[0-9a-f-]{36}$")
+            artifact = get(app_module.app, f"/v1/artifacts/{layer['artifactId']}")
+            self.assertEqual(artifact.status_code, 200)
+            self.assertEqual(artifact.headers["content-type"], "image/png")
+
+    def test_layers_endpoint_reports_an_unavailable_backend_without_model_download(self) -> None:
+        app_module = load_module("services.vision.app")
+
+        response = post_image(app_module.app, "/v1/layers", ONE_PIXEL_PNG, "image/png")
+
+        self.assertEqual(response.status_code, 503)
+
 
 if __name__ == "__main__":
     unittest.main()

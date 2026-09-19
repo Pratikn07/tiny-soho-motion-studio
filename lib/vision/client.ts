@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parseVisionArtifactId } from "./artifacts";
-import { ocrResultSchema, segmentationResultSchema, type OcrResult, type SegmentationResult } from "./contracts";
+import { layerResultSchema, ocrResultSchema, segmentationResultSchema, type LayerResult, type OcrResult, type SegmentationResult } from "./contracts";
 
 const DEFAULT_SIDECAR_URL = "http://127.0.0.1:8765";
 const REQUEST_TIMEOUT_MS = 1_500;
@@ -96,6 +96,10 @@ export function runVisionOcr(formData: FormData, configuredUrl?: string): Promis
 
 export function runVisionSegmentation(formData: FormData, configuredUrl?: string): Promise<SegmentationResult | VisionSidecarUnavailable> {
   return submitVisionUpload("/v1/segment", formData, segmentationResultSchema, configuredUrl);
+}
+
+export function runVisionLayers(formData: FormData, configuredUrl?: string): Promise<LayerResult | VisionSidecarUnavailable> {
+  return submitVisionUpload("/v1/layers", formData, layerResultSchema, configuredUrl);
 }
 
 export async function getVisionArtifact(artifactId: string, configuredUrl?: string): Promise<VisionArtifact> {

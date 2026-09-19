@@ -54,3 +54,34 @@ export const segmentationResultSchema = z.object({
 
 export type SegmentationPrompts = z.infer<typeof segmentationPromptsSchema>;
 export type SegmentationResult = z.infer<typeof segmentationResultSchema>;
+
+const layerArtifactSchema = z.object({
+  id: z.string().min(1),
+  artifactId: visionArtifactIdSchema,
+  zIndex: z.number().int().nonnegative(),
+  alphaCoverage: z.number().min(0).max(1),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+
+export const layerResultSchema = z.object({
+  image: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }),
+  layers: z.array(layerArtifactSchema).min(1),
+  diagnostics: z.object({
+    recompositionMatchesInput: z.boolean(),
+    overlap: z.object({
+      classification: z.enum(["not-evaluated", "potential-overlap", "no-overlap"]),
+      nonAuthoritative: z.literal(true),
+    }),
+  }),
+  backend: z.object({ provider: z.string().min(1), model: z.string().min(1), version: z.string().min(1) }),
+}).superRefine((result, context) => {
+  for (const [index, layer] of result.layers.entries()) {
+    if (layer.zIndex !== index) context.addIssue({ code: z.ZodIssueCode.custom, path: ["layers", index, "zIndex"], message: "Layers must have consecutive ascending z-indexes." });
+    if (layer.width !== result.image.width || layer.height !== result.image.height) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["layers", index], message: "Layer dimensions must match the source image." });
+    }
+  }
+});
+
+export type LayerResult = z.infer<typeof layerResultSchema>;

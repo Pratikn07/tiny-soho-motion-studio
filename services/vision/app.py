@@ -14,6 +14,7 @@ from pydantic import BaseModel, HttpUrl, TypeAdapter, model_validator
 from .artifacts.manager import ArtifactManager, ArtifactNotFound
 from .adapters.base import VisionCapabilityUnavailable
 from .adapters.paddle_ocr import default_paddle_ocr_adapter
+from .adapters.qwen_layers import default_qwen_layers_backend
 from .adapters.sam2 import default_sam2_adapter
 from .config import VisionConfig
 from .hardware import detect_hardware
@@ -22,6 +23,8 @@ from .runtime.registry import RuntimeRegistry
 from .schemas.common import RuntimeStatus
 from .schemas.ocr import OcrResult
 from .schemas.segmentation import SegmentationMask, SegmentationPrompts, SegmentationResult
+from .schemas.layers import LayerArtifact, LayerResult
+from .layers import recomposition_diagnostics
 from .typography import create_typography_safety_mask
 
 
@@ -132,6 +135,7 @@ artifact_manager = ArtifactManager(
 runtime_registry = RuntimeRegistry.default()
 ocr_adapter = default_paddle_ocr_adapter(vision_config.paddle_ocr_enabled)
 segmentation_adapter = default_sam2_adapter(vision_config.sam2_enabled, vision_config.sam2_checkpoint_path)
+layers_backend = default_qwen_layers_backend(vision_config.qwen_layers_enabled, vision_config.qwen_layers_model_path)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -212,6 +216,41 @@ async def segment(image: UploadFile = File(...), prompts: str = Form(...)) -> Se
         image={"width": decoded.width, "height": decoded.height},
         masks=masks,
         engine=segmentation_adapter.engine,
+    )
+
+
+@app.post("/v1/layers", response_model=LayerResult)
+async def layers(image: UploadFile = File(...), prompt: str | None = Form(default=None)) -> LayerResult:
+    if prompt is not None and len(prompt) > 1000:
+        raise HTTPException(status_code=400, detail="Layer prompt exceeds the 1000 character limit.")
+    try:
+        decoded = await decode_upload(
+            image,
+            max_bytes=vision_config.max_upload_bytes,
+            max_pixels=vision_config.max_image_pixels,
+        )
+    except ImageInputError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    try:
+        predictions = await layers_backend.decompose(decoded, prompt=prompt)
+    except VisionCapabilityUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    persisted_layers = []
+    for prediction in predictions:
+        metadata = artifact_manager.write_bytes(kind="rgba-layer", mime_type="image/png", data=prediction.png)
+        persisted_layers.append(LayerArtifact(
+            id=prediction.id,
+            artifactId=metadata.id,
+            zIndex=prediction.zIndex,
+            alphaCoverage=prediction.alphaCoverage,
+            width=decoded.width,
+            height=decoded.height,
+        ))
+    return LayerResult(
+        image={"width": decoded.width, "height": decoded.height},
+        layers=persisted_layers,
+        diagnostics=recomposition_diagnostics(decoded, predictions),
+        backend=layers_backend.backend,
     )
 
 
