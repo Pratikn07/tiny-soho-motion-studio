@@ -1,0 +1,108 @@
+[
+  {
+    "id": "image.ocr",
+    "name": "PaddleOCR",
+    "status": "planned",
+    "runtime": "python-fastapi",
+    "provider": "PaddleOCR",
+    "version": "source-pinned",
+    "hardwareRequirements": {
+      "cpu": "required",
+      "mps": "not-supported",
+      "cuda": "optional",
+      "notes": "Inference is intentionally not installed in VISION-01 through VISION-03."
+    },
+    "inputs": ["image"],
+    "outputs": ["text", "text-blocks"],
+    "upstream": {
+      "repository": "https://github.com/PaddlePaddle/PaddleOCR",
+      "pinnedRef": "dab3fe35379033fdcb2d0e9572fac0b36c9a9ebf",
+      "codeLicense": "Apache-2.0",
+      "modelLicense": "No checkpoint selected or downloaded; confirm the selected PaddleOCR checkpoint license before inference."
+    }
+  },
+  {
+    "id": "image.layers",
+    "name": "Qwen Image Layered",
+    "status": "planned",
+    "runtime": "python-fastapi",
+    "provider": "Qwen Image Layered",
+    "version": "source-pinned",
+    "hardwareRequirements": {
+      "cpu": "required",
+      "mps": "optional",
+      "cuda": "recommended",
+      "notes": "No model runtime or weights are installed in this track."
+    },
+    "inputs": ["image", "prompt"],
+    "outputs": ["rgba-layers", "layer-metadata"],
+    "upstream": {
+      "repository": "https://github.com/QwenLM/Qwen-Image-Layered",
+      "pinnedRef": "54c4fe47e76d745775e03fc66ee38457280ed9ea",
+      "codeLicense": "Apache-2.0",
+      "modelLicense": "Apache-2.0 (upstream Qwen-Image-Layered weights; no weights downloaded)"
+    }
+  },
+  {
+    "id": "image.segment",
+    "name": "SAM 2",
+    "status": "planned",
+    "runtime": "python-fastapi",
+    "provider": "SAM 2",
+    "version": "source-pinned",
+    "hardwareRequirements": {
+      "cpu": "required",
+      "mps": "optional",
+      "cuda": "recommended",
+      "notes": "No SAM 2 package or checkpoint is installed in this track."
+    },
+    "inputs": ["image", "points", "boxes"],
+    "outputs": ["mask", "mask-metadata"],
+    "upstream": {
+      "repository": "https://github.com/facebookresearch/sam2",
+      "pinnedRef": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+      "codeLicense": "Apache-2.0",
+      "modelLicense": "Apache-2.0 (upstream SAM 2 checkpoints; no checkpoint downloaded)"
+    }
+  },
+  {
+    "id": "image.inpaint",
+    "name": "Inpainting",
+    "status": "unavailable",
+    "runtime": "reserved",
+    "provider": "reserved",
+    "version": "not-selected",
+    "hardwareRequirements": {
+      "cpu": "not-required",
+      "mps": "not-required",
+      "cuda": "not-required",
+      "notes": "No local inpainting adapter has been selected."
+    },
+    "inputs": ["image", "mask", "prompt"],
+    "outputs": ["image"],
+    "upstream": null,
+    "unavailableReason": "Reserved until a reviewed local inpainting adapter is selected."
+  },
+  {
+    "id": "video.compose.typography",
+    "name": "FFmpeg typography composition",
+    "status": "available",
+    "runtime": "ffmpeg",
+    "provider": "FFmpeg",
+    "version": "system-managed",
+    "hardwareRequirements": {
+      "cpu": "required",
+      "mps": "not-required",
+      "cuda": "optional",
+      "notes": "Uses the existing local FFmpeg runtime; no model is involved."
+    },
+    "inputs": ["video", "typography-overlay"],
+    "outputs": ["video"],
+    "upstream": {
+      "repository": "https://github.com/FFmpeg/FFmpeg",
+      "pinnedRef": "system-managed",
+      "codeLicense": "LGPL-2.1-or-later or GPL-2.0-or-later, depending on the local build",
+      "modelLicense": "Not applicable"
+    }
+  }
+]
