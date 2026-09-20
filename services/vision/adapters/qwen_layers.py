@@ -6,7 +6,7 @@ import binascii
 import importlib.metadata
 import importlib.util
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from io import BytesIO
 from typing import Any
 from urllib.parse import urlparse
@@ -27,6 +27,7 @@ MAX_REMOTE_LAYER_BYTES = 16 * 1024 * 1024
 MAX_REMOTE_RESPONSE_BYTES = 192 * 1024 * 1024
 MAX_REMOTE_LAYER_PIXELS = 4 * 1024 * 1024
 MAX_REMOTE_TOTAL_PIXELS = MAX_REMOTE_LAYER_PIXELS * 8
+MAX_NORMALIZED_OUTPUT_PIXELS = MAX_REMOTE_TOTAL_PIXELS
 
 
 class FakeQwenLayersBackend:
@@ -198,7 +199,7 @@ class QwenRemoteHttpsBackend(_ConfiguredQwenBackend):
         self,
         settings: QwenLayersSettings,
         *,
-        request_handler: Callable[[str, str, Mapping[str, object], int], Mapping[str, object]] | None = None,
+        request_handler: Callable[[str, str, Mapping[str, object], int], Awaitable[Mapping[str, object]]] | None = None,
     ) -> None:
         super().__init__(settings)
         self._request_handler = request_handler or _remote_request
@@ -245,8 +246,7 @@ class QwenRemoteHttpsBackend(_ConfiguredQwenBackend):
         }
         try:
             response = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._request_handler,
+                self._request_handler(
                     self._settings.remote_url,
                     self._settings.remote_token,
                     request,
@@ -263,8 +263,8 @@ class QwenRemoteHttpsBackend(_ConfiguredQwenBackend):
         return _remote_layer_predictions(response, image, options, self)
 
 
-def _remote_request(url: str, token: str, request: Mapping[str, object], timeout_seconds: int) -> Mapping[str, object]:
-    with httpx.Client(timeout=timeout_seconds, follow_redirects=False) as client, client.stream(
+async def _remote_request(url: str, token: str, request: Mapping[str, object], timeout_seconds: int) -> Mapping[str, object]:
+    async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False) as client, client.stream(
         "POST",
         url,
         json=request,
@@ -280,7 +280,7 @@ def _remote_request(url: str, token: str, request: Mapping[str, object], timeout
             if expected_bytes > MAX_REMOTE_RESPONSE_BYTES:
                 raise VisionCapabilityUnavailable("Qwen Image Layered remote response exceeded the configured size limit.")
         body = bytearray()
-        for chunk in response.iter_bytes():
+        async for chunk in response.aiter_bytes():
             body.extend(chunk)
             if len(body) > MAX_REMOTE_RESPONSE_BYTES:
                 raise VisionCapabilityUnavailable("Qwen Image Layered remote response exceeded the configured size limit.")
@@ -313,8 +313,11 @@ def _remote_layer_predictions(
     for raw_layer in raw_layers:
         if not isinstance(raw_layer, Mapping) or not isinstance(raw_layer.get("pngBase64"), str):
             raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned an invalid layer schema.")
+        encoded_layer = raw_layer["pngBase64"]
+        if len(encoded_layer) > _max_base64_chars(MAX_REMOTE_LAYER_BYTES):
+            raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned an oversized encoded layer.")
         try:
-            raw_png = base64.b64decode(raw_layer["pngBase64"], validate=True)
+            raw_png = base64.b64decode(encoded_layer, validate=True)
         except (ValueError, binascii.Error) as error:
             raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned invalid layer encoding.") from error
         if len(raw_png) > MAX_REMOTE_LAYER_BYTES:
@@ -340,6 +343,8 @@ def _remote_layer_predictions(
 def _layer_predictions(layers: Sequence[Image.Image], image: DecodedImage, options: LayerOptions) -> list[LayerPrediction]:
     if len(layers) != options.requestedLayerCount:
         raise VisionCapabilityUnavailable("Qwen Image Layered returned an unexpected layer count.")
+    if image.width * image.height * options.requestedLayerCount > MAX_NORMALIZED_OUTPUT_PIXELS:
+        raise VisionCapabilityUnavailable("Qwen Image Layered normalized output would exceed the configured normalized output pixel limit.")
     output_size: tuple[int, int] | None = None
     predictions = []
     for index, layer in enumerate(layers):
@@ -357,6 +362,10 @@ def _layer_predictions(layers: Sequence[Image.Image], image: DecodedImage, optio
             raise VisionCapabilityUnavailable("Qwen Image Layered returned an empty alpha layer.")
         predictions.append(LayerPrediction(id=f"layer-{index + 1}", png=encode_rgba(normalized), zIndex=index, alphaCoverage=coverage))
     return predictions
+
+
+def _max_base64_chars(byte_limit: int) -> int:
+    return ((byte_limit + 2) // 3) * 4
 
 
 class DisabledQwenLayersBackend(_ConfiguredQwenBackend):

@@ -101,7 +101,7 @@ class LayersContractTests(unittest.TestCase):
         payload = base64.b64encode(png.getvalue()).decode("ascii")
         received = {}
 
-        def request_handler(url, token, request, timeout_seconds):
+        async def request_handler(url, token, request, timeout_seconds):
             received.update({"url": url, "token": token, "request": request, "timeout_seconds": timeout_seconds})
             return {"version": "remote-test", "layers": [{"pngBase64": payload, "zIndex": index} for index in range(4)]}
 
@@ -142,7 +142,10 @@ class LayersContractTests(unittest.TestCase):
             timeout_seconds=60,
             min_free_vram_bytes=1,
         )
-        backend = adapter_module.QwenRemoteHttpsBackend(settings, request_handler=lambda *_: {})
+        async def request_handler(*_):
+            return {}
+
+        backend = adapter_module.QwenRemoteHttpsBackend(settings, request_handler=request_handler)
         image = image_module.decode_image(image_bytes(), "image/png", max_bytes=4096, max_pixels=10_000)
 
         with self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "allowlisted"):
@@ -176,13 +179,19 @@ class LayersContractTests(unittest.TestCase):
         )
         image = image_module.decode_image(image_bytes(), "image/png", max_bytes=4096, max_pixels=10_000)
 
+        async def empty_response(*_):
+            return {}
+
+        async def invalid_response(*_):
+            return {"layers": [{"pngBase64": base64.b64encode(b"not a PNG").decode("ascii")}] * 4}
+
         with self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "query parameters"):
-            asyncio.run(adapter_module.QwenRemoteHttpsBackend(query_settings, request_handler=lambda *_: {}).decompose(image))
+            asyncio.run(adapter_module.QwenRemoteHttpsBackend(query_settings, request_handler=empty_response).decompose(image))
         with self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "invalid layer image"):
             asyncio.run(
                 adapter_module.QwenRemoteHttpsBackend(
                     invalid_response_settings,
-                    request_handler=lambda *_: {"layers": [{"pngBase64": base64.b64encode(b"not a PNG").decode("ascii")}] * 4},
+                    request_handler=invalid_response,
                 ).decompose(image)
             )
 
@@ -192,6 +201,59 @@ class LayersContractTests(unittest.TestCase):
 
         with self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "response exceeded"):
             adapter_module.parse_remote_response(b"x" * (adapter_module.MAX_REMOTE_RESPONSE_BYTES + 1))
+
+    def test_remote_backend_timeout_cancels_the_async_request(self) -> None:
+        adapter_module = load_module("services.vision.adapters.qwen_layers")
+        config_module = load_module("services.vision.config")
+        image_module = load_module("services.vision.image_input")
+        base_module = load_module("services.vision.adapters.base")
+        settings = config_module.QwenLayersSettings(
+            enabled=True,
+            backend="remote-https",
+            model_path=None,
+            remote_url="https://layers.example.test/v1/decompose",
+            remote_token="server-only-token",
+            remote_allowed_hosts=("layers.example.test",),
+            timeout_seconds=1,
+            min_free_vram_bytes=1,
+        )
+        canceled = []
+
+        async def slow_request(*_):
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                canceled.append(True)
+                raise
+
+        image = image_module.decode_image(image_bytes(), "image/png", max_bytes=4096, max_pixels=10_000)
+        with self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "timed out"):
+            asyncio.run(adapter_module.QwenRemoteHttpsBackend(settings, request_handler=slow_request).decompose(image))
+        self.assertEqual(canceled, [True])
+
+    def test_remote_layers_reject_oversized_base64_before_decoding_and_excessive_normalized_canvas(self) -> None:
+        adapter_module = load_module("services.vision.adapters.qwen_layers")
+        base_module = load_module("services.vision.adapters.base")
+        image_module = load_module("services.vision.image_input")
+        schema_module = load_module("services.vision.schemas.layers")
+        options = schema_module.LayerOptions(requestedLayerCount=4)
+        decoded = image_module.decode_image(image_bytes(), "image/png", max_bytes=4096, max_pixels=10_000)
+
+        with patch.object(adapter_module, "MAX_REMOTE_LAYER_BYTES", 3), self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "encoded layer"):
+            adapter_module._remote_layer_predictions(
+                {"layers": [{"pngBase64": "QUJDRA=="}] * 4},
+                decoded,
+                options,
+                object(),
+            )
+
+        too_large_source = image_module.DecodedImage(data=b"", mimeType="image/png", width=2_100, height=2_000)
+        with self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "normalized output pixel limit"):
+            adapter_module._layer_predictions(
+                [Image.new("RGBA", (1, 1), (0, 0, 0, 255)) for _ in range(8)],
+                too_large_source,
+                schema_module.LayerOptions(requestedLayerCount=8),
+            )
 
     def test_fake_backend_returns_ordered_rgba_layers_that_recompose_to_the_source(self) -> None:
         adapter_module = load_module("services.vision.adapters.qwen_layers")
