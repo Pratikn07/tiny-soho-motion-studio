@@ -8,11 +8,11 @@ import { configuredTransportCapability, effectiveTransportCapability, type Media
 
 export type ProviderLocator = { kind: "data-url" | "public-url" | "dashscope-oss"; value: string; expiresAt?: string };
 export type ResolvedProviderMedia = { role: MediaRole; mime: string; locator: ProviderLocator; referenceVoice?: ProviderLocator };
-export type ProviderMediaInput = { role: MediaRole; asset: Asset; publicUrl?: string; referenceVoice?: { asset: Asset; publicUrl?: string } };
+export type ProviderMediaInput = { role: MediaRole; asset: Asset; publicUrl?: string; preparedLocator?: ProviderLocator; referenceVoice?: { asset: Asset; publicUrl?: string; preparedLocator?: ProviderLocator } };
 export type ProviderMediaResolution = { ok: true; media: ResolvedProviderMedia[] } | { ok: false; reason: string };
 export type ProviderMediaPreflight = { ok: true } | { ok: false; reason: string };
 
-type TemporaryUpload = (input: { asset: Asset; model: ModelCapability; expiresAfterSeconds: number }) => Promise<string | { url: string; expiresAt?: string }>;
+type TemporaryUpload = (input: { asset: Asset; role: MediaRole | "reference-voice"; model: ModelCapability; expiresAfterSeconds: number }) => Promise<string | { url: string; expiresAt?: string }>;
 export type ResolveProviderMediaOptions = {
   model: ModelCapability;
   media: ProviderMediaInput[];
@@ -68,13 +68,22 @@ export function preflightProviderMedia(options: Pick<ResolveProviderMediaOptions
   return { ok: true };
 }
 
-async function locatorFor(input: { asset: Asset; publicUrl?: string }, role: MediaRole, options: ResolveProviderMediaOptions): Promise<ProviderLocator | ProviderMediaResolution> {
-  if (inlineImageRoles.has(role)) {
+function usablePreparedLocator(locator: ProviderLocator | undefined): ProviderLocator | null {
+  if (!locator || !["public-url", "dashscope-oss"].includes(locator.kind) || !locator.expiresAt || Number.isNaN(Date.parse(locator.expiresAt)) || Date.parse(locator.expiresAt) <= Date.now() || !isSafeBailianTemporaryLocator(locator.value)) return null;
+  return locator;
+}
+
+async function locatorFor(input: { asset: Asset; publicUrl?: string; preparedLocator?: ProviderLocator }, role: MediaRole | "reference-voice", options: ResolveProviderMediaOptions): Promise<ProviderLocator | ProviderMediaResolution> {
+  if (inlineImageRoles.has(role as MediaRole)) {
     if (!input.asset.mime.startsWith("image/")) return { ok: false, reason: `${role.replace("-", " ")} requires an image asset.` };
     const bytes = await (options.readFile || fs.readFile)(input.asset.path);
     if (bytes.length > imageLimitBytes) return { ok: false, reason: "Inline reference images must be 20 MB or smaller." };
     return { kind: "data-url", value: `data:${input.asset.mime};base64,${bytes.toString("base64")}` };
   }
+
+  const prepared = usablePreparedLocator(input.preparedLocator);
+  const capability = effectiveTransportCapability(options.capability || configuredTransportCapability(), options.model.providerModel);
+  if (prepared && capability.state === "verified") return prepared;
 
   if (input.publicUrl !== undefined) {
     if (!isSafePublicMediaUrl(input.publicUrl)) return { ok: false, reason: "A supplied public media URL must be a safe HTTPS URL." };
@@ -84,9 +93,8 @@ async function locatorFor(input: { asset: Asset; publicUrl?: string }, role: Med
   const existing = privateProviderUrl(input.asset);
   if (existing) return { kind: "public-url", value: existing.url, ...(existing.expiresAt ? { expiresAt: existing.expiresAt } : {}) };
 
-  const capability = effectiveTransportCapability(options.capability || configuredTransportCapability(), options.model.providerModel);
   if (capability.state !== "verified" || !options.temporaryUpload) return { ok: false, reason: unavailableReason(role) };
-  const result = await options.temporaryUpload({ asset: input.asset, model: options.model, expiresAfterSeconds: capability.expiresAfterSeconds || 0 });
+  const result = await options.temporaryUpload({ asset: input.asset, role, model: options.model, expiresAfterSeconds: capability.expiresAfterSeconds || 0 });
   const temporary = typeof result === "string" ? { url: result } : result;
   if (!isSafeBailianTemporaryLocator(temporary.url)) return { ok: false, reason: "Temporary upload returned an unsafe provider locator." };
   return { kind: temporary.url.startsWith("oss://") ? "dashscope-oss" : "public-url", value: temporary.url, ...(temporary.expiresAt ? { expiresAt: temporary.expiresAt } : {}) };
@@ -102,7 +110,7 @@ export async function resolveProviderMedia(options: ResolveProviderMediaOptions)
     const result = locator as ProviderLocator;
     let referenceVoice: ProviderLocator | undefined;
     if (input.referenceVoice) {
-      const voice = await locatorFor(input.referenceVoice, "reference-audio", options);
+      const voice = await locatorFor(input.referenceVoice, "reference-voice", options);
       if ("ok" in voice) {
         if (!voice.ok) return voice;
       }

@@ -1,15 +1,29 @@
 import fs from "node:fs/promises";
+import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { uploadBailianTemporaryAsset } from "../lib/media-transport/bailian";
+import { bailianProbeFixtures, type BailianProbeFixture } from "../lib/media-transport/probe-fixtures";
 import { listModels } from "../lib/models";
 
 const confirmation = "I_CONFIRM_THIS_IS_A_NO_GENERATION_UPLOAD_PROBE";
-const fixture = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLFWQAAAABJRU5ErkJggg==", "base64");
 
 function positiveInteger(value: string | undefined) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function runFfmpeg(args: string[]) {
+  return new Promise<void>((resolve, reject) => {
+    execFile("ffmpeg", args, { shell: false, timeout: 30_000, maxBuffer: 64 * 1024, windowsHide: true }, (error) => error ? reject(new Error("Could not create a synthetic no-generation probe fixture.")) : resolve());
+  });
+}
+
+async function createProbeFixtures(directory: string): Promise<BailianProbeFixture[]> {
+  const fixtures = bailianProbeFixtures(directory);
+  for (const fixture of fixtures) await runFfmpeg(fixture.command);
+  return fixtures;
 }
 
 async function main() {
@@ -21,17 +35,18 @@ async function main() {
   if (!expiresAfterSeconds) throw new Error("Set TINY_SOHO_BAILIAN_PROBE_EXPIRY_SECONDS to the expiry you have independently confirmed for this exact temporary-upload result.");
 
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "tiny-soho-bailian-probe-"));
-  const filePath = path.join(directory, "probe.png");
   try {
-    await fs.writeFile(filePath, fixture, { mode: 0o600 });
-    const uploaded = await uploadBailianTemporaryAsset({
-      asset: { id: "probe", projectId: null, kind: "probe", name: "probe.png", mime: "image/png", path: filePath, width: 1, height: 1, duration: null, hash: "probe", provenance: "{}", createdAt: new Date().toISOString() },
-      model,
-      expiresAfterSeconds,
-    });
+    const fixtures = await createProbeFixtures(directory);
+    for (const [index, fixture] of fixtures.entries()) {
+      const uploaded = await uploadBailianTemporaryAsset({
+        asset: { id: `probe-${index}`, projectId: null, kind: "probe", ...fixture.asset, hash: "probe", provenance: "{}", createdAt: new Date().toISOString() },
+        model,
+        expiresAfterSeconds,
+      });
+      if (!uploaded.url) throw new Error("Bailian temporary upload did not return a usable locator.");
+    }
     const capability = { id: "bailian-temporary-upload", state: "verified", region: "ap-southeast-1", models: [model.providerModel], expiresAfterSeconds, lastVerifiedAt: new Date().toISOString() };
-    if (!uploaded.url) throw new Error("Bailian temporary upload did not return a usable locator.");
-    console.log("No-generation upload probe returned an approved locator. It is intentionally not printed or saved.");
+    console.log("Both no-generation video and audio uploads returned approved locators. They are intentionally not printed or saved.");
     console.log("Review this candidate capability record before copying it into your owner-only .env:");
     console.log(JSON.stringify(capability));
   } finally {
@@ -39,7 +54,9 @@ async function main() {
   }
 }
 
-void main().catch((error) => {
-  console.error(error instanceof Error ? error.message : "Bailian temporary transport probe failed.");
-  process.exitCode = 1;
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  void main().catch((error) => {
+    console.error(error instanceof Error ? error.message : "Bailian temporary transport probe failed.");
+    process.exitCode = 1;
+  });
+}

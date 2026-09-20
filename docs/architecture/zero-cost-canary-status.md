@@ -30,11 +30,14 @@ valid outcome; no storage service, tunnel, or paid infrastructure was created.
 
 ## Optional Vision runtime
 
-**Unavailable, correctly reported.** `vision:doctor` found `ffmpeg` and
-`ffprobe`, but no FastAPI/Pillow/Uvicorn base runtime, PyTorch, model weights,
-or approved remote backend. The repository verification passed without tracked
-model or checkpoint artifacts. The implementation does not install packages,
-download weights, or acquire GPU infrastructure automatically.
+**Base sidecar ready; inference runtimes unavailable, correctly reported.** A
+local ignored Python 3.11 environment now has the five base sidecar
+dependencies, and the local FFmpeg/FFprobe typography-composition smoke
+passed. `vision:doctor` still reports no PyTorch, OCR/SAM2/Qwen runtime, model
+weights, or approved remote backend. The repository verification passed without
+tracked model or checkpoint artifacts. The implementation does not install
+optional packages, download weights, or acquire GPU infrastructure
+automatically.
 
 ## Knowledge retrieval smoke
 
