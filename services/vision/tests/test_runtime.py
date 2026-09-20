@@ -42,3 +42,13 @@ class VisionRuntimeTests(unittest.TestCase):
         self.assertEqual(status.state, "error")
         self.assertFalse(status.available)
         self.assertEqual(status.reason, "CUDA smoke test failed.")
+
+    def test_runtime_ready_transition_can_clear_an_unavailable_reason(self) -> None:
+        registry_module = load_module("services.vision.runtime.registry")
+        registry = registry_module.RuntimeRegistry.default()
+
+        registry.transition("image.ocr", state="ready", reason=None)
+
+        status = registry.status("image.ocr")
+        self.assertTrue(status.available)
+        self.assertIsNone(status.reason)

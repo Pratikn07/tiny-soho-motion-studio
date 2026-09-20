@@ -3,10 +3,13 @@ from __future__ import annotations
 import asyncio
 import base64
 import importlib
+import os
 import sys
+import tempfile
 import unittest
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -28,6 +31,87 @@ def load_module(module_name: str):
 
 
 class OcrContractTests(unittest.TestCase):
+    def test_paddle_ocr_configuration_requires_explicit_external_model_directories(self) -> None:
+        config_module = load_module("services.vision.config")
+        with patch.dict(
+            os.environ,
+            {
+                "TINY_SOHO_PADDLE_OCR_ENABLED": "1",
+                "TINY_SOHO_PADDLE_OCR_PROFILE": "v5-mobile",
+                "TINY_SOHO_PADDLE_OCR_DET_MODEL_DIR": "/opt/tiny-soho/models/det",
+                "TINY_SOHO_PADDLE_OCR_REC_MODEL_DIR": "/opt/tiny-soho/models/rec",
+                "TINY_SOHO_PADDLE_OCR_LANGUAGE": "en",
+                "TINY_SOHO_PADDLE_OCR_TIMEOUT_SECONDS": "30",
+            },
+            clear=False,
+        ):
+            config = config_module.VisionConfig.from_env()
+
+        self.assertTrue(config.paddle_ocr.enabled)
+        self.assertEqual(config.paddle_ocr.profile, "v5-mobile")
+        self.assertEqual(config.paddle_ocr.detection_model_dir, Path("/opt/tiny-soho/models/det"))
+        self.assertEqual(config.paddle_ocr.recognition_model_dir, Path("/opt/tiny-soho/models/rec"))
+        self.assertEqual(config.paddle_ocr.language, "en")
+        self.assertEqual(config.paddle_ocr.timeout_seconds, 30)
+
+    def test_paddle_ocr_normalizes_real_engine_output_without_dropping_low_recognition_text(self) -> None:
+        ocr_module = load_module("services.vision.adapters.paddle_ocr")
+        config_module = load_module("services.vision.config")
+        image_module = load_module("services.vision.image_input")
+
+        class FakePipeline:
+            received_image = None
+
+            def predict(self, image):
+                self.received_image = image
+                return [
+                    {
+                        "dt_polys": [[[0, 0], [10, 0], [10, 4], [0, 4]]],
+                        "dt_scores": [0.95],
+                        "rec_texts": ["Tiny Soho"],
+                        "rec_scores": [0.01],
+                    }
+                ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            model_root = Path(temporary_directory)
+            detection_model_dir = model_root / "detection"
+            recognition_model_dir = model_root / "recognition"
+            for model_dir in (detection_model_dir, recognition_model_dir):
+                model_dir.mkdir()
+                (model_dir / "inference.yml").touch()
+                (model_dir / "inference.pdiparams").touch()
+
+            settings = config_module.PaddleOcrSettings(
+                enabled=True,
+                profile="v5-mobile",
+                detection_model_dir=detection_model_dir,
+                recognition_model_dir=recognition_model_dir,
+                language="en",
+                timeout_seconds=30,
+            )
+            pipeline = FakePipeline()
+            adapter = ocr_module.PaddleOcrAdapter(
+                settings,
+                engine_factory=lambda _: (pipeline, "3.7.0", "cpu"),
+            )
+            image_bytes = BytesIO()
+            Image.new("RGB", (10, 4), "white").save(image_bytes, format="PNG")
+            image = image_module.decode_image(image_bytes.getvalue(), "image/png", max_bytes=1024, max_pixels=100)
+            result = asyncio.run(adapter.recognize(image))
+
+        self.assertEqual(result.engine.provider, "PaddleOCR")
+        self.assertEqual(result.engine.model, "PP-OCRv5_mobile_det + en_PP-OCRv5_mobile_rec")
+        self.assertEqual(result.engine.version, "3.7.0")
+        self.assertEqual(result.engine.device, "cpu")
+        self.assertEqual(result.engine.runtimeStatus, "ready")
+        self.assertEqual(result.regions[0].text, "Tiny Soho")
+        self.assertEqual(result.regions[0].detectionConfidence, 0.95)
+        self.assertEqual(result.regions[0].recognitionConfidence, 0.01)
+        self.assertEqual(result.regions[0].polygon[-1].x, 0.0)
+        self.assertEqual(result.regions[0].polygon[-1].y, 1.0)
+        self.assertFalse(isinstance(pipeline.received_image, (str, Path)))
+
     def test_fake_ocr_preserves_a_low_confidence_region_for_typography_protection(self) -> None:
         ocr_module = load_module("services.vision.adapters.paddle_ocr")
         schema_module = load_module("services.vision.schemas.ocr")

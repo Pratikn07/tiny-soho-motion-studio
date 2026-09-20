@@ -42,6 +42,8 @@ class OcrEngine(BaseModel):
     provider: str = Field(min_length=1)
     model: str = Field(min_length=1)
     version: str = Field(min_length=1)
+    device: str | None = None
+    runtimeStatus: str | None = None
 
 
 class OcrResult(BaseModel):
