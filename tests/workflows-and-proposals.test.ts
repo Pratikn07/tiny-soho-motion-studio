@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createStore } from "@/lib/store";
-import { executeWorkflowRun } from "@/lib/workflows";
+import { executeWorkflowRun, validateWorkflow } from "@/lib/workflows";
 import { approveProposalJobs, validateDirectorProposal } from "@/lib/proposals";
 
 describe("workflows and approved proposals", () => {
@@ -28,6 +28,31 @@ describe("workflows and approved proposals", () => {
 
     expect(result.createdJobs).toHaveLength(1);
     expect(JSON.parse(store.listJobs(project.id)[0].options).media).toEqual([{ assetId: asset.id, role: "start-image" }]);
+  });
+
+  it("routes multiple named structured asset outputs through the V2 sourceOutput and targetInput contract", () => {
+    const store = storeFor(); const project = store.createProject("Multi-output graph"); const start = imageAsset(store, project.id); const end = imageAsset(store, project.id);
+    const workflow = store.createWorkflow("V2 multi-output", { version: 2, nodes: [{ id: "shot", type: "generate-video", data: { modelId: "alibaba:wan2.7-i2v", prompt: "Move" } }, { id: "source", type: "asset", data: { outputs: { start: start.id, end: end.id } } }], edges: [{ source: "source", sourceOutput: "start", target: "shot", targetInput: "media:start-image" }, { source: "source", sourceOutput: "end", target: "shot", targetInput: "media:end-image" }] });
+    const run = store.createWorkflowRun(workflow.id, project.id, JSON.parse(workflow.graph));
+    const result = executeWorkflowRun(store, run.id, new Set(["alibaba:wan2.7-i2v"]));
+
+    expect(result.createdJobs).toHaveLength(1);
+    expect(JSON.parse(store.listJobs(project.id)[0].options).media).toEqual([{ assetId: start.id, role: "start-image" }, { assetId: end.id, role: "end-image" }]);
+    expect(result.state.nodes.source.outputs).toEqual({ start: { assetId: start.id }, end: { assetId: end.id } });
+  });
+
+  it("rejects an unknown V2 source output or Vision target input before execution", () => {
+    const graph = { version: 2, nodes: [{ id: "asset", type: "asset", data: { assetId: "asset_1" } }, { id: "ocr", type: "vision-ocr" }], edges: [{ source: "asset", sourceOutput: "unknown", target: "ocr", targetInput: "unexpected" }] };
+    expect(() => validateWorkflow(graph)).toThrow(/source output.*not declared/i);
+  });
+
+  it("continues a legacy run whose completed node stored a string output value", () => {
+    const store = storeFor(); const project = store.createProject("Legacy run"); const asset = imageAsset(store, project.id);
+    const workflow = store.createWorkflow("Legacy output", { nodes: [{ id: "shot", type: "generate-video", data: { modelId: "alibaba:wan2.7-i2v", prompt: "Move" } }, { id: "source", type: "asset", data: { assetId: asset.id } }], edges: [{ source: "source", target: "shot", targetRole: "start-image" }] });
+    const run = store.createWorkflowRun(workflow.id, project.id, JSON.parse(workflow.graph));
+    store.updateWorkflowRun(run.id, { status: "running", nodes: { source: { status: "completed", outputAssetId: asset.id, outputs: { asset: asset.id } } } });
+
+    expect(executeWorkflowRun(store, run.id, new Set(["alibaba:wan2.7-i2v"])).createdJobs).toHaveLength(1);
   });
 
   it("fails an invalid image-to-video workflow before it creates a job", () => {
