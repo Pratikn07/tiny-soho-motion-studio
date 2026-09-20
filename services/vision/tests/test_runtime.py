@@ -52,3 +52,19 @@ class VisionRuntimeTests(unittest.TestCase):
         status = registry.status("image.ocr")
         self.assertTrue(status.available)
         self.assertIsNone(status.reason)
+
+    def test_configured_lazy_adapter_is_startable_before_its_first_inference(self) -> None:
+        registry_module = load_module("services.vision.runtime.registry")
+        registry = registry_module.RuntimeRegistry.default()
+
+        registry.transition(
+            "image.ocr",
+            state="unloaded",
+            available=True,
+            reason="PaddleOCR is configured; awaiting a real local inference.",
+        )
+
+        status = registry.status("image.ocr")
+        self.assertEqual(status.state, "unloaded")
+        self.assertTrue(status.available)
+        self.assertIn("configured", status.reason)

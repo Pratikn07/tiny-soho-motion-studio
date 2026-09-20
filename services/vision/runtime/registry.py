@@ -63,12 +63,17 @@ class RuntimeRegistry:
         *,
         state: RuntimeState,
         reason: str | None | object = _UNCHANGED,
+        available: bool | object = _UNCHANGED,
     ) -> CapabilityRuntimeStatus:
         current = self.status(capability_id)
+        if available is _UNCHANGED:
+            next_available = True if state == "ready" else False if state == "error" else current.available
+        else:
+            next_available = bool(available)
         next_status = replace(
             current,
             state=state,
-            available=state == "ready",
+            available=next_available,
             reason=current.reason if reason is _UNCHANGED else reason,
         )
         self._statuses[capability_id] = next_status
