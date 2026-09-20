@@ -60,6 +60,22 @@ describe("creative knowledge retrieval", () => {
     expect(result).toMatchObject({ status: "no-match", evidence: [] });
   });
 
+  it("does not let a frequently used weak lexical match outrank an active observed Tiny Soho use-case match", async () => {
+    const adversarial: KnowledgeSource = {
+      ...source,
+      async searchTechniques() {
+        return [
+          { id: "frequent", name: "Slow movement", category: "product", mechanism: "Slow movement", why_it_works: "Product motion", prompt_fragment: "slow product", confidence: 1, times_used: 999999, status: "draft", evidence_type: "hypothesis" },
+          { id: "tinysoho", name: "Gentle camera motion", category: "camera", mechanism: "Stable movement", why_it_works: "Preserves layout", prompt_fragment: "camera move", tinysoho_use_cases: "slow product push-in with text-safe space", confidence: 0.5, times_used: 0, status: "active", evidence_type: "observed" },
+        ];
+      },
+    };
+
+    const result = await retrieveCreativeKnowledge("slow product push-in with text-safe space", adversarial);
+
+    expect(result.evidence[0]).toMatchObject({ sourceId: "tinysoho", status: "active", evidenceType: "observed" });
+  });
+
   it("keeps unavailable knowledge distinct from an empty search result", async () => {
     const result = await retrieveCreativeKnowledge("A slow product push-in", null);
 

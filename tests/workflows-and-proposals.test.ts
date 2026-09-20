@@ -55,4 +55,8 @@ describe("workflows and approved proposals", () => {
   it("rejects a Director draft that invents a project media reference", () => {
     expect(() => validateDirectorProposal({ projectId: "project_1", shots: [{ prompt: "Move", modelId: "alibaba:wan2.7-r2v", media: [{ assetId: "asset_invented", role: "reference-image" }] }] }, { projectId: "project_1", allowedAssetIds: new Set(["asset_real"]) })).toThrow(/not available in this project/i);
   });
+
+  it("rejects a Director draft that invents an evidence reference", () => {
+    expect(() => validateDirectorProposal({ projectId: "project_1", shots: [{ prompt: "Move", modelId: "alibaba:wan3-video", evidenceRefs: ["technique:invented"] }] }, { projectId: "project_1", allowedAssetIds: new Set(), allowedEvidenceRefs: new Set(["technique:real"]) })).toThrow(/evidence.*not available/i);
+  });
 });
