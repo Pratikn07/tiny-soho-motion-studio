@@ -36,17 +36,15 @@ describe("hosted Studio owner authentication", () => {
 });
 
 describe("hosted Studio server configuration", () => {
-  it("normalizes the owner allowlist and never marks an incomplete configuration ready", () => {
+  it("normalizes the owner allowlist and requires only Vercel's own configuration", () => {
     const configuration = parseServerEnv({
       NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-test-key",
       SUPABASE_SERVICE_ROLE_KEY: "service-test-key",
       TINY_SOHO_STUDIO_ADMIN_EMAILS: " OWNER@TinySoho.Test , second@tinysoho.test ",
-      DASHSCOPE_API_KEY: "",
-      ALIBABA_WORKSPACE_ID: "workspace-test",
     });
 
     expect(configuration.ownerEmails).toEqual(["owner@tinysoho.test", "second@tinysoho.test"]);
-    expect(configuration.configured).toBe(false);
+    expect(configuration.configured).toBe(true);
   });
 });

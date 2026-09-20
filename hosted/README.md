@@ -8,10 +8,10 @@ This is a standalone, owner-only Vercel application. Configure its Vercel projec
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `TINY_SOHO_STUDIO_ADMIN_EMAILS`
-- `DASHSCOPE_API_KEY`
-- `ALIBABA_WORKSPACE_ID`
 
 Only the two `NEXT_PUBLIC_` variables are exposed in the browser. All other values stay server-side. The `creative-studio` Supabase Storage bucket is private; the app creates short-lived signed URLs only after server-side owner checks.
+
+`DASHSCOPE_API_KEY` and `ALIBABA_WORKSPACE_ID` belong only to the separately deployed Creative Worker. They must not be configured in Vercel.
 
 ## Local commands
 
@@ -25,4 +25,4 @@ npm run build
 
 ## Scope boundary
 
-This app provides only the hosted Motion Studio UI, owner-gated API routes, and browser-triggered Wan job status checks. It does not run Instagram automation, Meta webhooks, Railway workers, a permanent provider worker, or any scheduled job.
+This app provides only the hosted Motion Studio UI, owner-gated API routes, and job-status reads. The separate Creative Worker submits, polls, and stores Alibaba results. This Vercel app does not run Instagram automation, Meta webhooks, Railway workers, a permanent provider worker, or any scheduled job.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOrGetJob, synchronizeJob } from "@/lib/jobs";
+import { createOrGetJob } from "@/lib/jobs";
 
 describe("hosted Studio jobs", () => {
   it("returns the original job for an identical idempotency replay", async () => {
@@ -20,28 +20,5 @@ describe("hosted Studio jobs", () => {
         { idempotencyKey: "ce82a151-4c9d-47b0-a112-48fa8bcbe9cf", fingerprint: "new" },
       ),
     ).rejects.toMatchObject({ status: 409, code: "idempotency_conflict" });
-  });
-
-  it("marks provider success as needs_attention when result ingestion fails", async () => {
-    const result = await synchronizeJob(
-      { id: "job-1", status: "submitted", providerTaskId: "provider-1" },
-      {
-        checkTask: async () => ({ status: "SUCCEEDED" as const, outputUrl: "https://provider.test/result.mp4" }),
-        ingestResult: async () => { throw new Error("storage unavailable"); },
-        update: async (patch) => ({ id: "job-1", ...patch }),
-      },
-    );
-
-    expect(result).toMatchObject({ status: "needs_attention" });
-  });
-
-  it("does not query or ingest again after another request claimed result downloading", async () => {
-    const job = { id: "job-1", status: "downloading" as const, providerTaskId: "provider-1" };
-
-    await expect(synchronizeJob(job, {
-      checkTask: async () => { throw new Error("must not poll"); },
-      ingestResult: async () => { throw new Error("must not ingest"); },
-      update: async () => { throw new Error("must not update"); },
-    })).resolves.toEqual(job);
   });
 });

@@ -1,5 +1,3 @@
-create schema if not exists private;
-
 alter table public.creative_studio_assets
   add column if not exists updated_at timestamptz not null default now();
 
@@ -43,7 +41,8 @@ alter table public.creative_studio_assets
 
 alter table public.creative_studio_jobs
   drop constraint if exists creative_studio_jobs_model_id_check,
-  drop constraint if exists creative_studio_jobs_task_check;
+  drop constraint if exists creative_studio_jobs_task_check,
+  drop constraint if exists creative_studio_jobs_prompt_check;
 
 alter table public.creative_studio_jobs
   add constraint creative_studio_jobs_model_id_check
@@ -52,7 +51,9 @@ alter table public.creative_studio_jobs
     check (task in (
       'text-to-video', 'image-to-video', 'keyframe-to-video',
       'reference-to-video', 'video-edit', 'animate-move', 'animate-mix'
-    ));
+    )),
+  add constraint creative_studio_jobs_prompt_check
+    check (char_length(prompt) <= 5000);
 
 alter table storage.buckets
   add column if not exists allowed_mime_types text[];

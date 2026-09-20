@@ -44,4 +44,44 @@ describe("Singapore video catalogue", () => {
       acknowledgements: [{ modelId: "wan2.2-animate-move", contractVersion: model!.contractVersion }],
     })).not.toThrow();
   });
+
+  it("rejects a resolution outside the selected model contract", () => {
+    const model = getVideoModelContract("wan2.7-i2v");
+    expect(() => preflightVideoGeneration({
+      modelId: "wan2.7-i2v",
+      prompt: "Move slowly.",
+      media: [{ assetId: "frame", role: "first_frame" }],
+      options: { resolution: "480P", duration: 5 },
+      acknowledgements: [{ modelId: "wan2.7-i2v", contractVersion: model!.contractVersion }],
+    })).toThrow(/resolution/i);
+  });
+
+  it("limits Wan 2.7 reference-to-video to 10 seconds when a reference video is supplied", () => {
+    const model = getVideoModelContract("wan2.7-r2v");
+    expect(() => preflightVideoGeneration({
+      modelId: "wan2.7-r2v",
+      prompt: "Use the reference subject.",
+      media: [{ assetId: "reference", role: "reference_video" }],
+      options: { duration: 15, resolution: "720P" },
+      acknowledgements: [{ modelId: "wan2.7-r2v", contractVersion: model!.contractVersion }],
+    })).toThrow(/duration/i);
+  });
+
+  it("rejects a video-continuation request that combines incompatible source inputs", () => {
+    const model = getVideoModelContract("wan2.7-i2v");
+    expect(() => preflightVideoGeneration({
+      modelId: "wan2.7-i2v",
+      prompt: "Continue the scene.",
+      media: [
+        { assetId: "frame", role: "first_frame" },
+        { assetId: "clip", role: "first_clip" },
+      ],
+      options: { duration: 5, resolution: "720P" },
+      acknowledgements: [{ modelId: "wan2.7-i2v", contractVersion: model!.contractVersion }],
+    })).toThrow(/combination/i);
+  });
+
+  it("keeps the documented five-second default for Wan 2.1 Image-to-Video Turbo", () => {
+    expect(getVideoModelContract("wan2.1-i2v-turbo")?.defaultOptions.duration).toBe(5);
+  });
 });

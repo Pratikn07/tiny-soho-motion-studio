@@ -39,8 +39,34 @@ const standardParameters = (options: Record<string, unknown>) => ({
   ...(typeof options.aspectRatio === "string" && options.aspectRatio !== "adaptive" ? { ratio: options.aspectRatio } : {}),
   ...(typeof options.promptExtend === "boolean" ? { prompt_extend: options.promptExtend } : {}),
   ...(typeof options.watermark === "boolean" ? { watermark: options.watermark } : {}),
+  ...(options.shotType === "single" || options.shotType === "multi" ? { shot_type: options.shotType } : {}),
   ...(typeof options.audio === "boolean" ? { audio: options.audio } : {}),
+  ...(options.audioSetting === "auto" || options.audioSetting === "origin" ? { audio_setting: options.audioSetting } : {}),
 });
+
+const legacySize = (resolution: unknown, aspectRatio: unknown) => {
+  const tier = typeof resolution === "string" ? resolution : "720P";
+  const ratio = typeof aspectRatio === "string" ? aspectRatio : "16:9";
+  const sizes: Record<string, Record<string, string>> = {
+    "480P": { "16:9": "832*480", "9:16": "480*832", "1:1": "624*624" },
+    "720P": { "16:9": "1280*720", "9:16": "720*1280", "1:1": "960*960", "4:3": "1088*832", "3:4": "832*1088" },
+    "1080P": { "16:9": "1920*1080", "9:16": "1080*1920", "1:1": "1440*1440", "4:3": "1632*1248", "3:4": "1248*1632" },
+  };
+  return sizes[tier]?.[ratio] ?? sizes[tier]?.["16:9"] ?? "1280*720";
+};
+
+const legacyTextParameters = (options: Record<string, unknown>) => ({
+  ...(typeof options.duration === "number" ? { duration: options.duration } : {}),
+  size: legacySize(options.resolution, options.aspectRatio),
+  ...(typeof options.promptExtend === "boolean" ? { prompt_extend: options.promptExtend } : {}),
+  ...(typeof options.watermark === "boolean" ? { watermark: options.watermark } : {}),
+  ...(options.shotType === "single" || options.shotType === "multi" ? { shot_type: options.shotType } : {}),
+});
+
+const isLegacyTextModel = (model: string) => /^wan2\.(1|2|5|6)-t2v/.test(model);
+const isLegacyImageModel = (model: string) => /^wan2\.(1|2|5|6)-i2v/.test(model);
+const isLegacyReferenceModel = (model: string) => /^wan2\.6-r2v/.test(model);
+const isKeyframeModel = (model: string) => /^wan2\.(1|2)-kf2v/.test(model);
 
 export function providerRequest(input: {
   modelId: string;
@@ -76,15 +102,101 @@ export function providerRequest(input: {
     if (operation === "video_edit") {
       inputBody.video_url = value(input.media, "source_video");
       inputBody.mask_image_url = value(input.media, "mask_image");
+      inputBody.mask_frame_id = input.options.maskFrameId;
     }
     if (operation === "video_extension") inputBody.first_clip_url = value(input.media, "first_clip");
-    return { path: "/services/aigc/video-generation/video-synthesis", body: { model: providerModel, input: inputBody, parameters: standardParameters(input.options) } };
+    return {
+      path: "/services/aigc/video-generation/video-synthesis",
+      body: {
+        model: providerModel,
+        input: inputBody,
+        parameters: {
+          ...standardParameters(input.options),
+          ...(input.options.maskType === "tracking" || input.options.maskType === "manual" ? { mask_type: input.options.maskType } : {}),
+          ...(typeof input.options.expandRatio === "number" ? { expand_ratio: input.options.expandRatio } : {}),
+          ...(typeof input.options.topScale === "number" ? { top_scale: input.options.topScale } : {}),
+          ...(typeof input.options.bottomScale === "number" ? { bottom_scale: input.options.bottomScale } : {}),
+          ...(typeof input.options.leftScale === "number" ? { left_scale: input.options.leftScale } : {}),
+          ...(typeof input.options.rightScale === "number" ? { right_scale: input.options.rightScale } : {}),
+        },
+      },
+    };
   }
 
-  const media = input.media.map((item) => {
+  if (isLegacyTextModel(providerModel)) {
+    return {
+      path: "/services/aigc/video-generation/video-synthesis",
+      body: {
+        model: providerModel,
+        input: { ...(input.prompt ? { prompt: input.prompt } : {}), ...(value(input.media, "driving_audio") ? { audio_url: value(input.media, "driving_audio") } : {}) },
+        parameters: legacyTextParameters(input.options),
+      },
+    };
+  }
+
+  if (isLegacyImageModel(providerModel)) {
+    const imageUrl = value(input.media, "first_frame");
+    if (!imageUrl) throw new Error("Image-to-video requires a first-frame image.");
+    return {
+      path: "/services/aigc/video-generation/video-synthesis",
+      body: {
+        model: providerModel,
+        input: { ...(input.prompt ? { prompt: input.prompt } : {}), img_url: imageUrl, ...(value(input.media, "driving_audio") ? { audio_url: value(input.media, "driving_audio") } : {}) },
+        parameters: standardParameters(input.options),
+      },
+    };
+  }
+
+  if (isKeyframeModel(providerModel)) {
+    const firstFrameUrl = value(input.media, "first_frame");
+    const lastFrameUrl = value(input.media, "last_frame");
+    if (!firstFrameUrl || !lastFrameUrl) throw new Error("Keyframe-to-video requires first and last frame images.");
+    return {
+      path: "/services/aigc/video-generation/video-synthesis",
+      body: {
+        model: providerModel,
+        input: { ...(input.prompt ? { prompt: input.prompt } : {}), first_frame_url: firstFrameUrl, last_frame_url: lastFrameUrl },
+        parameters: standardParameters(input.options),
+      },
+    };
+  }
+
+  if (providerModel.startsWith("wan2.7-t2v")) {
+    return {
+      path: "/services/aigc/video-generation/video-synthesis",
+      body: {
+        model: providerModel,
+        input: { ...(input.prompt ? { prompt: input.prompt } : {}), ...(value(input.media, "driving_audio") ? { audio_url: value(input.media, "driving_audio") } : {}) },
+        parameters: standardParameters(input.options),
+      },
+    };
+  }
+
+  if (isLegacyReferenceModel(providerModel)) {
+    const referenceUrls = input.media
+      .filter((item) => item.role === "reference_image" || item.role === "reference_video")
+      .map((item) => item.url);
+    if (!referenceUrls.length) throw new Error("Reference-to-video requires reference media.");
+    return {
+      path: "/services/aigc/video-generation/video-synthesis",
+      body: {
+        model: providerModel,
+        input: { ...(input.prompt ? { prompt: input.prompt } : {}), reference_urls: referenceUrls },
+        parameters: {
+          ...legacyTextParameters(input.options),
+          ...(typeof input.options.audio === "boolean" ? { audio: input.options.audio } : {}),
+        },
+      },
+    };
+  }
+
+  const voices = input.media.filter((item) => item.role === "driving_audio").map((item) => item.url);
+  let voiceIndex = 0;
+  const media = input.media.filter((item) => item.role !== "driving_audio").map((item) => {
     const type = roleType[item.role as Exclude<WorkerMediaRole, "driving_video">];
     if (!type) throw new Error(`Unsupported provider media role: ${item.role}`);
-    return { type, url: item.url };
+    const voice = item.role === "reference_image" || item.role === "reference_video" ? voices[voiceIndex++] : undefined;
+    return { type, url: item.url, ...(voice ? { reference_voice: voice } : {}) };
   });
   return {
     path: "/services/aigc/video-generation/video-synthesis",
