@@ -5,6 +5,7 @@ import base64
 import binascii
 import importlib.metadata
 import importlib.util
+import json
 from collections.abc import Callable, Mapping, Sequence
 from io import BytesIO
 from typing import Any
@@ -23,6 +24,9 @@ from ..schemas.layers import LayerBackend, LayerOptions, LayerPrediction
 MODEL_ID = "Qwen/Qwen-Image-Layered"
 SOURCE_COMMIT = "54c4fe47e76d745775e03fc66ee38457280ed9ea"
 MAX_REMOTE_LAYER_BYTES = 16 * 1024 * 1024
+MAX_REMOTE_RESPONSE_BYTES = 192 * 1024 * 1024
+MAX_REMOTE_LAYER_PIXELS = 4 * 1024 * 1024
+MAX_REMOTE_TOTAL_PIXELS = MAX_REMOTE_LAYER_PIXELS * 8
 
 
 class FakeQwenLayersBackend:
@@ -194,7 +198,7 @@ class QwenRemoteHttpsBackend(_ConfiguredQwenBackend):
         self,
         settings: QwenLayersSettings,
         *,
-        request_handler: Callable[[str, str, Mapping[str, object]], Mapping[str, object]] | None = None,
+        request_handler: Callable[[str, str, Mapping[str, object], int], Mapping[str, object]] | None = None,
     ) -> None:
         super().__init__(settings)
         self._request_handler = request_handler or _remote_request
@@ -220,6 +224,8 @@ class QwenRemoteHttpsBackend(_ConfiguredQwenBackend):
         parsed = urlparse(self._settings.remote_url)
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
             return "Qwen Image Layered remote URL must be an HTTPS endpoint without embedded credentials."
+        if parsed.query or parsed.fragment:
+            return "Qwen Image Layered remote URL must not contain query parameters or fragments."
         if parsed.hostname.lower() not in self._settings.remote_allowed_hosts:
             return "Qwen Image Layered remote URL host is not explicitly allowlisted."
         return None
@@ -239,7 +245,13 @@ class QwenRemoteHttpsBackend(_ConfiguredQwenBackend):
         }
         try:
             response = await asyncio.wait_for(
-                asyncio.to_thread(self._request_handler, self._settings.remote_url, self._settings.remote_token, request),
+                asyncio.to_thread(
+                    self._request_handler,
+                    self._settings.remote_url,
+                    self._settings.remote_token,
+                    request,
+                    self._settings.timeout_seconds,
+                ),
                 timeout=self._settings.timeout_seconds,
             )
         except TimeoutError as error:
@@ -251,11 +263,37 @@ class QwenRemoteHttpsBackend(_ConfiguredQwenBackend):
         return _remote_layer_predictions(response, image, options, self)
 
 
-def _remote_request(url: str, token: str, request: Mapping[str, object]) -> Mapping[str, object]:
-    with httpx.Client(timeout=60, follow_redirects=False) as client:
-        response = client.post(url, json=request, headers={"Authorization": f"Bearer {token}"})
+def _remote_request(url: str, token: str, request: Mapping[str, object], timeout_seconds: int) -> Mapping[str, object]:
+    with httpx.Client(timeout=timeout_seconds, follow_redirects=False) as client, client.stream(
+        "POST",
+        url,
+        json=request,
+        headers={"Authorization": f"Bearer {token}"},
+    ) as response:
         response.raise_for_status()
-        payload = response.json()
+        content_length = response.headers.get("content-length")
+        if content_length is not None:
+            try:
+                expected_bytes = int(content_length)
+            except ValueError as error:
+                raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned an invalid Content-Length header.") from error
+            if expected_bytes > MAX_REMOTE_RESPONSE_BYTES:
+                raise VisionCapabilityUnavailable("Qwen Image Layered remote response exceeded the configured size limit.")
+        body = bytearray()
+        for chunk in response.iter_bytes():
+            body.extend(chunk)
+            if len(body) > MAX_REMOTE_RESPONSE_BYTES:
+                raise VisionCapabilityUnavailable("Qwen Image Layered remote response exceeded the configured size limit.")
+    return parse_remote_response(bytes(body))
+
+
+def parse_remote_response(body: bytes) -> Mapping[str, object]:
+    if len(body) > MAX_REMOTE_RESPONSE_BYTES:
+        raise VisionCapabilityUnavailable("Qwen Image Layered remote response exceeded the configured size limit.")
+    try:
+        payload = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned invalid JSON.") from error
     if not isinstance(payload, Mapping):
         raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned a non-object response.")
     return payload
@@ -271,6 +309,7 @@ def _remote_layer_predictions(
     if not isinstance(raw_layers, list) or len(raw_layers) != options.requestedLayerCount:
         raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned an unexpected layer count.")
     decoded_layers: list[Image.Image] = []
+    total_pixels = 0
     for raw_layer in raw_layers:
         if not isinstance(raw_layer, Mapping) or not isinstance(raw_layer.get("pngBase64"), str):
             raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned an invalid layer schema.")
@@ -280,9 +319,19 @@ def _remote_layer_predictions(
             raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned invalid layer encoding.") from error
         if len(raw_png) > MAX_REMOTE_LAYER_BYTES:
             raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned an oversized layer.")
-        with Image.open(BytesIO(raw_png)) as layer:
-            layer.load()
-            decoded_layers.append(layer.copy())
+        try:
+            with Image.open(BytesIO(raw_png)) as layer:
+                width, height = layer.size
+                pixels = width * height
+                if pixels > MAX_REMOTE_LAYER_PIXELS or total_pixels + pixels > MAX_REMOTE_TOTAL_PIXELS:
+                    raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned layers above the configured pixel limit.")
+                layer.load()
+                decoded_layers.append(layer.copy())
+                total_pixels += pixels
+        except VisionCapabilityUnavailable:
+            raise
+        except (Image.DecompressionBombError, OSError, ValueError) as error:
+            raise VisionCapabilityUnavailable("Qwen Image Layered remote backend returned an invalid layer image.") from error
     version = response.get("version")
     backend._version = version if isinstance(version, str) and version else "remote-response"
     return _layer_predictions(decoded_layers, image, options)

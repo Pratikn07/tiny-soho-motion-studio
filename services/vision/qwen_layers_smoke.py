@@ -32,6 +32,11 @@ async def run_smoke() -> dict[str, object]:
     started = time.perf_counter()
     layers = await backend.decompose(image, options)
     diagnostics = recomposition_diagnostics(image, layers)
+    note = (
+        "Explicit reviewed remote decomposition; the configured server received this image, but no model download was made by this command."
+        if isinstance(backend, QwenRemoteHttpsBackend)
+        else "Explicit local Qwen decomposition only; no provider request or model download was made by this command."
+    )
     return {
         "status": "warning" if diagnostics.warning else "passed",
         "backend": backend.backend.model_dump(),
@@ -39,7 +44,7 @@ async def run_smoke() -> dict[str, object]:
         "layerCount": len(layers),
         "latencyMilliseconds": round((time.perf_counter() - started) * 1000),
         "diagnostics": diagnostics.model_dump(),
-        "note": "Explicit Qwen decomposition only; no provider request or model download was made by this command.",
+        "note": note,
     }
 
 

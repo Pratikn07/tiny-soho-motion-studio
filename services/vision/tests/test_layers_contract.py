@@ -101,8 +101,8 @@ class LayersContractTests(unittest.TestCase):
         payload = base64.b64encode(png.getvalue()).decode("ascii")
         received = {}
 
-        def request_handler(url, token, request):
-            received.update({"url": url, "token": token, "request": request})
+        def request_handler(url, token, request, timeout_seconds):
+            received.update({"url": url, "token": token, "request": request, "timeout_seconds": timeout_seconds})
             return {"version": "remote-test", "layers": [{"pngBase64": payload, "zIndex": index} for index in range(4)]}
 
         settings = config_module.QwenLayersSettings(
@@ -123,6 +123,7 @@ class LayersContractTests(unittest.TestCase):
         self.assertEqual(received["url"], "https://layers.example.test/v1/decompose")
         self.assertEqual(received["token"], "server-only-token")
         self.assertEqual(received["request"]["requestedLayerCount"], 4)
+        self.assertEqual(received["timeout_seconds"], 60)
         self.assertEqual(backend.backend.provider, "QwenRemoteHttpsBackend")
 
     def test_remote_backend_rejects_a_host_outside_the_server_allowlist(self) -> None:
@@ -146,6 +147,51 @@ class LayersContractTests(unittest.TestCase):
 
         with self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "allowlisted"):
             asyncio.run(backend.decompose(image, schema_module.LayerOptions(requestedLayerCount=4)))
+
+    def test_remote_backend_rejects_query_parameters_and_invalid_layer_images(self) -> None:
+        adapter_module = load_module("services.vision.adapters.qwen_layers")
+        config_module = load_module("services.vision.config")
+        image_module = load_module("services.vision.image_input")
+        schema_module = load_module("services.vision.schemas.layers")
+        base_module = load_module("services.vision.adapters.base")
+        query_settings = config_module.QwenLayersSettings(
+            enabled=True,
+            backend="remote-https",
+            model_path=None,
+            remote_url="https://layers.example.test/v1/decompose?token=not-allowed",
+            remote_token="server-only-token",
+            remote_allowed_hosts=("layers.example.test",),
+            timeout_seconds=60,
+            min_free_vram_bytes=1,
+        )
+        invalid_response_settings = config_module.QwenLayersSettings(
+            enabled=True,
+            backend="remote-https",
+            model_path=None,
+            remote_url="https://layers.example.test/v1/decompose",
+            remote_token="server-only-token",
+            remote_allowed_hosts=("layers.example.test",),
+            timeout_seconds=60,
+            min_free_vram_bytes=1,
+        )
+        image = image_module.decode_image(image_bytes(), "image/png", max_bytes=4096, max_pixels=10_000)
+
+        with self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "query parameters"):
+            asyncio.run(adapter_module.QwenRemoteHttpsBackend(query_settings, request_handler=lambda *_: {}).decompose(image))
+        with self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "invalid layer image"):
+            asyncio.run(
+                adapter_module.QwenRemoteHttpsBackend(
+                    invalid_response_settings,
+                    request_handler=lambda *_: {"layers": [{"pngBase64": base64.b64encode(b"not a PNG").decode("ascii")}] * 4},
+                ).decompose(image)
+            )
+
+    def test_remote_response_parser_rejects_an_oversized_body_before_json_decoding(self) -> None:
+        adapter_module = load_module("services.vision.adapters.qwen_layers")
+        base_module = load_module("services.vision.adapters.base")
+
+        with self.assertRaisesRegex(base_module.VisionCapabilityUnavailable, "response exceeded"):
+            adapter_module.parse_remote_response(b"x" * (adapter_module.MAX_REMOTE_RESPONSE_BYTES + 1))
 
     def test_fake_backend_returns_ordered_rgba_layers_that_recompose_to_the_source(self) -> None:
         adapter_module = load_module("services.vision.adapters.qwen_layers")
