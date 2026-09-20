@@ -90,7 +90,16 @@ class ArtifactManager:
             Path(temporary_name).unlink(missing_ok=True)
             raise
 
-    def _metadata(self, *, kind: str, mime_type: str, size_bytes: int) -> ArtifactMetadata:
+    def _metadata(
+        self,
+        *,
+        kind: str,
+        mime_type: str,
+        size_bytes: int,
+        producer: str | None = None,
+        plate_mode: str | None = None,
+        plate_text_removed: bool | None = None,
+    ) -> ArtifactMetadata:
         artifact_id = str(uuid.uuid4())
         created_at = datetime.now(UTC)
         return ArtifactMetadata(
@@ -100,6 +109,9 @@ class ArtifactManager:
             createdAt=created_at,
             expiresAt=created_at + timedelta(seconds=self.ttl_seconds),
             sizeBytes=size_bytes,
+            producer=producer,
+            plateMode=plate_mode,
+            plateTextRemoved=plate_text_removed,
         )
 
     def _write_metadata(self, metadata: ArtifactMetadata) -> None:
@@ -139,7 +151,16 @@ class ArtifactManager:
             temporary.unlink(missing_ok=True)
             raise
 
-    def write_bytes(self, *, kind: str, mime_type: str, data: bytes) -> ArtifactMetadata:
+    def write_bytes(
+        self,
+        *,
+        kind: str,
+        mime_type: str,
+        data: bytes,
+        producer: str | None = None,
+        plate_mode: str | None = None,
+        plate_text_removed: bool | None = None,
+    ) -> ArtifactMetadata:
         if mime_type not in BYTE_WRITABLE_MIME_TYPES:
             raise ArtifactMimeTypeError("Unsupported artifact MIME type.")
         if not data:
@@ -147,7 +168,14 @@ class ArtifactManager:
         if len(data) > self.max_image_artifact_bytes:
             raise ArtifactTooLarge("Artifact exceeds the configured size limit.")
 
-        metadata = self._metadata(kind=kind, mime_type=mime_type, size_bytes=len(data))
+        metadata = self._metadata(
+            kind=kind,
+            mime_type=mime_type,
+            size_bytes=len(data),
+            producer=producer,
+            plate_mode=plate_mode,
+            plate_text_removed=plate_text_removed,
+        )
         self._write_atomic(self._data_path(metadata.id), data)
         self._write_metadata(metadata)
         return metadata

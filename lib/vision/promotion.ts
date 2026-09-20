@@ -44,7 +44,7 @@ export const promoteVisionArtifactRequestSchema = z.object({
 
 export type PromoteVisionArtifactRequest = z.infer<typeof promoteVisionArtifactRequestSchema>;
 type CoreStore = ReturnType<typeof createStore>;
-type PromotionMetadata = Pick<VisionArtifactMetadata, "id" | "kind" | "mimeType" | "sizeBytes">;
+type PromotionMetadata = Pick<VisionArtifactMetadata, "id" | "kind" | "mimeType" | "sizeBytes" | "producer" | "plateMode" | "plateTextRemoved">;
 
 type ReadyArtifact = { body: ReadableStream<Uint8Array>; contentType: string };
 type VisionSidecarSource = {
@@ -95,6 +95,9 @@ export async function promoteVisionArtifact(rawRequest: unknown, dependencies: P
           mime: metadata.mimeType,
           sizeBytes: metadata.sizeBytes,
           promotedAt: new Date().toISOString(),
+          producer: metadata.producer || null,
+          plateMode: metadata.plateMode || null,
+          plateTextRemoved: metadata.plateTextRemoved ?? null,
         },
       }),
     });

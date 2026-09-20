@@ -53,7 +53,7 @@ class GenerationPlateTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def test_original_plate_reuses_the_source_and_requires_a_covering_trusted_overlay(self) -> None:
+    def test_original_plate_mints_a_trusted_generation_plate_and_requires_a_covering_overlay(self) -> None:
         from services.vision.overlay import create_overlay_artifact
         from services.vision.plate import GenerationPlateBuildRequest, build_generation_plate
 
@@ -72,10 +72,15 @@ class GenerationPlateTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(result.artifactId, source.id)
+        self.assertNotEqual(result.artifactId, source.id)
         self.assertEqual(result.mode, "original-with-protected-text")
         self.assertFalse(result.textRemoved)
-        self.assertEqual(result.provenance["source"]["sha256"], result.provenance["plate"]["sha256"])
+        self.assertEqual(result.provenance["plate"]["artifactId"], result.artifactId)
+        metadata = self.manager.metadata(result.artifactId)
+        self.assertEqual(metadata.kind, "generation-plate")
+        self.assertEqual(metadata.producer, "generation-plate-builder")
+        self.assertEqual(metadata.plateMode, "original-with-protected-text")
+        self.assertFalse(metadata.plateTextRemoved)
 
     def test_layers_plate_excludes_text_like_layers_and_verifies_with_a_second_ocr_pass(self) -> None:
         from services.vision.overlay import create_overlay_artifact
@@ -145,10 +150,13 @@ class GenerationPlateTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(result.artifactId, source.id)
+        self.assertNotEqual(result.artifactId, source.id)
         self.assertFalse(result.textRemoved)
         self.assertEqual(result.mode, "original-with-protected-text")
         self.assertTrue(any("remaining typography" in warning for warning in result.warnings))
+        metadata = self.manager.metadata(result.artifactId)
+        self.assertEqual(metadata.kind, "generation-plate")
+        self.assertFalse(metadata.plateTextRemoved)
 
     def test_rejects_an_overlay_that_does_not_cover_all_protected_source_pixels(self) -> None:
         from services.vision.adapters.base import VisionCapabilityUnavailable

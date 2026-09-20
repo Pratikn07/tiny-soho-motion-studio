@@ -44,6 +44,9 @@ export const visionArtifactMetadataSchema = z.object({
   createdAt: z.string().datetime(),
   expiresAt: z.string().datetime(),
   sizeBytes: z.number().int().positive(),
+  producer: z.string().min(1).nullable().optional(),
+  plateMode: z.enum(["original-with-protected-text", "layers-text-removed"]).nullable().optional(),
+  plateTextRemoved: z.boolean().nullable().optional(),
 });
 export type VisionArtifactMetadata = z.infer<typeof visionArtifactMetadataSchema>;
 
