@@ -90,7 +90,16 @@ describe("Tiny Soho model contracts", () => {
   it("accepts Wan 2.7 I2V advanced URL-only roles without weakening the image-only path", () => {
     const model = getModel("alibaba:wan2.7-i2v");
     expect(() => validateGeneration(model, { task: "image-to-video", prompt: "The speaker follows the supplied track.", inputRoles: ["start-image", "driving-audio"], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).not.toThrow();
+    expect(() => validateGeneration(model, { task: "image-to-video", prompt: "The ending frame is preserved while the speaker follows the supplied track.", inputRoles: ["start-image", "end-image", "driving-audio"], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).not.toThrow();
     expect(() => validateGeneration(model, { task: "image-to-video", prompt: "Continue the supplied clip.", inputRoles: ["first-clip"], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).not.toThrow();
+    expect(() => validateGeneration(model, { task: "image-to-video", prompt: "Continue into the supplied last frame.", inputRoles: ["first-clip", "end-image"], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).not.toThrow();
+  });
+
+  it("keeps Tiny Soho's safe product defaults explicit instead of relying on provider defaults", () => {
+    expect(getModel("alibaba:wan2.7-i2v").defaultOptions).toMatchObject({ resolution: "720P" });
+    expect(getModel("alibaba:wan2.7-r2v").defaultOptions).toMatchObject({ resolution: "720P" });
+    expect(getModel("alibaba:wan3-video").defaultOptions).toMatchObject({ resolution: "720P", audio: false });
+    expect(getModel("alibaba:wan3-video-prime").defaultOptions).toMatchObject({ resolution: "720P", audio: false });
   });
 
   it("creates deterministic per-type reference indexes for Director and prompt compilation", () => {

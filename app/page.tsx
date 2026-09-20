@@ -80,6 +80,7 @@ export default function Studio() {
   const [duration, setDuration] = useState("5");
   const [resolution, setResolution] = useState("720P");
   const [ratio, setRatio] = useState("adaptive");
+  const [audioEnabled, setAudioEnabled] = useState(false);
   const active = models.find((model) => model.id === modelId);
   const images = assets.filter((asset) => asset.mime.startsWith("image/"));
   const videos = assets.filter((asset) => asset.mime.startsWith("video/"));
@@ -112,7 +113,7 @@ export default function Studio() {
   const selectModel = (id: string) => {
     const model = models.find((entry) => entry.id === id);
     setModelId(id); clearMedia();
-    if (model) { setDuration(String(model.defaultOptions.duration || "")); setResolution(String(model.defaultOptions.resolution || "")); setRatio(String(model.defaultOptions.aspectRatio || "")); }
+    if (model) { setDuration(String(model.defaultOptions.duration || "")); setResolution(String(model.defaultOptions.resolution || "")); setRatio(String(model.defaultOptions.aspectRatio || "")); setAudioEnabled(model.defaultOptions.audio === true); }
   };
 
   const media = useMemo(() => {
@@ -135,6 +136,9 @@ export default function Studio() {
 
   const selectedModelTransport = transport.models.find((entry) => entry.modelId === active?.id);
   const r2vFirstFrameSelected = active?.id === "alibaba:wan2.7-r2v" && Boolean(source);
+  const i2vFirstClipSelected = active?.id === "alibaba:wan2.7-i2v" && Boolean(firstClip);
+  const i2vStartOrDrivingSelected = active?.id === "alibaba:wan2.7-i2v" && Boolean(source || drivingAudio);
+  const supportsOutputAudio = typeof active?.defaultOptions.audio === "boolean";
   const transportReason = (role: TransportMedia["role"]) => selectedModelTransport?.media.find((entry) => entry.role === role)?.reason || transport.transport.reason || "Local URL transport is unavailable.";
   const available = (role: TransportMedia["role"]) => Boolean(selectedModelTransport?.media.find((entry) => entry.role === role)?.available);
   const asset = (assetId: string) => assets.find((entry) => entry.id === assetId);
@@ -169,6 +173,7 @@ export default function Studio() {
     if (active.duration) options.duration = Number(duration);
     if (active.resolutions) options.resolution = resolution;
     if (active.aspectRatios && !r2vFirstFrameSelected) options.aspectRatio = ratio;
+    if (supportsOutputAudio) options.audio = audioEnabled;
     try {
       const job = await api<Job>("/api/jobs", { method: "POST", body: JSON.stringify({ projectId, idempotencyKey: crypto.randomUUID(), modelId: active.id, prompt, media, options }) });
       setNotice("Queued " + job.id.slice(-8) + ". The worker still requires Free Quota confirmation."); await refresh();
@@ -209,17 +214,18 @@ export default function Studio() {
                     <div className={"transport-state " + transport.transport.state}><b>Local URL media: {transport.transport.state}</b><span>{transport.transport.reason || "Verified for the selected model."}</span></div>
                     <label>MODEL<select value={active?.id || ""} onChange={(event) => selectModel(event.target.value)}>{shownModels.map((model) => <option key={model.id} value={model.id}>{model.label}{model.eligible ? "" : " — blocked"}</option>)}</select></label>
                     <label>PROMPT<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} /></label>
-                    {(active?.media === "image" || hasRole(active, "start-image")) && <AssetPicker label={active?.media === "image" ? "SOURCE IMAGE OPTIONAL" : "START FRAME OPTIONAL"} assets={images} values={source ? [source] : []} setValues={(ids) => setSource(ids[0] || "")} />}
+                    {(active?.media === "image" || (hasRole(active, "start-image") && !i2vFirstClipSelected)) && <AssetPicker label={active?.media === "image" ? "SOURCE IMAGE OPTIONAL" : "START FRAME OPTIONAL"} assets={images} values={source ? [source] : []} setValues={(ids) => { setSource(ids[0] || ""); if (ids[0]) setFirstClip(""); }} />}
                     {hasRole(active, "end-image") && <AssetPicker label="END FRAME OPTIONAL" assets={images} values={end ? [end] : []} setValues={(ids) => setEnd(ids[0] || "")} />}
                     {hasRole(active, "reference-image") && <AssetPicker label="REFERENCE IMAGES" assets={images} values={referenceImages} setValues={setReferenceImages} multiple maximum={active?.mediaRules.maxByRole["reference-image"]} />}
                     {hasRole(active, "reference-video") && <><AssetPicker label="REFERENCE VIDEOS" assets={videos} values={referenceVideos} setValues={setReferenceVideos} multiple maximum={active?.mediaRules.maxByRole["reference-video"]} /><UrlFields values={referenceVideos} assets={videos} urls={urls} setUrl={setUrl} reason={"Local reference video: " + transportReason("reference-video")} /></>}
                     {hasRole(active, "reference-audio") && <><AssetPicker label="REFERENCE AUDIO" assets={audio} values={referenceAudio} setValues={setReferenceAudio} multiple maximum={active?.mediaRules.maxByRole["reference-audio"]} /><UrlFields values={referenceAudio} assets={audio} urls={urls} setUrl={setUrl} reason={"Local reference audio: " + transportReason("reference-audio")} /></>}
-                    {hasRole(active, "driving-audio") && <><AssetPicker label="DRIVING AUDIO" assets={audio} values={drivingAudio ? [drivingAudio] : []} setValues={(ids) => setDrivingAudio(ids[0] || "")} /><UrlFields values={drivingAudio ? [drivingAudio] : []} assets={audio} urls={urls} setUrl={setUrl} reason={"Local driving audio: " + transportReason("driving-audio")} /></>}
-                    {hasRole(active, "first-clip") && <><AssetPicker label="FIRST CLIP" assets={videos} values={firstClip ? [firstClip] : []} setValues={(ids) => setFirstClip(ids[0] || "")} /><UrlFields values={firstClip ? [firstClip] : []} assets={videos} urls={urls} setUrl={setUrl} reason={"Local first clip: " + transportReason("first-clip")} /></>}
+                    {hasRole(active, "driving-audio") && !i2vFirstClipSelected && <><AssetPicker label="DRIVING AUDIO" assets={audio} values={drivingAudio ? [drivingAudio] : []} setValues={(ids) => { setDrivingAudio(ids[0] || ""); if (ids[0]) setFirstClip(""); }} /><UrlFields values={drivingAudio ? [drivingAudio] : []} assets={audio} urls={urls} setUrl={setUrl} reason={"Local driving audio: " + transportReason("driving-audio")} /></>}
+                    {hasRole(active, "first-clip") && !i2vStartOrDrivingSelected && <><AssetPicker label="FIRST CLIP" assets={videos} values={firstClip ? [firstClip] : []} setValues={(ids) => { setFirstClip(ids[0] || ""); if (ids[0]) { setSource(""); setDrivingAudio(""); } }} /><UrlFields values={firstClip ? [firstClip] : []} assets={videos} urls={urls} setUrl={setUrl} reason={"Local first clip: " + transportReason("first-clip")} /></>}
                     {active?.id === "alibaba:wan2.7-r2v" && [...referenceImages, ...referenceVideos].map((referenceId) => <div key={referenceId} className="voice-row"><AssetPicker label={"REFERENCE VOICE FOR " + referenceId.slice(-8)} assets={audio} values={voices[referenceId] ? [voices[referenceId]] : []} setValues={(ids) => setVoices({ ...voices, [referenceId]: ids[0] || "" })} />{voices[referenceId] && <label>EXISTING PUBLIC HTTPS VOICE URL<input type="url" value={voiceUrls[referenceId] || ""} onChange={(event) => setVoiceUrls({ ...voiceUrls, [referenceId]: event.target.value })} placeholder="https://public.example/voice.mp3" /></label>}</div>)}
                     {active?.duration && <label>DURATION<select value={duration} onChange={(event) => setDuration(event.target.value)}>{active.duration.smartValue && <option value="-1">Smart duration</option>}{Array.from({ length: active.duration.max - active.duration.min + 1 }, (_, index) => active.duration!.min + index).map((value) => <option key={value} value={value}>{value} seconds</option>)}</select></label>}
                     {active?.resolutions && <label>RESOLUTION<select value={resolution} onChange={(event) => setResolution(event.target.value)}>{active.resolutions.map((value) => <option key={value}>{value}</option>)}</select></label>}
                     {active?.aspectRatios && (r2vFirstFrameSelected ? <p className="transport-hint">ASPECT RATIO · Derived from the selected first frame.</p> : <label>ASPECT RATIO<select value={ratio} onChange={(event) => setRatio(event.target.value)}>{active.aspectRatios.map((value) => <option key={value}>{value}</option>)}</select></label>)}
+                    {supportsOutputAudio && <label><input type="checkbox" checked={audioEnabled} onChange={(event) => setAudioEnabled(event.target.checked)} /> GENERATE AUDIO</label>}
                     <div className="presets"><button onClick={() => setPrompt(prompt + ". Locked camera, text-safe central negative space.")}>Locked</button><button onClick={() => setPrompt(prompt + ". Slow push-in, natural ambient movement.")}>Slow push-in</button><button onClick={() => setPrompt(prompt + ". Gentle lateral pan, soft daylight.")}>Gentle pan</button></div>
                     {!!blockers.length && <div className="transport-blockers"><b>Selected media cannot be queued yet</b>{blockers.map((blocker) => <span key={blocker}>{blocker}</span>)}<small>Select a reusable provider output or add a query-free public HTTPS URL.</small></div>}
                     <button className="primary generate" disabled={!canSubmit} onClick={() => void submit()}>{!active?.eligible ? "Confirm Free Quota Only in Settings" : blockers.length ? "Resolve media transport first" : "Generate after review →"}</button>

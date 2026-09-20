@@ -94,12 +94,29 @@ function exceeds(asset: { sizeBytes?: number | null }, maximum: number) { return
 function validateMediaMetadata(store: ReturnType<typeof createStore>, projectId: string, model: ModelCapability, media: Array<{ input: GenerationMedia; asset: ReturnType<ReturnType<typeof createStore>["getAsset"]> }>, options: GenerationOptions) {
   for (const { input, asset } of media) {
     if (!asset) continue;
-    if (input.role === "reference-image" && exceeds(asset, 20 * mib)) throw new Error("Reference images must be 20 MB or smaller.");
+    if (model.media === "video" && ["start-image", "end-image", "reference-image"].includes(input.role)) {
+      if (!asset.width || !asset.height || asset.width < 240 || asset.width > 8000 || asset.height < 240 || asset.height > 8000 || asset.width / asset.height < 1 / 8 || asset.width / asset.height > 8) throw new Error("Image dimensions are outside the provider limit.");
+      if (exceeds(asset, 20 * mib)) throw new Error("Video-model image inputs must be 20 MB or smaller.");
+    }
     if (input.role === "reference-video") {
       if (!["video/mp4", "video/quicktime"].includes(asset.mime)) throw new Error("Reference video must be MP4 or MOV.");
       if (!within(asset.duration, 1, 30)) throw new Error("Reference video duration must be from 1 to 30 seconds.");
       if (!asset.width || !asset.height || asset.width < 240 || asset.width > 4096 || asset.height < 240 || asset.height > 4096 || asset.width / asset.height < 1 / 8 || asset.width / asset.height > 8) throw new Error("Reference video dimensions are outside the provider limit.");
       if (exceeds(asset, 100 * mib)) throw new Error("Reference video must be 100 MB or smaller.");
+    }
+    if (input.role === "driving-audio") {
+      if (!["audio/mpeg", "audio/wav"].includes(asset.mime) || !within(asset.duration, 2, 30)) throw new Error("Driving audio must be WAV or MP3 from 2 to 30 seconds.");
+      if (exceeds(asset, 15 * mib)) throw new Error("Driving audio must be 15 MB or smaller.");
+    }
+    if (input.role === "first-clip") {
+      if (!["video/mp4", "video/quicktime"].includes(asset.mime)) throw new Error("First clip must be MP4 or MOV.");
+      if (!within(asset.duration, 2, 10)) throw new Error("First clip duration must be from 2 to 10 seconds.");
+      if (!asset.width || !asset.height || asset.width < 240 || asset.width > 4096 || asset.height < 240 || asset.height > 4096 || asset.width / asset.height < 1 / 8 || asset.width / asset.height > 8) throw new Error("First clip dimensions are outside the provider limit.");
+      if (exceeds(asset, 100 * mib)) throw new Error("First clip must be 100 MB or smaller.");
+    }
+    if (model.family === "wan3" && input.role === "reference-audio") {
+      if (!["audio/mpeg", "audio/wav"].includes(asset.mime)) throw new Error("Reference audio must be WAV or MP3.");
+      if (exceeds(asset, 15 * mib)) throw new Error("Reference audio must be 15 MB or smaller.");
     }
     if (input.referenceVoiceAssetId !== undefined) {
       if (model.family !== "wan2.7-r2v" || !["reference-image", "reference-video"].includes(input.role)) throw new Error("Reference voice is supported only for Wan 2.7 reference image or video media.");

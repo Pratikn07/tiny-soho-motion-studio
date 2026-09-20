@@ -81,4 +81,28 @@ describe("shared generation preflight", () => {
 
     expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "short-voice", modelId: "alibaba:wan2.7-r2v", prompt: "The reference image speaks.", media: [{ assetId: reference.id, role: "reference-image", referenceVoiceAssetId: voice.id }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan2.7-r2v"]))).toThrow(/reference voice.*1.*10/i);
   });
+
+  it("rejects I2V driving-audio and first-clip metadata outside the documented ranges before transport", () => {
+    const store = storeFor(); const project = store.createProject("I2V media limits"); const start = image(store, project.id);
+    const shortAudio = store.addAsset({ projectId: project.id, kind: "audio", name: "short.mp3", mime: "audio/mpeg", path: "/tmp/short.mp3", width: null, height: null, duration: 1, sizeBytes: 1024, hash: "audio", provenance: "{}" });
+    const longClip = store.addAsset({ projectId: project.id, kind: "video", name: "long.mp4", mime: "video/mp4", path: "/tmp/long.mp4", width: 320, height: 320, duration: 11, sizeBytes: 1024, hash: "video", provenance: "{}" });
+
+    expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "short-audio", modelId: "alibaba:wan2.7-i2v", prompt: "Animate with sound.", media: [{ assetId: start.id, role: "start-image" }, { assetId: shortAudio.id, role: "driving-audio", publicUrl: "https://media.example.test/short.mp3" }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan2.7-i2v"]))).toThrow(/driving audio.*2.*30/i);
+    expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "long-clip", modelId: "alibaba:wan2.7-i2v", prompt: "Continue the clip.", media: [{ assetId: longClip.id, role: "first-clip", publicUrl: "https://media.example.test/long.mp4" }], options: { duration: 15, resolution: "720P" } }, new Set(["alibaba:wan2.7-i2v"]))).toThrow(/first clip.*2.*10/i);
+  });
+
+  it("rejects undersized video-model image inputs before they are inlined", () => {
+    const store = storeFor(); const project = store.createProject("Image limits");
+    const tooSmall = store.addAsset({ projectId: project.id, kind: "layer", name: "small.png", mime: "image/png", path: "/tmp/small.png", width: 239, height: 300, duration: null, sizeBytes: 1024, hash: "small", provenance: "{}" });
+
+    expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "small-image", modelId: "alibaba:wan2.7-i2v", prompt: "Animate.", media: [{ assetId: tooSmall.id, role: "start-image" }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan2.7-i2v"]))).toThrow(/image dimensions.*provider limit/i);
+  });
+
+  it("rejects a non-WAV/MP3 Wan 3 reference-audio asset before transport", () => {
+    const store = storeFor(); const project = store.createProject("Reference audio MIME");
+    const unsupportedAudio = store.addAsset({ projectId: project.id, kind: "audio", name: "reference.ogg", mime: "audio/ogg", path: "/tmp/reference.ogg", width: null, height: null, duration: 3, sizeBytes: 1024, hash: "ogg", provenance: "{}" });
+
+    expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "ogg-audio", modelId: "alibaba:wan3-video", prompt: "Use this audio reference.", media: [{ assetId: unsupportedAudio.id, role: "reference-audio", publicUrl: "https://media.example.test/reference.ogg" }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan3-video"]))).toThrow(/reference audio must be WAV or MP3/i);
+    expect(store.listJobs(project.id)).toHaveLength(0);
+  });
 });

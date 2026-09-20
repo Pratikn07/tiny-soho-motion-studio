@@ -10,7 +10,7 @@ describe("queued job media resolution", () => {
 
   it("resolves queued local image media into provider-safe values without exposing an asset path", async () => {
     const db = storeFor(); const project = db.createProject("Media job");
-    const image = db.addAsset({ projectId: project.id, kind: "reference", name: "reference.png", mime: "image/png", path: "/owner-only/reference.png", width: 100, height: 100, duration: null, hash: "image", provenance: "{}" });
+    const image = db.addAsset({ projectId: project.id, kind: "reference", name: "reference.png", mime: "image/png", path: "/owner-only/reference.png", width: 320, height: 320, duration: null, hash: "image", provenance: "{}" });
     const job = queueGeneration(db, { projectId: project.id, idempotencyKey: "image", modelId: "alibaba:wan2.7-r2v", prompt: "Use the reference image.", media: [{ assetId: image.id, role: "reference-image" }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan2.7-r2v"]));
 
     const result = await resolveJobMedia(db, job, { readFile: async () => Buffer.from("image") });
