@@ -94,7 +94,7 @@ class VisionSidecarContractTests(unittest.TestCase):
         )
         self.assertEqual(payload["capabilities"][0]["status"], "planned")
         self.assertEqual(payload["capabilities"][3]["status"], "unavailable")
-        self.assertIn("No model runtime", payload["capabilities"][1]["hardwareRequirements"]["notes"])
+        self.assertIn("local backend requires CUDA", payload["capabilities"][1]["hardwareRequirements"]["notes"])
         runtime_status = payload["capabilities"][0].get("runtimeStatus", {})
         self.assertEqual(runtime_status.get("state"), "unloaded")
         self.assertFalse(runtime_status.get("available"))

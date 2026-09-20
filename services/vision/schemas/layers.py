@@ -15,6 +15,8 @@ class LayerBackend(BaseModel):
     provider: str = Field(min_length=1)
     model: str = Field(min_length=1)
     version: str = Field(min_length=1)
+    device: str | None = None
+    runtimeStatus: str | None = None
 
 
 class LayerOptions(BaseModel):
@@ -48,6 +50,9 @@ class LayerClassification(BaseModel):
 
 class RecompositionDiagnostics(BaseModel):
     recompositionMatchesInput: bool
+    meanAbsoluteError: float = Field(ge=0, le=1)
+    warningThreshold: float = Field(ge=0, le=1)
+    warning: str | None = None
     overlap: EvidenceOverlap
     classifications: list[LayerClassification]
 

@@ -18,7 +18,8 @@
     "vision:doctor": "python3 -m services.vision.vision_doctor",
     "vision:start": "python3 -m services.vision.app",
     "vision:smoke": "python3 -m services.vision.ocr_smoke",
-    "vision:sam2:smoke": "python3 -m services.vision.sam2_smoke"
+    "vision:sam2:smoke": "python3 -m services.vision.sam2_smoke",
+    "vision:qwen:smoke": "python3 -m services.vision.qwen_layers_smoke"
   },
   "dependencies": {
     "@xyflow/react": "^12.8.6",

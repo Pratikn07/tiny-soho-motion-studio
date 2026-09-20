@@ -14,7 +14,7 @@ from pydantic import BaseModel, HttpUrl, TypeAdapter, model_validator
 from .artifacts.manager import ArtifactManager, ArtifactNotFound
 from .adapters.base import VisionCapabilityUnavailable
 from .adapters.paddle_ocr import PaddleOcrAdapter, default_paddle_ocr_adapter
-from .adapters.qwen_layers import default_qwen_layers_backend
+from .adapters.qwen_layers import QwenLocalCudaBackend, QwenRemoteHttpsBackend, default_qwen_layers_backend
 from .adapters.sam2 import Sam2Adapter, default_sam2_adapter
 from .config import VisionConfig
 from .hardware import detect_hardware
@@ -153,7 +153,13 @@ runtime_registry.transition(
     state="unloaded",
     reason=segmentation_configuration_reason or "SAM 2 is configured; awaiting a real local inference.",
 )
-layers_backend = default_qwen_layers_backend(vision_config.qwen_layers_enabled, vision_config.qwen_layers_model_path)
+layers_backend = default_qwen_layers_backend(vision_config.qwen_layers)
+layers_configuration_reason = layers_backend.configuration_reason()
+runtime_registry.transition(
+    "image.layers",
+    state="unloaded",
+    reason=layers_configuration_reason or "Qwen Image Layered is configured; awaiting a real backend inference.",
+)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -272,11 +278,18 @@ async def layers(
         )
     except ImageInputError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    is_real_backend = isinstance(layers_backend, (QwenLocalCudaBackend, QwenRemoteHttpsBackend))
     try:
         async with inference_locks.get("image.layers"):
+            if is_real_backend:
+                runtime_registry.transition("image.layers", state="loading")
             predictions = await layers_backend.decompose(decoded, options)
     except VisionCapabilityUnavailable as error:
+        if is_real_backend:
+            runtime_registry.transition("image.layers", state="error", reason=str(error))
         raise HTTPException(status_code=503, detail=str(error)) from error
+    if is_real_backend:
+        runtime_registry.transition("image.layers", state="ready", reason=None)
     persisted_layers = []
     for prediction in predictions:
         metadata = artifact_manager.write_bytes(kind="rgba-layer", mime_type="image/png", data=prediction.png)

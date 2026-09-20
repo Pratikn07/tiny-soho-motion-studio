@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -23,3 +25,39 @@ class VisionDoctorTests(unittest.TestCase):
         self.assertEqual(result["runtime"], "unavailable")
         self.assertFalse(result["enabled"])
         self.assertIn("does not load a model", result["note"])
+
+    def test_qwen_remote_token_is_never_returned_by_the_doctor(self) -> None:
+        doctor = importlib.import_module("services.vision.vision_doctor")
+        with patch.dict(
+            os.environ,
+            {
+                "TINY_SOHO_QWEN_LAYERS_ENABLED": "1",
+                "TINY_SOHO_QWEN_LAYERS_BACKEND": "remote-https",
+                "TINY_SOHO_QWEN_LAYERS_REMOTE_URL": "https://layers.example.test/v1/decompose",
+                "TINY_SOHO_QWEN_LAYERS_REMOTE_TOKEN": "must-not-appear",
+                "TINY_SOHO_QWEN_LAYERS_REMOTE_ALLOWED_HOSTS": "layers.example.test",
+            },
+            clear=False,
+        ):
+            result = doctor.report()
+
+        self.assertEqual(result["qwenLayers"]["remote"]["host"], "layers.example.test")
+        self.assertTrue(result["qwenLayers"]["remote"]["tokenConfigured"])
+        self.assertEqual(result["qwenLayers"]["remote"]["allowedHosts"], ["layers.example.test"])
+        self.assertNotIn("must-not-appear", json.dumps(result))
+
+    def test_qwen_local_directory_is_configuration_not_a_successful_inference(self) -> None:
+        doctor = importlib.import_module("services.vision.vision_doctor")
+        with tempfile.TemporaryDirectory() as temporary_directory, patch.dict(
+            os.environ,
+            {
+                "TINY_SOHO_QWEN_LAYERS_ENABLED": "1",
+                "TINY_SOHO_QWEN_LAYERS_BACKEND": "local-cuda",
+                "TINY_SOHO_QWEN_LAYERS_MODEL_PATH": temporary_directory,
+            },
+            clear=False,
+        ):
+            result = doctor.report()
+
+        self.assertTrue(result["qwenLayers"]["modelDirectory"]["present"])
+        self.assertEqual(result["qwenLayers"]["runtime"], "configured-not-verified")

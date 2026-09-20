@@ -36,6 +36,18 @@ class Sam2Settings:
 
 
 @dataclass(frozen=True)
+class QwenLayersSettings:
+    enabled: bool
+    backend: str
+    model_path: Path | None
+    remote_url: str | None
+    remote_token: str | None
+    remote_allowed_hosts: tuple[str, ...]
+    timeout_seconds: int
+    min_free_vram_bytes: int
+
+
+@dataclass(frozen=True)
 class VisionConfig:
     cache_dir: Path
     artifact_ttl_seconds: int
@@ -45,8 +57,7 @@ class VisionConfig:
     max_image_pixels: int
     paddle_ocr: PaddleOcrSettings
     sam2: Sam2Settings
-    qwen_layers_enabled: bool
-    qwen_layers_model_path: Path | None
+    qwen_layers: QwenLayersSettings
     ffmpeg_path: str
     ffprobe_path: str
 
@@ -59,6 +70,9 @@ class VisionConfig:
         sam2_device = os.environ.get("TINY_SOHO_SAM2_DEVICE", "auto")
         if sam2_device not in {"auto", "cpu", "mps", "cuda"}:
             raise RuntimeError("TINY_SOHO_SAM2_DEVICE must be one of auto, cpu, mps, or cuda.")
+        qwen_layers_backend = os.environ.get("TINY_SOHO_QWEN_LAYERS_BACKEND", "disabled")
+        if qwen_layers_backend not in {"disabled", "local-cuda", "remote-https"}:
+            raise RuntimeError("TINY_SOHO_QWEN_LAYERS_BACKEND must be disabled, local-cuda, or remote-https.")
         return cls(
             cache_dir=cache_dir.expanduser(),
             artifact_ttl_seconds=_positive_int(os.environ.get("TINY_SOHO_VISION_ARTIFACT_TTL_SECONDS", "86400"), "TINY_SOHO_VISION_ARTIFACT_TTL_SECONDS"),
@@ -87,8 +101,26 @@ class VisionConfig:
                     "TINY_SOHO_SAM2_TIMEOUT_SECONDS",
                 ),
             ),
-            qwen_layers_enabled=os.environ.get("TINY_SOHO_QWEN_LAYERS_ENABLED") == "1",
-            qwen_layers_model_path=_optional_path(os.environ.get("TINY_SOHO_QWEN_LAYERS_MODEL_PATH")),
+            qwen_layers=QwenLayersSettings(
+                enabled=os.environ.get("TINY_SOHO_QWEN_LAYERS_ENABLED") == "1",
+                backend=qwen_layers_backend,
+                model_path=_optional_path(os.environ.get("TINY_SOHO_QWEN_LAYERS_MODEL_PATH")),
+                remote_url=os.environ.get("TINY_SOHO_QWEN_LAYERS_REMOTE_URL") or None,
+                remote_token=os.environ.get("TINY_SOHO_QWEN_LAYERS_REMOTE_TOKEN") or None,
+                remote_allowed_hosts=tuple(
+                    host.strip().lower()
+                    for host in os.environ.get("TINY_SOHO_QWEN_LAYERS_REMOTE_ALLOWED_HOSTS", "").split(",")
+                    if host.strip()
+                ),
+                timeout_seconds=_positive_int(
+                    os.environ.get("TINY_SOHO_QWEN_LAYERS_TIMEOUT_SECONDS", "60"),
+                    "TINY_SOHO_QWEN_LAYERS_TIMEOUT_SECONDS",
+                ),
+                min_free_vram_bytes=_positive_int(
+                    os.environ.get("TINY_SOHO_QWEN_LAYERS_MIN_FREE_VRAM_BYTES", str(16 * 1024 * 1024 * 1024)),
+                    "TINY_SOHO_QWEN_LAYERS_MIN_FREE_VRAM_BYTES",
+                ),
+            ),
             ffmpeg_path=os.environ.get("FFMPEG_PATH", "ffmpeg"),
             ffprobe_path=os.environ.get("FFPROBE_PATH", "ffprobe"),
         )

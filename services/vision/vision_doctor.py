@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from urllib.parse import urlparse
 
 from .config import VisionConfig
 from .hardware import detect_hardware
@@ -27,6 +28,25 @@ def _checkpoint_status(path: Path | None) -> dict[str, object]:
     return {"configured": True, "path": str(path), "present": path.is_file()}
 
 
+def _directory_status(path: Path | None) -> dict[str, object]:
+    if path is None:
+        return {"configured": False, "present": False}
+    return {"configured": True, "path": str(path), "present": path.is_dir()}
+
+
+def _qwen_remote_status(url: str | None, token: str | None, allowed_hosts: tuple[str, ...]) -> dict[str, object]:
+    if url is None:
+        return {"configured": False, "tokenConfigured": bool(token), "allowedHosts": list(allowed_hosts)}
+    parsed = urlparse(url)
+    valid_endpoint = parsed.scheme == "https" and bool(parsed.hostname) and not parsed.username and not parsed.password
+    return {
+        "configured": valid_endpoint and parsed.hostname.lower() in allowed_hosts,
+        "host": parsed.hostname,
+        "tokenConfigured": bool(token),
+        "allowedHosts": list(allowed_hosts),
+    }
+
+
 def report() -> dict[str, object]:
     config = VisionConfig.from_env()
     settings = config.paddle_ocr
@@ -35,6 +55,16 @@ def report() -> dict[str, object]:
     configured = bool(settings.enabled and detection["complete"] and recognition["complete"] and settings.language == "en")
     sam2_checkpoint = _checkpoint_status(config.sam2.checkpoint_path)
     sam2_configured = bool(config.sam2.enabled and sam2_checkpoint["present"])
+    qwen_model = _directory_status(config.qwen_layers.model_path)
+    qwen_remote = _qwen_remote_status(
+        config.qwen_layers.remote_url,
+        config.qwen_layers.remote_token,
+        config.qwen_layers.remote_allowed_hosts,
+    )
+    qwen_configured = bool(
+        config.qwen_layers.enabled
+        and ((config.qwen_layers.backend == "local-cuda" and qwen_model["present"]) or (config.qwen_layers.backend == "remote-https" and qwen_remote["configured"] and qwen_remote["tokenConfigured"]))
+    )
     return {
         "capability": "image.ocr",
         "profile": settings.profile,
@@ -55,6 +85,17 @@ def report() -> dict[str, object]:
             "checkpoint": sam2_checkpoint,
             "runtime": "configured-not-verified" if sam2_configured else "unavailable",
             "note": "Run vision:sam2:smoke for real prompted local segmentation. This command does not load SAM 2.",
+        },
+        "qwenLayers": {
+            "capability": "image.layers",
+            "enabled": config.qwen_layers.enabled,
+            "backend": config.qwen_layers.backend,
+            "timeoutSeconds": config.qwen_layers.timeout_seconds,
+            "minimumFreeVramBytes": config.qwen_layers.min_free_vram_bytes,
+            "modelDirectory": qwen_model,
+            "remote": qwen_remote,
+            "runtime": "configured-not-verified" if qwen_configured else "unavailable",
+            "note": "Enhanced mode requires a real CUDA or reviewed remote decomposition smoke; this command does not load Qwen.",
         },
         "hardware": detect_hardware(),
     }
