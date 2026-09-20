@@ -8,9 +8,12 @@ describe("Singapore video catalogue", () => {
   it("contains every general video family offered in Singapore", () => {
     expect(SINGAPORE_VIDEO_MODELS.map((model) => model.providerModel)).toEqual(expect.arrayContaining([
       "wan2.7-t2v-2026-04-25",
+      "wan2.7-t2v-2026-06-12",
       "wan2.7-i2v-2026-04-25",
       "wan2.2-kf2v-flash",
       "wan2.7-r2v",
+      "wan2.7-r2v-2026-06-12",
+      "wan3.0-video-prime",
       "wan2.7-videoedit",
       "wan2.2-animate-move",
     ]));

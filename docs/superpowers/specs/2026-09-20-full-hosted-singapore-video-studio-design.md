@@ -10,10 +10,10 @@ The source of truth is the Singapore/International section of Alibaba's current 
 
 | Family | Provider models or modes | Inputs |
 | --- | --- | --- |
-| Text to video | `wan2.7-t2v-2026-04-25`, `wan2.7-t2v`, `wan2.6-t2v`, `wan2.5-t2v-preview`, `wan2.2-t2v-plus`, `wan2.1-t2v-turbo`, `wan2.1-t2v-plus` | Prompt and supported options |
+| Text to video | `wan2.7-t2v-2026-06-12`, `wan2.7-t2v-2026-04-25`, `wan2.7-t2v`, `wan2.6-t2v`, `wan2.5-t2v-preview`, `wan2.2-t2v-plus`, `wan2.1-t2v-turbo`, `wan2.1-t2v-plus`, `wan3.0-video`, `wan3.0-video-prime` | Prompt and supported options |
 | Image to video | `wan2.7-i2v-2026-04-25`, `wan2.7-i2v`, `wan2.6-i2v-flash`, `wan2.6-i2v`, `wan2.5-i2v-preview`, `wan2.2-i2v-flash`, `wan2.2-i2v-plus`, `wan2.1-i2v-plus`, `wan2.1-i2v-turbo` | First frame; Wan 2.7 can also accept permitted last frame, driving audio, and first clip |
 | First/last-frame video | `wan2.2-kf2v-flash`, `wan2.1-kf2v-plus` | First and last image frames |
-| Reference to video | `wan2.7-r2v`, `wan2.6-r2v-flash`, `wan2.6-r2v` | Prompt plus ordered reference media |
+| Reference to video | `wan2.7-r2v-2026-06-12`, `wan2.7-r2v`, `wan2.6-r2v-flash`, `wan2.6-r2v`, `wan3.0-video`, `wan3.0-video-prime` | Prompt plus ordered reference media |
 | Video edit | `wan2.7-videoedit`, `wan2.1-vace-plus` | Source video plus documented controls |
 | Character motion and swap | `wan2.2-animate-move` and `wan2.2-animate-mix`, both `wan-std` and `wan-pro` | Documented source, reference, and driving video |
 

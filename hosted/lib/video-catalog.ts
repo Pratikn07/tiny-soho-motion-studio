@@ -84,8 +84,24 @@ const imageVideo = (id: string, label: string, extended = false): VideoModelCont
   ...videoOptions({ duration: 5, resolution: "720P", promptExtend: true, watermark: false }),
 });
 
+const wan3 = (
+  providerModel: "wan3.0-video" | "wan3.0-video-prime",
+  task: "text-to-video" | "image-to-video" | "reference-to-video",
+): VideoModelContract => ({
+  id: `${providerModel}:${task}`,
+  label: `${providerModel === "wan3.0-video-prime" ? "Wan 3 Video Prime" : "Wan 3 Video"} ${task.replaceAll("-", " ")}`,
+  providerModel,
+  task,
+  requiredRoles: task === "image-to-video" ? ["first_frame"] : [],
+  optionalRoles: task === "text-to-video" ? [] : ["last_frame", "reference_image", "reference_video", "driving_audio"],
+  requiresAnyRole: task === "reference-to-video" ? ["reference_image", "reference_video"] : undefined,
+  maxByRole: { first_frame: 1, last_frame: 1, reference_image: 10, reference_video: 5, driving_audio: 1 },
+  ...videoOptions({ duration: 5, resolution: "720P", aspectRatio: "adaptive", promptExtend: true, watermark: false, audio: false }),
+});
+
 export const SINGAPORE_VIDEO_MODELS: readonly VideoModelContract[] = [
   textVideo("wan2.7-t2v-2026-04-25", "Wan 2.7 Text to Video"),
+  textVideo("wan2.7-t2v-2026-06-12", "Wan 2.7 Text to Video (June 2026 snapshot)"),
   textVideo("wan2.7-t2v", "Wan 2.7 Text to Video"),
   textVideo("wan2.6-t2v", "Wan 2.6 Text to Video"),
   textVideo("wan2.5-t2v-preview", "Wan 2.5 Text to Video Preview"),
@@ -101,6 +117,12 @@ export const SINGAPORE_VIDEO_MODELS: readonly VideoModelContract[] = [
   imageVideo("wan2.2-i2v-plus", "Wan 2.2 Image to Video Plus"),
   imageVideo("wan2.1-i2v-plus", "Wan 2.1 Image to Video Plus"),
   imageVideo("wan2.1-i2v-turbo", "Wan 2.1 Image to Video Turbo"),
+  wan3("wan3.0-video", "text-to-video"),
+  wan3("wan3.0-video", "image-to-video"),
+  wan3("wan3.0-video", "reference-to-video"),
+  wan3("wan3.0-video-prime", "text-to-video"),
+  wan3("wan3.0-video-prime", "image-to-video"),
+  wan3("wan3.0-video-prime", "reference-to-video"),
   {
     id: "wan2.2-kf2v-flash",
     label: "Wan 2.2 Keyframe to Video Flash",
@@ -123,6 +145,7 @@ export const SINGAPORE_VIDEO_MODELS: readonly VideoModelContract[] = [
   },
   ...[
     ["wan2.7-r2v", "Wan 2.7 Reference to Video"],
+    ["wan2.7-r2v-2026-06-12", "Wan 2.7 Reference to Video (June 2026 snapshot)"],
     ["wan2.6-r2v-flash", "Wan 2.6 Reference to Video Flash"],
     ["wan2.6-r2v", "Wan 2.6 Reference to Video"],
   ].map(([id, label]): VideoModelContract => ({
