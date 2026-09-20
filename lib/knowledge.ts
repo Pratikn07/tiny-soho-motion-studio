@@ -38,12 +38,18 @@ const maximumEvidence = 8;
 
 function text(value: unknown) { return typeof value === "string" ? value.trim() : ""; }
 function number(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? value : null; }
+function decimal(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string" || !/^-?(?:\d+\.?\d*|\.\d+)$/.test(value.trim())) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 function recordId(row: KnowledgeRecord) { return text(row.id); }
 function normalizedTokens(brief: string) {
   return [...new Set((brief.toLowerCase().match(/[a-z0-9]{2,}/g) || []).filter((term) => !stopWords.has(term)))].slice(0, 10);
 }
 
-type EvidenceShape = { title: string; summary: string; confidence?: number | null; timesUsed?: number | null; useCases?: string; status?: string; evidenceType?: string };
+type EvidenceShape = { title: string; summary: string; confidence?: number | null; timesUsed?: number | null; useCases?: string; status?: string; evidenceType?: string; performanceLift?: number | null; performanceLiftComparable?: boolean };
 
 function scoreEvidence(terms: string[], shape: EvidenceShape) {
   const haystackTerms = new Set((`${shape.title} ${shape.summary} ${shape.useCases || ""}`.toLowerCase().match(/[a-z0-9]{2,}/g) || []));
@@ -55,7 +61,12 @@ function scoreEvidence(terms: string[], shape: EvidenceShape) {
   const evidenceType = ({ observed: 25, inferred: 10, hypothesis: 0 } as Record<string, number>)[(shape.evidenceType || "").toLowerCase()] || 0;
   const confidence = Math.max(0, Math.min(shape.confidence || 0, 1)) * 10;
   const timesUsed = Math.min(Math.log1p(Math.max(shape.timesUsed || 0, 0)), 5) * 3;
-  const components = { lexical: matches.length * 100, useCase, status, evidenceType, confidence: Math.round(confidence), timesUsed: Math.round(timesUsed) };
+  // A lift value has no portable meaning without an explicit source-side comparability flag.
+  // The source value is a normalized fraction, so its bounded contribution is percentage points.
+  const performanceLift = shape.performanceLiftComparable && shape.performanceLift !== null && shape.performanceLift !== undefined && Number.isFinite(shape.performanceLift)
+    ? Math.round(Math.max(0, Math.min(shape.performanceLift * 100, 25)))
+    : null;
+  const components = { lexical: matches.length * 100, useCase, status, evidenceType, confidence: Math.round(confidence), timesUsed: Math.round(timesUsed), ...(performanceLift === null ? {} : { performanceLift }) };
   return { score: Object.values(components).reduce((total, value) => total + value, 0), components };
 }
 
@@ -72,6 +83,7 @@ function techniqueEvidence(row: KnowledgeRecord, terms: string[]) {
     summary: [text(row.category), text(row.mechanism), text(row.why_it_works), text(row.prompt_fragment)].filter(Boolean).join(" · "),
     confidence: number(row.confidence), timesUsed: number(row.times_used),
     useCases: text(row.tinysoho_use_cases), status: text(row.status), evidenceType: text(row.evidence_type),
+    performanceLift: decimal(row.avg_performance_lift), performanceLiftComparable: row.performance_lift_comparable === true || text(row.performance_lift_comparable).toLowerCase() === "true",
   });
 }
 
@@ -146,7 +158,8 @@ const readerStatementTimeoutMs = 3_000;
 
 const queryPlans = {
   techniques: `SELECT t.id, t.name, t.category, t.mechanism, t.why_it_works, t.prompt_fragment, t.confidence, t.times_used,
-      to_jsonb(t)->>'tinysoho_use_cases' AS tinysoho_use_cases, to_jsonb(t)->>'status' AS status, to_jsonb(t)->>'evidence_type' AS evidence_type
+      to_jsonb(t)->>'tinysoho_use_cases' AS tinysoho_use_cases, to_jsonb(t)->>'status' AS status, to_jsonb(t)->>'evidence_type' AS evidence_type,
+      to_jsonb(t)->>'avg_performance_lift' AS avg_performance_lift, to_jsonb(t)->>'performance_lift_comparable' AS performance_lift_comparable
     FROM public.ts_techniques t
     WHERE concat_ws(' ', t.name, t.category, t.mechanism, t.why_it_works, t.prompt_fragment, to_jsonb(t)->>'tinysoho_use_cases', to_jsonb(t)->>'status', to_jsonb(t)->>'evidence_type') ILIKE ANY($1::text[])
     LIMIT 25`,

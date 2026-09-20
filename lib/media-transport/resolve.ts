@@ -10,6 +10,7 @@ export type ProviderLocator = { kind: "data-url" | "public-url" | "dashscope-oss
 export type ResolvedProviderMedia = { role: MediaRole; mime: string; locator: ProviderLocator; referenceVoice?: ProviderLocator };
 export type ProviderMediaInput = { role: MediaRole; asset: Asset; publicUrl?: string; referenceVoice?: { asset: Asset; publicUrl?: string } };
 export type ProviderMediaResolution = { ok: true; media: ResolvedProviderMedia[] } | { ok: false; reason: string };
+export type ProviderMediaPreflight = { ok: true } | { ok: false; reason: string };
 
 type TemporaryUpload = (input: { asset: Asset; model: ModelCapability; expiresAfterSeconds: number }) => Promise<string | { url: string; expiresAt?: string }>;
 export type ResolveProviderMediaOptions = {
@@ -22,6 +23,7 @@ export type ResolveProviderMediaOptions = {
 
 const inlineImageRoles = new Set<MediaRole>(["source-image", "start-image", "end-image", "reference-image"]);
 const imageLimitBytes = 20 * 1024 * 1024;
+const unavailableReason = (role: string) => `Local ${role.replace("-", " ")} is unavailable because free Singapore URL transport is not verified.`;
 
 export function isSafePublicMediaUrl(value: string) {
   try {
@@ -45,6 +47,27 @@ function privateProviderUrl(asset: Asset): { url: string; expiresAt?: string } |
   }
 }
 
+function transportPreflightFor(input: { asset: Asset; publicUrl?: string }, role: MediaRole | "reference-voice", model: ModelCapability, capability?: MediaTransportCapability): ProviderMediaPreflight {
+  if (inlineImageRoles.has(role as MediaRole)) return { ok: true };
+  if (input.publicUrl !== undefined) return isSafePublicMediaUrl(input.publicUrl) ? { ok: true } : { ok: false, reason: "A supplied public media URL must be a safe HTTPS URL." };
+  if (privateProviderUrl(input.asset)) return { ok: true };
+  const effective = effectiveTransportCapability(capability || configuredTransportCapability(), model.providerModel);
+  return effective.state === "verified" ? { ok: true } : { ok: false, reason: unavailableReason(role) };
+}
+
+/** Checks every URL-required input before a durable job exists; it never reads files or uploads media. */
+export function preflightProviderMedia(options: Pick<ResolveProviderMediaOptions, "model" | "media" | "capability">): ProviderMediaPreflight {
+  for (const input of options.media) {
+    const mediaPreflight = transportPreflightFor(input, input.role, options.model, options.capability);
+    if (!mediaPreflight.ok) return mediaPreflight;
+    if (input.referenceVoice) {
+      const voicePreflight = transportPreflightFor(input.referenceVoice, "reference-voice", options.model, options.capability);
+      if (!voicePreflight.ok) return voicePreflight;
+    }
+  }
+  return { ok: true };
+}
+
 async function locatorFor(input: { asset: Asset; publicUrl?: string }, role: MediaRole, options: ResolveProviderMediaOptions): Promise<ProviderLocator | ProviderMediaResolution> {
   if (inlineImageRoles.has(role)) {
     if (!input.asset.mime.startsWith("image/")) return { ok: false, reason: `${role.replace("-", " ")} requires an image asset.` };
@@ -62,7 +85,7 @@ async function locatorFor(input: { asset: Asset; publicUrl?: string }, role: Med
   if (existing) return { kind: "public-url", value: existing.url, ...(existing.expiresAt ? { expiresAt: existing.expiresAt } : {}) };
 
   const capability = effectiveTransportCapability(options.capability || configuredTransportCapability(), options.model.providerModel);
-  if (capability.state !== "verified" || !options.temporaryUpload) return { ok: false, reason: `Local ${role.replace("-", " ")} is unavailable because free Singapore URL transport is not verified.` };
+  if (capability.state !== "verified" || !options.temporaryUpload) return { ok: false, reason: unavailableReason(role) };
   const result = await options.temporaryUpload({ asset: input.asset, model: options.model, expiresAfterSeconds: capability.expiresAfterSeconds || 0 });
   const temporary = typeof result === "string" ? { url: result } : result;
   if (!isSafeBailianTemporaryLocator(temporary.url)) return { ok: false, reason: "Temporary upload returned an unsafe provider locator." };

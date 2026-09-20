@@ -76,6 +76,26 @@ describe("creative knowledge retrieval", () => {
     expect(result.evidence[0]).toMatchObject({ sourceId: "tinysoho", status: "active", evidenceType: "observed" });
   });
 
+  it("uses a bounded performance lift only when the source marks the metric comparable", async () => {
+    const performance: KnowledgeSource = {
+      ...source,
+      async searchTechniques() {
+        return [
+          { id: "not-comparable", name: "Slow product motion", category: "product", mechanism: "Motion", why_it_works: "Focus", prompt_fragment: "slow product", avg_performance_lift: 0.9, confidence: 0.5 },
+          { id: "comparable", name: "Slow product motion", category: "product", mechanism: "Motion", why_it_works: "Focus", prompt_fragment: "slow product", avg_performance_lift: "0.2", performance_lift_comparable: true, confidence: 0.5 },
+          { id: "missing", name: "Slow product motion", category: "product", mechanism: "Motion", why_it_works: "Focus", prompt_fragment: "slow product", avg_performance_lift: null, performance_lift_comparable: true, confidence: 0.5 },
+        ];
+      },
+    };
+
+    const result = await retrieveCreativeKnowledge("slow product motion", performance);
+
+    expect(result.evidence.map((item) => item.sourceId)).toEqual(["comparable", "missing", "not-comparable"]);
+    expect(result.evidence[0].scoreComponents).toMatchObject({ performanceLift: 20 });
+    expect(result.evidence[1].scoreComponents).not.toHaveProperty("performanceLift");
+    expect(result.evidence[2].scoreComponents).not.toHaveProperty("performanceLift");
+  });
+
   it("keeps unavailable knowledge distinct from an empty search result", async () => {
     const result = await retrieveCreativeKnowledge("A slow product push-in", null);
 
@@ -148,6 +168,7 @@ describe("creative knowledge retrieval", () => {
       const values = call[1];
       return Array.isArray(values) && values.length === 1 && Array.isArray(values[0]) && values[0].every((value) => typeof value === "string" && value.startsWith("%") && value.endsWith("%"));
     })).toBe(true);
+    expect(selects.find((call) => String(call[0]).includes("FROM public.ts_techniques"))?.[0]).toContain("avg_performance_lift");
     expect(postgres.query.mock.calls.some((call) => typeof call[0] === "string" && /set role|security definer|rpc/i.test(call[0]))).toBe(false);
   });
 

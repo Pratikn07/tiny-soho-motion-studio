@@ -29,6 +29,15 @@ const ROLE_ALIASES: Record<InputRole, MediaRole> = { "source-image": "source-ima
 export function normalizeMediaRole(role: string): MediaRole { const normalized = ROLE_ALIASES[role as InputRole]; if (!normalized) throw new Error(`Unknown media role: ${role}.`); return normalized; }
 export function listModels() { return MODELS; }
 export function getModel(id: string) { const model = MODELS.find((candidate) => candidate.id === id); if (!model) throw new Error("Unknown model."); return model; }
+export type ReferenceIndexMap = { images: Array<{ index: number; assetId: string }>; videos: Array<{ index: number; assetId: string }>; audio: Array<{ index: number; assetId: string }> };
+export function referenceIndexMap(media: Array<{ assetId: string; role: MediaRole }>): ReferenceIndexMap {
+  const groups: ReferenceIndexMap = { images: [], videos: [], audio: [] };
+  for (const item of media) {
+    const group = item.role === "reference-image" ? groups.images : item.role === "reference-video" ? groups.videos : item.role === "reference-audio" ? groups.audio : null;
+    if (group) group.push({ index: group.length + 1, assetId: item.assetId });
+  }
+  return groups;
+}
 export function compileCinemaPrompt(prompt: string, controls: { motion?: string; lighting?: string; framing?: string }) { const labels: Record<string, string> = { "slow-push-in": "slow push-in", "gentle-pan": "gentle lateral pan", locked: "locked camera", ambient: "subtle ambient motion", reveal: "product reveal" }; const additions = [controls.motion && labels[controls.motion], controls.lighting, controls.framing].filter(Boolean).join(", "); return [prompt.trim(), additions].filter(Boolean).join(". ").slice(0, 5000); }
 const equalRoles = (left: MediaRole[], right: MediaRole[]) => left.length === right.length && [...left].sort().every((role, index) => role === [...right].sort()[index]);
 

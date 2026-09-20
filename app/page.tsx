@@ -134,6 +134,7 @@ export default function Studio() {
   }, [active, source, end, referenceImages, referenceVideos, referenceAudio, drivingAudio, firstClip, urls, voices, voiceUrls]);
 
   const selectedModelTransport = transport.models.find((entry) => entry.modelId === active?.id);
+  const r2vFirstFrameSelected = active?.id === "alibaba:wan2.7-r2v" && Boolean(source);
   const transportReason = (role: TransportMedia["role"]) => selectedModelTransport?.media.find((entry) => entry.role === role)?.reason || transport.transport.reason || "Local URL transport is unavailable.";
   const available = (role: TransportMedia["role"]) => Boolean(selectedModelTransport?.media.find((entry) => entry.role === role)?.available);
   const asset = (assetId: string) => assets.find((entry) => entry.id === assetId);
@@ -167,7 +168,7 @@ export default function Studio() {
     const options: Record<string, unknown> = { promptExtend: true, watermark: false };
     if (active.duration) options.duration = Number(duration);
     if (active.resolutions) options.resolution = resolution;
-    if (active.aspectRatios) options.aspectRatio = ratio;
+    if (active.aspectRatios && !r2vFirstFrameSelected) options.aspectRatio = ratio;
     try {
       const job = await api<Job>("/api/jobs", { method: "POST", body: JSON.stringify({ projectId, idempotencyKey: crypto.randomUUID(), modelId: active.id, prompt, media, options }) });
       setNotice("Queued " + job.id.slice(-8) + ". The worker still requires Free Quota confirmation."); await refresh();
@@ -218,7 +219,7 @@ export default function Studio() {
                     {active?.id === "alibaba:wan2.7-r2v" && [...referenceImages, ...referenceVideos].map((referenceId) => <div key={referenceId} className="voice-row"><AssetPicker label={"REFERENCE VOICE FOR " + referenceId.slice(-8)} assets={audio} values={voices[referenceId] ? [voices[referenceId]] : []} setValues={(ids) => setVoices({ ...voices, [referenceId]: ids[0] || "" })} />{voices[referenceId] && <label>EXISTING PUBLIC HTTPS VOICE URL<input type="url" value={voiceUrls[referenceId] || ""} onChange={(event) => setVoiceUrls({ ...voiceUrls, [referenceId]: event.target.value })} placeholder="https://public.example/voice.mp3" /></label>}</div>)}
                     {active?.duration && <label>DURATION<select value={duration} onChange={(event) => setDuration(event.target.value)}>{active.duration.smartValue && <option value="-1">Smart duration</option>}{Array.from({ length: active.duration.max - active.duration.min + 1 }, (_, index) => active.duration!.min + index).map((value) => <option key={value} value={value}>{value} seconds</option>)}</select></label>}
                     {active?.resolutions && <label>RESOLUTION<select value={resolution} onChange={(event) => setResolution(event.target.value)}>{active.resolutions.map((value) => <option key={value}>{value}</option>)}</select></label>}
-                    {active?.aspectRatios && <label>ASPECT RATIO<select value={ratio} onChange={(event) => setRatio(event.target.value)}>{active.aspectRatios.map((value) => <option key={value}>{value}</option>)}</select></label>}
+                    {active?.aspectRatios && (r2vFirstFrameSelected ? <p className="transport-hint">ASPECT RATIO · Derived from the selected first frame.</p> : <label>ASPECT RATIO<select value={ratio} onChange={(event) => setRatio(event.target.value)}>{active.aspectRatios.map((value) => <option key={value}>{value}</option>)}</select></label>)}
                     <div className="presets"><button onClick={() => setPrompt(prompt + ". Locked camera, text-safe central negative space.")}>Locked</button><button onClick={() => setPrompt(prompt + ". Slow push-in, natural ambient movement.")}>Slow push-in</button><button onClick={() => setPrompt(prompt + ". Gentle lateral pan, soft daylight.")}>Gentle pan</button></div>
                     {!!blockers.length && <div className="transport-blockers"><b>Selected media cannot be queued yet</b>{blockers.map((blocker) => <span key={blocker}>{blocker}</span>)}<small>Select a reusable provider output or add a query-free public HTTPS URL.</small></div>}
                     <button className="primary generate" disabled={!canSubmit} onClick={() => void submit()}>{!active?.eligible ? "Confirm Free Quota Only in Settings" : blockers.length ? "Resolve media transport first" : "Generate after review →"}</button>

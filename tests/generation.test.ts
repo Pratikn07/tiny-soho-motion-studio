@@ -43,12 +43,12 @@ describe("shared generation preflight", () => {
       idempotencyKey: "voice",
       modelId: "alibaba:wan2.7-r2v",
       prompt: "The reference image speaks clearly.",
-      media: [{ assetId: reference.id, role: "reference-image", referenceVoiceAssetId: voice.id }] as any,
+      media: [{ assetId: reference.id, role: "reference-image", referenceVoiceAssetId: voice.id, referenceVoicePublicUrl: "https://media.example.test/voice.mp3" }] as any,
       options: { duration: 5, resolution: "720P" },
     }, new Set(["alibaba:wan2.7-r2v"]));
 
     expect(JSON.parse(job.inputAssetIds)).toEqual([reference.id]);
-    expect(JSON.parse(job.options).media).toEqual([{ assetId: reference.id, role: "reference-image", referenceVoiceAssetId: voice.id }]);
+    expect(JSON.parse(job.options).media).toEqual([{ assetId: reference.id, role: "reference-image", referenceVoiceAssetId: voice.id, referenceVoicePublicUrl: "https://media.example.test/voice.mp3" }]);
   });
 
   it("rejects a supplied URL with query data so it cannot become a browser-visible secret", () => {
@@ -58,10 +58,18 @@ describe("shared generation preflight", () => {
     expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "query-url", modelId: "alibaba:wan2.7-r2v", prompt: "Use the reference video.", media: [{ assetId: reference.id, role: "reference-video", publicUrl: "https://media.example.test/reference.mp4?token=secret" }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan2.7-r2v"]))).toThrow(/safe HTTPS URL/i);
   });
 
+  it("rejects an untransportable local URL-required input before queueing a job", () => {
+    const store = storeFor(); const project = store.createProject("Transport preflight");
+    const reference = store.addAsset({ projectId: project.id, kind: "reference", name: "reference.mp4", mime: "video/mp4", path: "/tmp/reference.mp4", width: 320, height: 320, duration: 2, hash: "reference", provenance: "{}" });
+
+    expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "no-transport", modelId: "alibaba:wan2.7-r2v", prompt: "Use the reference video.", media: [{ assetId: reference.id, role: "reference-video" }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan2.7-r2v"]))).toThrow(/reference video.*transport is not verified/i);
+    expect(store.listJobs(project.id)).toHaveLength(0);
+  });
+
   it("enforces Wan 3 aggregate input-video and output duration before a job is queued", () => {
     const store = storeFor(); const project = store.createProject("Video duration");
     const videos = Array.from({ length: 5 }, (_, index) => store.addAsset({ projectId: project.id, kind: "reference", name: `reference-${index}.mp4`, mime: "video/mp4", path: `/tmp/reference-${index}.mp4`, width: 320, height: 320, duration: 3, sizeBytes: 1024, hash: `video-${index}`, provenance: "{}" }));
-    const media = videos.map((video) => ({ assetId: video.id, role: "reference-video" as const }));
+    const media = videos.map((video, index) => ({ assetId: video.id, role: "reference-video" as const, publicUrl: `https://media.example.test/reference-${index}.mp4` }));
 
     expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "duration-ok", modelId: "alibaba:wan3-video", prompt: "Extend the reference videos.", media, options: { duration: 15, resolution: "720P" } }, new Set(["alibaba:wan3-video"]))).not.toThrow();
     expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "duration-over", modelId: "alibaba:wan3-video", prompt: "Extend the reference videos.", media, options: { duration: 16, resolution: "720P" } }, new Set(["alibaba:wan3-video"]))).toThrow(/input video.*output duration.*30/i);

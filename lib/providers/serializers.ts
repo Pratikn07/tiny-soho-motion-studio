@@ -19,6 +19,10 @@ const videoInput = (prompt: string, inputs: ResolvedProviderMedia[], roles: Reco
   })),
 });
 const requiresOssResourceResolve = (inputs: ResolvedProviderMedia[]) => inputs.some((input) => input.locator.kind === "dashscope-oss" || input.referenceVoice?.kind === "dashscope-oss");
+const stableWan3MediaOrder = (inputs: ResolvedProviderMedia[]) => {
+  const roleOrder = ["start-image", "end-image", "reference-image", "reference-video", "reference-audio"];
+  return roleOrder.flatMap((role) => inputs.filter((input) => input.role === role));
+};
 
 export function serializeWanImageRequest(job: { modelId: string; prompt: string; options: string }, inputs: ResolvedProviderMedia[]): SerializedAlibabaRequest {
   const model = getModel(job.modelId); const options = effectiveOptions(job.modelId, job.options);
@@ -40,7 +44,8 @@ export function serializeWan27R2VRequest(job: { modelId: string; prompt: string;
 
 export function serializeWan3Request(job: { modelId: string; prompt: string; options: string }, inputs: ResolvedProviderMedia[]): SerializedAlibabaRequest {
   const model = getModel(job.modelId); const options = effectiveOptions(job.modelId, job.options);
-  return { path: "/services/aigc/video-generation/video-synthesis", async: true, timeoutMs: 60_000, requiresOssResourceResolve: requiresOssResourceResolve(inputs), body: { model: model.providerModel, input: videoInput(job.prompt, inputs, { "start-image": "first_frame", "end-image": "last_frame", "reference-image": "reference_image", "reference-video": "reference_video", "reference-audio": "reference_audio" }, options.negativePrompt), parameters: { resolution: options.resolution, duration: options.duration, ...(options.aspectRatio ? { ratio: options.aspectRatio } : {}), prompt_extend: options.promptExtend, watermark: options.watermark, ...(typeof options.audio === "boolean" ? { audio: options.audio } : {}) } } };
+  const orderedInputs = stableWan3MediaOrder(inputs);
+  return { path: "/services/aigc/video-generation/video-synthesis", async: true, timeoutMs: 60_000, requiresOssResourceResolve: requiresOssResourceResolve(orderedInputs), body: { model: model.providerModel, input: videoInput(job.prompt, orderedInputs, { "start-image": "first_frame", "end-image": "last_frame", "reference-image": "reference_image", "reference-video": "reference_video", "reference-audio": "reference_audio" }, options.negativePrompt), parameters: { resolution: options.resolution, duration: options.duration, ...(options.aspectRatio ? { ratio: options.aspectRatio } : {}), prompt_extend: options.promptExtend, watermark: options.watermark, ...(typeof options.audio === "boolean" ? { audio: options.audio } : {}) } } };
 }
 
 export function serializeAlibabaJob(job: { modelId: string; prompt: string; options: string }, inputs: ResolvedProviderMedia[]) {

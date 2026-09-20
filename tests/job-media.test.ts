@@ -22,7 +22,7 @@ describe("queued job media resolution", () => {
   it("returns a pre-submit capability failure for a local reference video", async () => {
     const db = storeFor(); const project = db.createProject("Video job");
     const video = db.addAsset({ projectId: project.id, kind: "reference", name: "reference.mp4", mime: "video/mp4", path: "/owner-only/reference.mp4", width: 320, height: 320, duration: 2, hash: "video", provenance: "{}" });
-    const job = queueGeneration(db, { projectId: project.id, idempotencyKey: "video", modelId: "alibaba:wan2.7-r2v", prompt: "Use the reference video.", media: [{ assetId: video.id, role: "reference-video" }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan2.7-r2v"]));
+    const job = db.createJob({ projectId: project.id, idempotencyKey: "video", modelId: "alibaba:wan2.7-r2v", task: "reference-to-video", prompt: "Use the reference video.", inputAssetIds: [video.id], options: { duration: 5, resolution: "720P", media: [{ assetId: video.id, role: "reference-video" }] } });
 
     await expect(resolveJobMedia(db, job)).resolves.toEqual({ ok: false, reason: "Local reference video is unavailable because free Singapore URL transport is not verified." });
   });

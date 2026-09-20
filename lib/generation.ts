@@ -1,5 +1,5 @@
 import { getModel, normalizeMediaRole, validateGeneration, type GenerationOptions, type GenerationTask, type MediaRole, type ModelCapability } from "./models";
-import { isSafePublicMediaUrl } from "./media-transport/resolve";
+import { isSafePublicMediaUrl, preflightProviderMedia } from "./media-transport/resolve";
 import type { createStore } from "./store";
 
 export type GenerationMedia = { assetId: string; role: MediaRole; publicUrl?: string; referenceVoiceAssetId?: string; referenceVoicePublicUrl?: string };
@@ -75,6 +75,16 @@ export function preflightGeneration(store: ReturnType<typeof createStore>, draft
   const options = { ...model.defaultOptions, ...normalized.options };
   validateGeneration(model, { task, prompt: normalized.prompt, inputRoles: normalized.media.map((input) => input.role), options, freeQuotaConfirmed: eligibleModels.has(model.id) });
   validateMediaMetadata(store, project.id, model, resolvedAssets, options);
+  const transportPreflight = preflightProviderMedia({ model, media: resolvedAssets.map(({ input, asset }) => ({
+    role: input.role,
+    asset: asset!,
+    ...(input.publicUrl ? { publicUrl: input.publicUrl } : {}),
+    ...(input.referenceVoiceAssetId ? (() => {
+      const voice = store.getAsset(input.referenceVoiceAssetId);
+      return voice ? { referenceVoice: { asset: voice, ...(input.referenceVoicePublicUrl ? { publicUrl: input.referenceVoicePublicUrl } : {}) } } : {};
+    })() : {}),
+  })) });
+  if (!transportPreflight.ok) throw new Error(transportPreflight.reason);
   return { projectId: normalized.projectId, idempotencyKey: normalized.idempotencyKey, model, task, prompt: normalized.prompt, media: normalized.media, options, internalProvenance: normalized.internalProvenance };
 }
 

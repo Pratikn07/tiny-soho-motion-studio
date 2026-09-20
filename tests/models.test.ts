@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compileCinemaPrompt, getModel, validateGeneration } from "@/lib/models";
+import { compileCinemaPrompt, getModel, referenceIndexMap, validateGeneration } from "@/lib/models";
 
 describe("Tiny Soho model contracts", () => {
   it("keeps the source prompt under the provider limit after cinema controls", () => {
@@ -91,5 +91,19 @@ describe("Tiny Soho model contracts", () => {
     const model = getModel("alibaba:wan2.7-i2v");
     expect(() => validateGeneration(model, { task: "image-to-video", prompt: "The speaker follows the supplied track.", inputRoles: ["start-image", "driving-audio"], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).not.toThrow();
     expect(() => validateGeneration(model, { task: "image-to-video", prompt: "Continue the supplied clip.", inputRoles: ["first-clip"], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).not.toThrow();
+  });
+
+  it("creates deterministic per-type reference indexes for Director and prompt compilation", () => {
+    expect(referenceIndexMap([
+      { assetId: "video-1", role: "reference-video" },
+      { assetId: "image-1", role: "reference-image" },
+      { assetId: "audio-1", role: "reference-audio" },
+      { assetId: "image-2", role: "reference-image" },
+      { assetId: "video-2", role: "reference-video" },
+    ])).toEqual({
+      images: [{ index: 1, assetId: "image-1" }, { index: 2, assetId: "image-2" }],
+      videos: [{ index: 1, assetId: "video-1" }, { index: 2, assetId: "video-2" }],
+      audio: [{ index: 1, assetId: "audio-1" }],
+    });
   });
 });
