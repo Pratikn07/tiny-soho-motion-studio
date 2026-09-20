@@ -19,6 +19,7 @@ describe("public asset serialization", () => {
     });
 
     expect(result).not.toHaveProperty("path");
+    expect(result).not.toHaveProperty("provenance");
     expect(result).toMatchObject({ id: "asset_test", kind: "generation-plate" });
   });
 });

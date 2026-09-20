@@ -63,4 +63,33 @@ describe("Tiny Soho model contracts", () => {
     const model = getModel("alibaba:wan3-video");
     expect(() => validateGeneration(model, { task: "reference-to-video", prompt: "Create a gentle, cohesive motion study", inputRoles: ["start-image", "reference-image"], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).toThrow(/cannot mix frame and reference/i);
   });
+
+  it("accepts Wan 2.7 R2V first-frame control with five mixed image and video references", () => {
+    const model = getModel("alibaba:wan2.7-r2v");
+    expect(() => validateGeneration(model, {
+      task: "reference-to-video",
+      prompt: "Video 1 enters beside Image 1 while the first frame controls composition.",
+      inputRoles: ["start-image", "reference-image", "reference-video", "reference-image", "reference-video", "reference-image"],
+      options: { duration: 10, resolution: "720P", aspectRatio: "9:16" },
+      freeQuotaConfirmed: true,
+    })).not.toThrow();
+  });
+
+  it("rejects a sixth Wan 2.7 R2V reference and standalone reference audio", () => {
+    const model = getModel("alibaba:wan2.7-r2v");
+    expect(() => validateGeneration(model, { task: "reference-to-video", prompt: "A scene", inputRoles: Array<"reference-image">(6).fill("reference-image"), options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).toThrow(/at most 5 reference/i);
+    expect(() => validateGeneration(model, { task: "reference-to-video", prompt: "A scene", inputRoles: ["reference-audio"], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).toThrow(/does not accept|reference audio/i);
+  });
+
+  it("uses Wan 3's 20,000-character prompt ceiling instead of the Wan 2.7 ceiling", () => {
+    const model = getModel("alibaba:wan3-video");
+    expect(() => validateGeneration(model, { task: "text-to-video", prompt: "a".repeat(20_000), inputRoles: [], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).not.toThrow();
+    expect(() => validateGeneration(model, { task: "text-to-video", prompt: "a".repeat(20_001), inputRoles: [], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).toThrow(/20,000/i);
+  });
+
+  it("accepts Wan 2.7 I2V advanced URL-only roles without weakening the image-only path", () => {
+    const model = getModel("alibaba:wan2.7-i2v");
+    expect(() => validateGeneration(model, { task: "image-to-video", prompt: "The speaker follows the supplied track.", inputRoles: ["start-image", "driving-audio"], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).not.toThrow();
+    expect(() => validateGeneration(model, { task: "image-to-video", prompt: "Continue the supplied clip.", inputRoles: ["first-clip"], options: { duration: 5, resolution: "720P" }, freeQuotaConfirmed: true })).not.toThrow();
+  });
 });

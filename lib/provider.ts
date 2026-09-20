@@ -1,11 +1,12 @@
 import { workspaceBaseUrl, configPresent } from "./config";
 import { getModel } from "./models";
-import { serializeAlibabaJob, type ProviderInput } from "./providers/serializers";
+import { serializeAlibabaJob } from "./providers/serializers";
+import type { ResolvedProviderMedia } from "./media-transport/resolve";
 
 const auth = () => ({ Authorization: `Bearer ${process.env.DASHSCOPE_API_KEY}` });
 const json = async (response: Response) => { const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.message || body.code || `Provider request failed (${response.status})`); return body; };
 
-export async function submitAlibabaJob(job: { modelId: string; task: string; prompt: string; inputAssetIds: string; options: string }, inputs: ProviderInput[]) {
+export async function submitAlibabaJob(job: { modelId: string; task: string; prompt: string; inputAssetIds: string; options: string }, inputs: ResolvedProviderMedia[]) {
   if (!configPresent()) throw new Error("Alibaba credentials are not configured. Run npm run setup.");
   const model = getModel(job.modelId);
   const serialized = serializeAlibabaJob(job, inputs);

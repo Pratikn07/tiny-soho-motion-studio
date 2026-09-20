@@ -34,4 +34,36 @@ describe("shared generation preflight", () => {
     const job = queueGeneration(store, { projectId: project.id, idempotencyKey: "ready", modelId: "alibaba:wan2.7-i2v", prompt: "Move", media: [{ assetId: start.id, role: "start-image" }, { assetId: end.id, role: "end-image" }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan2.7-i2v"]));
     expect(job.task).toBe("image-to-video"); expect(JSON.parse(job.inputAssetIds)).toEqual([start.id, end.id]); expect(JSON.parse(job.options).media.map((media: { role: string }) => media.role)).toEqual(["start-image", "end-image"]);
   });
+
+  it("preserves a Wan 2.7 R2V per-reference voice association without making it a standalone media item", () => {
+    const store = storeFor(); const project = store.createProject("Voice reference");
+    const reference = image(store, project.id); const voice = store.addAsset({ projectId: project.id, kind: "voice", name: "voice.mp3", mime: "audio/mpeg", path: "/tmp/voice.mp3", width: null, height: null, duration: 3, sizeBytes: 1024, hash: "voice", provenance: "{}" });
+    const job = queueGeneration(store, {
+      projectId: project.id,
+      idempotencyKey: "voice",
+      modelId: "alibaba:wan2.7-r2v",
+      prompt: "The reference image speaks clearly.",
+      media: [{ assetId: reference.id, role: "reference-image", referenceVoiceAssetId: voice.id }] as any,
+      options: { duration: 5, resolution: "720P" },
+    }, new Set(["alibaba:wan2.7-r2v"]));
+
+    expect(JSON.parse(job.inputAssetIds)).toEqual([reference.id]);
+    expect(JSON.parse(job.options).media).toEqual([{ assetId: reference.id, role: "reference-image", referenceVoiceAssetId: voice.id }]);
+  });
+
+  it("enforces Wan 3 aggregate input-video and output duration before a job is queued", () => {
+    const store = storeFor(); const project = store.createProject("Video duration");
+    const videos = Array.from({ length: 5 }, (_, index) => store.addAsset({ projectId: project.id, kind: "reference", name: `reference-${index}.mp4`, mime: "video/mp4", path: `/tmp/reference-${index}.mp4`, width: 320, height: 320, duration: 3, sizeBytes: 1024, hash: `video-${index}`, provenance: "{}" }));
+    const media = videos.map((video) => ({ assetId: video.id, role: "reference-video" as const }));
+
+    expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "duration-ok", modelId: "alibaba:wan3-video", prompt: "Extend the reference videos.", media, options: { duration: 15, resolution: "720P" } }, new Set(["alibaba:wan3-video"]))).not.toThrow();
+    expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "duration-over", modelId: "alibaba:wan3-video", prompt: "Extend the reference videos.", media, options: { duration: 16, resolution: "720P" } }, new Set(["alibaba:wan3-video"]))).toThrow(/input video.*output duration.*30/i);
+  });
+
+  it("rejects a Wan 2.7 R2V reference voice outside its documented duration range", () => {
+    const store = storeFor(); const project = store.createProject("Voice duration");
+    const reference = image(store, project.id); const voice = store.addAsset({ projectId: project.id, kind: "voice", name: "voice.wav", mime: "audio/wav", path: "/tmp/voice.wav", width: null, height: null, duration: 0.5, sizeBytes: 1024, hash: "voice", provenance: "{}" });
+
+    expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "short-voice", modelId: "alibaba:wan2.7-r2v", prompt: "The reference image speaks.", media: [{ assetId: reference.id, role: "reference-image", referenceVoiceAssetId: voice.id }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan2.7-r2v"]))).toThrow(/reference voice.*1.*10/i);
+  });
 });

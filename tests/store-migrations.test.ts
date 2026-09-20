@@ -6,10 +6,10 @@ import path from "node:path";
 import { createStore } from "@/lib/store";
 
 describe("SQLite schema migrations", () => {
-  it("recognizes the current schema as baseline version 1 without rebuilding it", () => {
+  it("recognizes the current schema as version 3 without rebuilding it", () => {
     const db = createStore(":memory:");
     try {
-      expect(db.schemaVersion()).toBe(1);
+      expect(db.schemaVersion()).toBe(3);
       expect(db.createProject("Migration fixture").name).toBe("Migration fixture");
     } finally {
       db.close();
@@ -26,7 +26,7 @@ describe("SQLite schema migrations", () => {
 
     const db = createStore(filename);
     try {
-      expect(db.schemaVersion()).toBe(1);
+      expect(db.schemaVersion()).toBe(3);
       expect(db.getProject("project_legacy")?.name).toBe("Legacy");
     } finally {
       db.close();
