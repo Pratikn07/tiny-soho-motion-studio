@@ -10,7 +10,7 @@
       "cpu": "required",
       "mps": "not-supported",
       "cuda": "optional",
-      "notes": "Inference is intentionally not installed in VISION-01 through VISION-03."
+      "notes": "The optional local PaddleOCR v5-mobile runtime requires reviewed, externally provisioned model files."
     },
     "inputs": ["image"],
     "outputs": ["text", "text-blocks"],
@@ -18,7 +18,7 @@
       "repository": "https://github.com/PaddlePaddle/PaddleOCR",
       "pinnedRef": "dab3fe35379033fdcb2d0e9572fac0b36c9a9ebf",
       "codeLicense": "Apache-2.0",
-      "modelLicense": "No checkpoint selected or downloaded; confirm the selected PaddleOCR checkpoint license before inference."
+      "modelLicense": "Apache-2.0 for PP-OCRv5_mobile_det and en_PP-OCRv5_mobile_rec; availability still requires explicit local provisioning."
     }
   },
   {
@@ -54,7 +54,7 @@
       "cpu": "required",
       "mps": "optional",
       "cuda": "recommended",
-      "notes": "No SAM 2 package or checkpoint is installed in this track."
+      "notes": "The optional SAM 2 runtime requires an explicitly provisioned, validated checkpoint."
     },
     "inputs": ["image", "points", "boxes"],
     "outputs": ["mask", "mask-metadata"],
@@ -62,7 +62,7 @@
       "repository": "https://github.com/facebookresearch/sam2",
       "pinnedRef": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
       "codeLicense": "Apache-2.0",
-      "modelLicense": "Apache-2.0 (upstream SAM 2 checkpoints; no checkpoint downloaded)"
+      "modelLicense": "Apache-2.0 for SAM 2 checkpoints; availability still requires explicit local provisioning."
     }
   },
   {

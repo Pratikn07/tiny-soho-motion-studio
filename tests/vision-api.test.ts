@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET as getCapabilities } from "@/app/api/capabilities/route";
 import { GET as getVisionHealth } from "@/app/api/vision/health/route";
@@ -10,6 +10,7 @@ function localRequest(path: string) {
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   if (originalSidecarUrl === undefined) delete process.env.TINY_SOHO_VISION_SIDECAR_URL;
   else process.env.TINY_SOHO_VISION_SIDECAR_URL = originalSidecarUrl;
 });
@@ -26,6 +27,53 @@ describe("vision API routes", () => {
       id: "image.segment",
       provider: "SAM 2",
       runtimeStatus: { state: "unloaded", available: false, reason: expect.any(String) },
+    });
+  });
+
+  it("preserves a ready runtime status from a Pydantic capability payload with a null optional reason", async () => {
+    process.env.TINY_SOHO_VISION_SIDECAR_URL = "http://127.0.0.1:8766";
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({
+      capabilities: [{
+        id: "image.ocr",
+        name: "PaddleOCR",
+        status: "planned",
+        runtime: "python-fastapi",
+        provider: "PaddleOCR",
+        version: "source-pinned",
+        hardwareRequirements: { cpu: "required", mps: "not-supported", cuda: "optional" },
+        inputs: ["image"],
+        outputs: ["text", "text-blocks"],
+        upstream: {
+          repository: "https://github.com/PaddlePaddle/PaddleOCR",
+          pinnedRef: "dab3fe35379033fdcb2d0e9572fac0b36c9a9ebf",
+          codeLicense: "Apache-2.0",
+          modelLicense: "Apache-2.0",
+        },
+        unavailableReason: null,
+        runtimeStatus: {
+          capabilityId: "image.ocr",
+          backend: "PaddleOcrAdapter",
+          state: "ready",
+          available: true,
+          reason: null,
+        },
+      }],
+      hardware: {
+        cpu: { available: true, cores: 10, architecture: "arm64" },
+        mps: { available: false, reason: "PyTorch is not installed; MPS cannot be checked." },
+        cuda: { available: false, deviceCount: 0, reason: "PyTorch is not installed; CUDA cannot be checked." },
+      },
+    }), { status: 200 }));
+
+    const response = await getCapabilities(localRequest("/api/capabilities"));
+    const body = await response.json() as { capabilities: Array<{ id: string; runtimeStatus?: unknown }> };
+
+    expect(body.capabilities.find((capability) => capability.id === "image.ocr")?.runtimeStatus).toEqual({
+      capabilityId: "image.ocr",
+      backend: "PaddleOcrAdapter",
+      state: "ready",
+      available: true,
+      reason: null,
     });
   });
 

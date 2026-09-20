@@ -33,7 +33,7 @@ export const capabilitySchema = z.object({
   inputs: z.array(z.string().min(1)).min(1),
   outputs: z.array(z.string().min(1)).min(1),
   upstream: upstreamSchema.nullable(),
-  unavailableReason: z.string().min(1).optional(),
+  unavailableReason: z.string().min(1).nullable().optional(),
   runtimeStatus: capabilityRuntimeStatusSchema.optional(),
 }).superRefine((capability, context) => {
   if (capability.status === "unavailable" && !capability.unavailableReason) {
