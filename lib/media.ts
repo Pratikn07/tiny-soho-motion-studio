@@ -10,8 +10,13 @@ function run(args: string[]) { return new Promise<void>((resolve, reject) => { c
 export async function compositeOverlay(video: string, overlay: string, canvas = "1080:1440") {
   await fs.mkdir(exportsDir(), { recursive: true });
   const output = path.join(exportsDir(), `composite-${randomUUID()}.mp4`);
-  await run(["-y", "-i", video, "-loop", "1", "-i", overlay, "-filter_complex", `[0:v]scale=${canvas}:force_original_aspect_ratio=decrease,pad=${canvas}:(ow-iw)/2:(oh-ih)/2:black[base];[1:v]scale=${canvas},format=rgba[overlay];[base][overlay]overlay=0:0:format=auto`, "-map", "0:a?", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-shortest", output]);
-  return output;
+  try {
+    await run(["-y", "-i", video, "-loop", "1", "-i", overlay, "-filter_complex", `[0:v]scale=${canvas}:force_original_aspect_ratio=decrease,pad=${canvas}:(ow-iw)/2:(oh-ih)/2:black[base];[1:v]scale=${canvas},format=rgba[overlay];[base][overlay]overlay=0:0:format=auto`, "-map", "0:a?", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-shortest", output]);
+    return output;
+  } catch (error) {
+    await fs.rm(output, { force: true });
+    throw error;
+  }
 }
 
 export async function concatenateVideos(videos: string[], canvas = "1080:1440") {
@@ -20,6 +25,13 @@ export async function concatenateVideos(videos: string[], canvas = "1080:1440") 
   const list = path.join(exportsDir(), `concat-${randomUUID()}.txt`);
   const output = path.join(exportsDir(), `export-${randomUUID()}.mp4`);
   await fs.writeFile(list, videos.map((video) => `file '${video.replace(/'/g, "'\\''")}'`).join("\n"));
-  try { await run(["-y", "-f", "concat", "-safe", "0", "-i", list, "-vf", `scale=${canvas}:force_original_aspect_ratio=decrease,pad=${canvas}:(ow-iw)/2:(oh-ih)/2:black,fps=30`, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", output]); } finally { await fs.rm(list, { force: true }); }
-  return output;
+  try {
+    await run(["-y", "-f", "concat", "-safe", "0", "-i", list, "-vf", `scale=${canvas}:force_original_aspect_ratio=decrease,pad=${canvas}:(ow-iw)/2:(oh-ih)/2:black,fps=30`, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", output]);
+    return output;
+  } catch (error) {
+    await fs.rm(output, { force: true });
+    throw error;
+  } finally {
+    await fs.rm(list, { force: true });
+  }
 }

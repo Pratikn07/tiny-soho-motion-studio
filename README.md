@@ -61,6 +61,23 @@ The browser uses internal media roles such as `start-image` and `end-image`. Onl
 
 The browser talks only to local `/api/*` routes. SQLite and media live under `~/Library/Application Support/Tiny Soho Studio` by default. A separate worker process submits and polls durable Alibaba jobs every 15 seconds. Provider result URLs are downloaded without forwarding the DashScope authorization header.
 
+## Core media recovery
+
+Core asset handling has separate limits for browser uploads (25 MB), provider
+results (500 MB), and local exports (1 GB). Provider results are accepted only
+from exact HTTPS Alibaba storage domain boundaries, are streamed to a local
+temporary file with a hard ceiling and SHA-256 hash, then decoded/probed before
+being atomically adopted as a content-addressed local asset. Redirects and
+unrecognised content types are rejected; provider credentials are never sent to
+the result host.
+
+SQLite uses `migrations/001_baseline.sql` and `PRAGMA user_version` within an
+immediate transaction. On worker startup, a job interrupted during submission
+becomes `submission_unknown` and a job interrupted during local result handling
+becomes `needs_attention`; neither is silently resubmitted. Only a still-queued
+job can be canceled locally. A provider-submitted job may continue consuming
+quota even if its downstream handling is stopped.
+
 ## Verification
 
 ```bash

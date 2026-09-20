@@ -14,25 +14,55 @@ function now() { return new Date().toISOString(); }
 function id(prefix: string) { return `${prefix}_${randomUUID()}`; }
 function parse<T>(value: string): T { return JSON.parse(value) as T; }
 
+const BASELINE_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, canvas TEXT NOT NULL, storyboard TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS assets (id TEXT PRIMARY KEY, project_id TEXT, kind TEXT NOT NULL, name TEXT NOT NULL, mime TEXT NOT NULL, path TEXT NOT NULL, width INTEGER, height INTEGER, duration REAL, hash TEXT NOT NULL, provenance TEXT NOT NULL, created_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, idempotency_key TEXT NOT NULL, fingerprint TEXT NOT NULL, model_id TEXT NOT NULL, task TEXT NOT NULL, prompt TEXT NOT NULL, input_asset_ids TEXT NOT NULL, options TEXT NOT NULL, status TEXT NOT NULL, provider_task_id TEXT, output_asset_id TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(project_id, idempotency_key));
+  CREATE TABLE IF NOT EXISTS workflows (id TEXT PRIMARY KEY, name TEXT NOT NULL, graph TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS workflow_runs (id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, project_id TEXT NOT NULL, graph TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS proposals (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, prompt TEXT NOT NULL, proposal TEXT NOT NULL, fingerprint TEXT NOT NULL, approved_at TEXT, created_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
+`;
+
+function baselineSchema() {
+  const migration = path.join(process.cwd(), "migrations", "001_baseline.sql");
+  try {
+    return fs.readFileSync(migration, "utf8");
+  } catch {
+    return BASELINE_SCHEMA;
+  }
+}
+
+function runMigrations(db: Database.Database) {
+  let version = Number(db.pragma("user_version", { simple: true }));
+  if (version > 1) throw new Error(`Database schema version ${version} is newer than this application supports.`);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (version < 1) {
+      db.exec(baselineSchema());
+      db.pragma("user_version = 1");
+      version = 1;
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return version;
+}
+
 export function createStore(filename = databasePath()) {
   if (filename !== ":memory:") fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new Database(filename);
   db.pragma("journal_mode = WAL");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, canvas TEXT NOT NULL, storyboard TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS assets (id TEXT PRIMARY KEY, project_id TEXT, kind TEXT NOT NULL, name TEXT NOT NULL, mime TEXT NOT NULL, path TEXT NOT NULL, width INTEGER, height INTEGER, duration REAL, hash TEXT NOT NULL, provenance TEXT NOT NULL, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, idempotency_key TEXT NOT NULL, fingerprint TEXT NOT NULL, model_id TEXT NOT NULL, task TEXT NOT NULL, prompt TEXT NOT NULL, input_asset_ids TEXT NOT NULL, options TEXT NOT NULL, status TEXT NOT NULL, provider_task_id TEXT, output_asset_id TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(project_id, idempotency_key));
-    CREATE TABLE IF NOT EXISTS workflows (id TEXT PRIMARY KEY, name TEXT NOT NULL, graph TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS workflow_runs (id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, project_id TEXT NOT NULL, graph TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS proposals (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, prompt TEXT NOT NULL, proposal TEXT NOT NULL, fingerprint TEXT NOT NULL, approved_at TEXT, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
-  `);
+  const schemaVersion = runMigrations(db);
   const projectFrom = (row: any): Project => ({ id: row.id, name: row.name, canvas: row.canvas, storyboard: row.storyboard, createdAt: row.created_at, updatedAt: row.updated_at });
   const assetFrom = (row: any): Asset => ({ id: row.id, projectId: row.project_id, kind: row.kind, name: row.name, mime: row.mime, path: row.path, width: row.width, height: row.height, duration: row.duration, hash: row.hash, provenance: row.provenance, createdAt: row.created_at });
   const jobFrom = (row: any): Job => ({ id: row.id, projectId: row.project_id, idempotencyKey: row.idempotency_key, modelId: row.model_id, task: row.task, prompt: row.prompt, inputAssetIds: row.input_asset_ids, options: row.options, status: row.status, providerTaskId: row.provider_task_id, outputAssetId: row.output_asset_id, error: row.error, createdAt: row.created_at, updatedAt: row.updated_at });
   const runFrom = (row: any): WorkflowRun => ({ id: row.id, workflowId: row.workflow_id, projectId: row.project_id, graph: row.graph, state: row.state, createdAt: row.created_at, updatedAt: row.updated_at });
   return {
     close: () => db.close(),
+    schemaVersion: () => schemaVersion,
     createProject(name: string, canvas = "1080x1440") { const project = { id: id("project"), name: name.trim() || "Untitled project", canvas, storyboard: "[]", createdAt: now(), updatedAt: now() }; db.prepare("INSERT INTO projects VALUES (@id,@name,@canvas,@storyboard,@createdAt,@updatedAt)").run(project); return project; },
     listProjects() { return db.prepare("SELECT * FROM projects ORDER BY updated_at DESC").all().map(projectFrom); },
     getProject(projectId: string) { const row = db.prepare("SELECT * FROM projects WHERE id=?").get(projectId); return row ? projectFrom(row) : null; },
@@ -45,6 +75,27 @@ export function createStore(filename = databasePath()) {
     getJob(jobId: string) { const row = db.prepare("SELECT * FROM jobs WHERE id=?").get(jobId); return row ? jobFrom(row) : null; },
     claimNextJob() { const row = db.prepare("SELECT id FROM jobs WHERE status='queued' ORDER BY created_at LIMIT 1").get() as { id: string } | undefined; if (!row) return null; const stamp = now(); const result = db.prepare("UPDATE jobs SET status='submitting',updated_at=? WHERE id=? AND status='queued'").run(stamp, row.id); return result.changes ? this.getJob(row.id) : null; },
     updateJob(jobId: string, patch: Partial<Pick<Job, "status" | "providerTaskId" | "outputAssetId" | "error">>) { const existing = this.getJob(jobId); if (!existing) throw new Error("Job not found"); const next = { ...existing, ...patch, updatedAt: now() }; db.prepare("UPDATE jobs SET status=@status,provider_task_id=@providerTaskId,output_asset_id=@outputAssetId,error=@error,updated_at=@updatedAt WHERE id=@id").run(next); return next; },
+    transitionJob(jobId: string, expectedStatuses: JobStatus[], patch: Partial<Pick<Job, "status" | "providerTaskId" | "outputAssetId" | "error">>) {
+      if (!expectedStatuses.length) throw new Error("At least one expected job status is required.");
+      const existing = this.getJob(jobId);
+      if (!existing) throw new Error("Job not found");
+      const next = { ...existing, ...patch, updatedAt: now() };
+      const placeholders = expectedStatuses.map(() => "?").join(",");
+      const result = db.prepare(`UPDATE jobs SET status=?,provider_task_id=?,output_asset_id=?,error=?,updated_at=? WHERE id=? AND status IN (${placeholders})`).run(next.status, next.providerTaskId, next.outputAssetId, next.error, next.updatedAt, jobId, ...expectedStatuses);
+      return result.changes ? next : null;
+    },
+    cancelQueuedJob(jobId: string) {
+      return this.transitionJob(jobId, ["queued"], { status: "canceled", error: "Canceled before provider submission." });
+    },
+    reconcileInterruptedJobs() {
+      const stamp = now();
+      const reconcile = db.transaction(() => {
+        const ambiguous = db.prepare("UPDATE jobs SET status='submission_unknown',error=?,updated_at=? WHERE status='submitting'").run("Worker interrupted while submitting; provider acceptance is unknown.", stamp).changes;
+        const attention = db.prepare("UPDATE jobs SET status='needs_attention',error=?,updated_at=? WHERE status IN ('downloading','processing')").run("Worker interrupted during local result handling; retry downstream work explicitly.", stamp).changes;
+        return { submissionUnknown: ambiguous, needsAttention: attention };
+      });
+      return reconcile();
+    },
     setSetting(key: string, value: unknown) { db.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").run(key, JSON.stringify(value), now()); },
     getSetting<T>(key: string): T | null { const row = db.prepare("SELECT value FROM settings WHERE key=?").get(key) as { value: string } | undefined; return row ? parse<T>(row.value) : null; },
     createWorkflow(name: string, graph: unknown) { const next = { id: id("workflow"), name, graph: JSON.stringify(graph), createdAt: now(), updatedAt: now() }; db.prepare("INSERT INTO workflows VALUES (@id,@name,@graph,@createdAt,@updatedAt)").run(next); return next; },
