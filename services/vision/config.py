@@ -27,6 +27,15 @@ class PaddleOcrSettings:
 
 
 @dataclass(frozen=True)
+class Sam2Settings:
+    enabled: bool
+    checkpoint_path: Path | None
+    model_config: str
+    device: str
+    timeout_seconds: int
+
+
+@dataclass(frozen=True)
 class VisionConfig:
     cache_dir: Path
     artifact_ttl_seconds: int
@@ -35,8 +44,7 @@ class VisionConfig:
     max_video_artifact_bytes: int
     max_image_pixels: int
     paddle_ocr: PaddleOcrSettings
-    sam2_enabled: bool
-    sam2_checkpoint_path: Path | None
+    sam2: Sam2Settings
     qwen_layers_enabled: bool
     qwen_layers_model_path: Path | None
     ffmpeg_path: str
@@ -48,6 +56,9 @@ class VisionConfig:
         paddle_ocr_profile = os.environ.get("TINY_SOHO_PADDLE_OCR_PROFILE", "v5-mobile")
         if paddle_ocr_profile != "v5-mobile":
             raise RuntimeError("TINY_SOHO_PADDLE_OCR_PROFILE currently supports only v5-mobile.")
+        sam2_device = os.environ.get("TINY_SOHO_SAM2_DEVICE", "auto")
+        if sam2_device not in {"auto", "cpu", "mps", "cuda"}:
+            raise RuntimeError("TINY_SOHO_SAM2_DEVICE must be one of auto, cpu, mps, or cuda.")
         return cls(
             cache_dir=cache_dir.expanduser(),
             artifact_ttl_seconds=_positive_int(os.environ.get("TINY_SOHO_VISION_ARTIFACT_TTL_SECONDS", "86400"), "TINY_SOHO_VISION_ARTIFACT_TTL_SECONDS"),
@@ -66,8 +77,16 @@ class VisionConfig:
                     "TINY_SOHO_PADDLE_OCR_TIMEOUT_SECONDS",
                 ),
             ),
-            sam2_enabled=os.environ.get("TINY_SOHO_SAM2_ENABLED") == "1",
-            sam2_checkpoint_path=_optional_path(os.environ.get("TINY_SOHO_SAM2_CHECKPOINT_PATH")),
+            sam2=Sam2Settings(
+                enabled=os.environ.get("TINY_SOHO_SAM2_ENABLED") == "1",
+                checkpoint_path=_optional_path(os.environ.get("TINY_SOHO_SAM2_CHECKPOINT_PATH")),
+                model_config=os.environ.get("TINY_SOHO_SAM2_MODEL_CONFIG", "configs/sam2.1/sam2.1_hiera_t.yaml"),
+                device=sam2_device,
+                timeout_seconds=_positive_int(
+                    os.environ.get("TINY_SOHO_SAM2_TIMEOUT_SECONDS", "45"),
+                    "TINY_SOHO_SAM2_TIMEOUT_SECONDS",
+                ),
+            ),
             qwen_layers_enabled=os.environ.get("TINY_SOHO_QWEN_LAYERS_ENABLED") == "1",
             qwen_layers_model_path=_optional_path(os.environ.get("TINY_SOHO_QWEN_LAYERS_MODEL_PATH")),
             ffmpeg_path=os.environ.get("FFMPEG_PATH", "ffmpeg"),

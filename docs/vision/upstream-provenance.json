@@ -18,12 +18,15 @@
       "name": "SAM 2",
       "upstreamRepository": "https://github.com/facebookresearch/sam2",
       "pinnedCommit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
-      "packageVersion": "1.0",
+      "packageVersion": "SAM-2 1.0 optional runtime; torch==2.5.1 and torchvision==0.20.1",
       "codeLicense": "Apache-2.0",
       "checkpointIdentifier": "sam2.1_hiera_tiny.pt",
-      "checkpointSource": "https://github.com/facebookresearch/sam2/tree/main/checkpoints",
+      "checkpointSource": "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt",
       "checkpointLicense": "Apache-2.0",
-      "status": "not installed"
+      "checkpointSha256": "7402e0d864fa82708a20fbd15bc84245c2f26dff0eb43a4b5b93452deb34be69",
+      "testedPython": "3.11.6",
+      "testedDevice": "cpu (Apple Silicon; MPS runtime smoke failed on an unsupported PyTorch operator)",
+      "status": "validated-on-apple-silicon-cpu"
     },
     {
       "capability": "image.layers",
