@@ -17,16 +17,20 @@ Browser / Vision Lab
 
 The sidecar never receives Alibaba credentials and does not change Supabase,
 SQLite, quota accounting, provider payloads, or the production generation
-worker. The mock MotionPackage bridge prepares a prompt only; it never creates
-or submits a job.
+worker. The Vision Generation Bridge accepts only a validated, persistent
+MotionPackageV2 and explicitly queues one idempotent request through that
+existing worker; it does not add a parallel provider path.
 
 ## Capability truthfulness
 
-`lib/capabilities/manifest.json` records product availability, required
+`lib/capabilities/manifest.json` records planned product support, required
 runtime, upstream repository and pin, code license, and model/checkpoint
 license independently. `GET /v1/capabilities` combines it with a runtime
-status. `planned` describes the product capability; it is not evidence that
-the local model is installed or usable.
+status. A `planned` registry entry is not evidence that its optional local
+model is installed or usable: only a configured runtime can start work, and a
+runtime that reports ready has completed a real inference. A configured lazy
+adapter is startable while unloaded and becomes ready only after that first
+successful inference.
 
 | Capability | Default runtime state | Test backend |
 | --- | --- | --- |
@@ -118,6 +122,23 @@ that can turn a validated package into a durable generation request.
 
 The safety mask is guidance for model prompts; local overlay composition is
 the mechanism that preserves original typography.
+
+## Experimental Vision Lab flow
+
+The Vision Lab is a project-aware diagnostic and production-preparation
+surface. It first fetches project assets, model eligibility, and capability
+runtime state. A user chooses an existing project image or a local file, then
+explicitly runs real OCR and may add prompted SAM segmentation or Qwen layer
+analysis when those runtimes are configured. It creates a trusted overlay and
+generation plate in the sidecar, then promotes the reviewed source, overlay,
+plate, and optional analysis outputs into project-scoped core assets.
+
+Only after promotion does the browser construct and submit a MotionPackageV2
+for server-side validation. A separate explicit generate action calls the
+existing Vision Generation Bridge with one persisted attempt ID. The browser
+polls the durable core job; after a completed raw video is saved locally, the
+user explicitly invokes the core FFmpeg composition endpoint. Temporary
+sidecar artifact IDs never reach the provider serialization path.
 
 ## Optional setup
 

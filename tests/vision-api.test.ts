@@ -15,12 +15,17 @@ afterEach(() => {
 });
 
 describe("vision API routes", () => {
-  it("keeps the static capability catalog available without the Python sidecar", async () => {
-    const response = getCapabilities(localRequest("/api/capabilities"));
+  it("keeps the capability catalog usable and marks sidecar work unavailable when Python is stopped", async () => {
+    process.env.TINY_SOHO_VISION_SIDECAR_URL = "http://127.0.0.1:9";
+    const response = await getCapabilities(localRequest("/api/capabilities"));
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      capabilities: expect.arrayContaining([expect.objectContaining({ id: "image.segment", provider: "SAM 2" })]),
+    const body = await response.json() as { sidecar: unknown; capabilities: Array<{ id: string }> };
+    expect(body.sidecar).toMatchObject({ status: "unavailable", reason: expect.any(String) });
+    expect(body.capabilities.find((capability) => capability.id === "image.segment")).toMatchObject({
+      id: "image.segment",
+      provider: "SAM 2",
+      runtimeStatus: { state: "unloaded", available: false, reason: expect.any(String) },
     });
   });
 

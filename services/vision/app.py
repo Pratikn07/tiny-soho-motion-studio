@@ -147,6 +147,7 @@ runtime_registry.transition(
     "image.ocr",
     state="unloaded",
     reason=ocr_configuration_reason or "PaddleOCR is configured; awaiting a real local inference.",
+    available=ocr_configuration_reason is None,
 )
 segmentation_adapter = default_sam2_adapter(vision_config.sam2)
 segmentation_configuration_reason = segmentation_adapter.configuration_reason()
@@ -154,6 +155,7 @@ runtime_registry.transition(
     "image.segment",
     state="unloaded",
     reason=segmentation_configuration_reason or "SAM 2 is configured; awaiting a real local inference.",
+    available=segmentation_configuration_reason is None,
 )
 layers_backend = default_qwen_layers_backend(vision_config.qwen_layers)
 layers_configuration_reason = layers_backend.configuration_reason()
@@ -161,6 +163,7 @@ runtime_registry.transition(
     "image.layers",
     state="unloaded",
     reason=layers_configuration_reason or "Qwen Image Layered is configured; awaiting a real backend inference.",
+    available=layers_configuration_reason is None,
 )
 
 
