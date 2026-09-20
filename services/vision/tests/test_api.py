@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import importlib
+import json
 import platform
 import sys
 import unittest
@@ -41,6 +42,15 @@ def post_image(app, path: str, data: bytes, mime_type: str) -> httpx.Response:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             return await client.post(path, files={"image": ("slide.png", data, mime_type)})
+
+    return asyncio.run(request())
+
+
+def post_json(app, path: str, payload: dict[str, object]) -> httpx.Response:
+    async def request() -> httpx.Response:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.post(path, json=payload)
 
     return asyncio.run(request())
 
@@ -256,6 +266,41 @@ class VisionSidecarContractTests(unittest.TestCase):
         self.assertRegex(payload["sourceArtifactId"], r"^[0-9a-f-]{36}$")
         self.assertEqual(payload["width"], 1)
         self.assertEqual(payload["height"], 1)
+
+    def test_plate_endpoint_reuses_only_owned_source_and_trusted_overlay_artifacts(self) -> None:
+        app_module = load_module("services.vision.app")
+        region = {
+            "id": "copy",
+            "text": "copy",
+            "polygon": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 1, "y": 1}],
+            "boundingBox": {"x": 0, "y": 0, "width": 1, "height": 1},
+        }
+
+        async def overlay_request() -> httpx.Response:
+            transport = httpx.ASGITransport(app=app_module.app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                return await client.post(
+                    "/v1/overlay",
+                    files={"image": ("slide.png", ONE_PIXEL_PNG, "image/png")},
+                    data={"regions": json.dumps([region])},
+                )
+
+        overlay_response = asyncio.run(overlay_request())
+        self.assertEqual(overlay_response.status_code, 200)
+        overlay = overlay_response.json()
+        response = post_json(app_module.app, "/v1/plates", {
+            "sourceArtifactId": overlay["sourceArtifactId"],
+            "typographyOverlayArtifactId": overlay["artifactId"],
+            "regions": [region],
+            "mode": "original-with-protected-text",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["artifactId"], overlay["sourceArtifactId"])
+        self.assertEqual(payload["mode"], "original-with-protected-text")
+        self.assertFalse(payload["textRemoved"])
+        self.assertRegex(payload["artifactId"], r"^[0-9a-f-]{36}$")
 
 
 if __name__ == "__main__":

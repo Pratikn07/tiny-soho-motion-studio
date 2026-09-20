@@ -65,16 +65,25 @@ not remove a broader temporary or home directory.
 1. OCR returns every region, including low-confidence text, plus a dilated
    local safety-mask artifact.
 2. Segmentation returns binary PNG masks under artifact IDs.
-3. The Safe Motion planner consumes normalized OCR/segmentation geometry and
-   reduces or rejects risky subject movement using conservative swept bounds.
-4. Overlay generation copies original image pixels in protected polygons into
+3. A generation plate is either the original flattened source with protected
+   typography (`original-with-protected-text`) or, only when Qwen layer
+   diagnostics pass and a real second OCR pass finds no residual protected
+   text, a separately stored `layers-text-removed` PNG. Inpainting remains
+   unavailable. Each result retains source, overlay, layer/second-pass analysis,
+   hashes, dimensions, timestamp, and mode provenance.
+4. The Safe Motion planner consumes normalized OCR/segmentation geometry plus
+   a plate mode. It applies subject and camera movement relative to the fixed
+   overlay, then reduces or rejects any swept collision, canvas escape, or
+   camera movement that exposes a fixed-overlay edge. An initial overlap is
+   allowed only for a stationary, explicit `behind-fixed-overlay` plan.
+5. Overlay generation copies original image pixels in protected polygons into
    a full-canvas transparent PNG.
-5. A MotionPackage records source and overlay IDs, a generation-plate mode,
+6. A MotionPackage records source and overlay IDs, a generation-plate mode,
    whether text was actually removed, protected-region provenance, the safe
    plan, and explicit `avoidTextGeneration`/`preserveComposition` hints. An
    original flattened slide is explicitly `original-with-protected-text`, never
    described as a clean plate, and receives a conservative motion budget.
-6. FFmpeg can overlay the trusted PNG above a local MP4 while retaining source
+7. FFmpeg can overlay the trusted PNG above a local MP4 while retaining source
    audio only when it exists. It accepts only owned artifacts and uses argument
    arrays, never a shell command.
 

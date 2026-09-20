@@ -3,6 +3,7 @@ import { parseVisionArtifactId } from "./artifacts";
 import { layerResultSchema, ocrResultSchema, segmentationResultSchema, type LayerResult, type OcrResult, type SegmentationResult } from "./contracts";
 import { typographyOverlayResultSchema, type TypographyOverlayResult } from "./overlay";
 import { typographyCompositionResultSchema, type TypographyCompositionRequest, type TypographyCompositionResult } from "./composer";
+import { generationPlateResultSchema, type GenerationPlateBuildRequest, type GenerationPlateResult } from "./plate";
 
 const DEFAULT_SIDECAR_URL = "http://127.0.0.1:8765";
 const REQUEST_TIMEOUT_MS = 1_500;
@@ -106,6 +107,25 @@ export function runVisionLayers(formData: FormData, configuredUrl?: string): Pro
 
 export function createVisionTypographyOverlay(formData: FormData, configuredUrl?: string): Promise<TypographyOverlayResult | VisionSidecarUnavailable> {
   return submitVisionUpload("/v1/overlay", formData, typographyOverlayResultSchema, configuredUrl);
+}
+
+export async function createVisionGenerationPlate(request: GenerationPlateBuildRequest, configuredUrl?: string): Promise<GenerationPlateResult | VisionSidecarUnavailable> {
+  const resolved = resolveVisionSidecarUrl(configuredUrl);
+  if (!resolved.ok) return { status: "unavailable", reason: resolved.reason };
+  try {
+    const response = await fetch(`${resolved.url}/v1/plates`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(request),
+      cache: "no-store",
+      signal: AbortSignal.timeout(INFERENCE_REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) return { status: "unavailable", reason: `Vision sidecar returned HTTP ${response.status}.` };
+    const parsed = generationPlateResultSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : { status: "unavailable", reason: "Vision sidecar returned an invalid response." };
+  } catch {
+    return { status: "unavailable", reason: "Vision sidecar is not running or did not respond in time." };
+  }
 }
 
 export async function composeVisionTypography(request: TypographyCompositionRequest, configuredUrl?: string): Promise<TypographyCompositionResult | VisionSidecarUnavailable> {

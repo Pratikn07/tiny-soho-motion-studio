@@ -28,14 +28,14 @@ export const generationPlateSchema = z.object({
 export type GenerationPlateDescriptor = z.infer<typeof generationPlateSchema>;
 
 export type MotionPackage = {
-  version: "1";
+  version: "2";
   sourceBackgroundArtifactId: string;
   sourceImage: { artifactId: string };
   generationPlate: GenerationPlateDescriptor;
   typographyOverlay: TypographyOverlay;
   plan: SafeMotionPlan;
   generationHints: { avoidTextGeneration: true; preserveComposition: true };
-  provenance: { overlayMode: "original-region-patch"; protectedRegionIds: string[] };
+  provenance: { overlayMode: "original-region-patch"; protectedRegionIds: string[]; plateMode: GenerationPlateDescriptor["mode"] };
 };
 
 export type MotionPackageInput = Pick<MotionPackage, "sourceBackgroundArtifactId" | "typographyOverlay" | "plan"> & {
@@ -58,6 +58,9 @@ export function createMotionPackage(input: MotionPackageInput): MotionPackage {
   if (generationPlate.sourceArtifactId !== sourceBackgroundArtifactId) {
     throw new Error("Generation plate provenance must point to the supplied source artifact.");
   }
+  if (input.plan.plateMode !== generationPlate.mode) {
+    throw new Error("Safe Motion plan and generation plate mode must agree.");
+  }
   if (!generationPlate.textRemoved) {
     if (!sameRegionIds(generationPlate.protectedRegionIds, typographyOverlay.protectedRegionIds)) {
       throw new Error("A text-retaining generation plate requires a trusted overlay for every protected region.");
@@ -67,14 +70,14 @@ export function createMotionPackage(input: MotionPackageInput): MotionPackage {
     }
   }
   return {
-    version: "1",
+    version: "2",
     sourceBackgroundArtifactId,
     sourceImage: { artifactId: sourceBackgroundArtifactId },
     generationPlate,
     typographyOverlay,
     plan: input.plan,
     generationHints: { avoidTextGeneration: true, preserveComposition: true },
-    provenance: { overlayMode: typographyOverlay.mode, protectedRegionIds: typographyOverlay.protectedRegionIds },
+    provenance: { overlayMode: typographyOverlay.mode, protectedRegionIds: typographyOverlay.protectedRegionIds, plateMode: generationPlate.mode },
   };
 }
 

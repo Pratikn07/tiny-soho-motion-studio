@@ -59,6 +59,14 @@ shell command. Generated MP4s are adopted atomically from sidecar-owned
 temporary files, so composition does not load the completed video into Python
 memory.
 
+`POST /v1/plates` accepts only sidecar-owned source-image, trusted-overlay, and
+optional RGBA-layer artifact IDs. It verifies the overlay's dimensions, safety
+coverage, and exact protected source pixels. It uses the original source by default. A text-removed
+plate is emitted only when Qwen recomposition diagnostics pass, a text-like
+layer overlaps OCR protection, and a real second OCR pass finds no protected
+text left. If any check is unavailable or fails, it returns the original plate
+with truthful warnings; it never claims inpainting is available.
+
 ## Artifact limits
 
 `TINY_SOHO_VISION_MAX_UPLOAD_BYTES` defaults to 16 MB and limits browser image
