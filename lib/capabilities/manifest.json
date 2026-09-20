@@ -29,10 +29,10 @@
     "provider": "Qwen Image Layered",
     "version": "source-pinned",
     "hardwareRequirements": {
-      "cpu": "required",
-      "mps": "optional",
+      "cpu": "optional",
+      "mps": "not-supported",
       "cuda": "recommended",
-      "notes": "No model runtime or weights are installed in this track."
+      "notes": "The optional local backend requires CUDA and reviewed, externally provisioned weights. A remote backend is server-configured only."
     },
     "inputs": ["image", "prompt"],
     "outputs": ["rgba-layers", "layer-metadata"],

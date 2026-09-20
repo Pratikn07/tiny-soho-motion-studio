@@ -33,12 +33,12 @@
       "name": "Qwen Image Layered",
       "upstreamRepository": "https://github.com/QwenLM/Qwen-Image-Layered",
       "pinnedCommit": "54c4fe47e76d745775e03fc66ee38457280ed9ea",
-      "packageVersion": "optional runtime requirements; not installed",
+      "packageVersion": "candidate local CUDA lock: torch==2.5.1, transformers==4.51.3, accelerate==1.6.0, diffusers@a3e0b8ec235c27a6c17a21976daf7fd32d819d05; not validated on the Apple Silicon target",
       "codeLicense": "Apache-2.0",
       "checkpointIdentifier": "Qwen-Image-Layered",
       "checkpointSource": "https://github.com/QwenLM/Qwen-Image-Layered",
       "checkpointLicense": "Apache-2.0",
-      "status": "not installed"
+      "status": "backend-implemented-cuda-or-trusted-remote-required"
     }
   ]
 }

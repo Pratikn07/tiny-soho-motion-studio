@@ -1,5 +1,7 @@
-# Optional local Qwen Image Layered runtime. This file is excluded from base
-# sidecar requirements and CI. It does not download model weights.
-torch>=2.5.1
-transformers>=4.51.3
-accelerate>=1.6.0
+# Optional local Qwen Image Layered runtime. This candidate lock is excluded
+# from base sidecar requirements and CI. It does not download model weights.
+# A CUDA-host smoke remains required before the capability can be enabled.
+torch==2.5.1
+transformers==4.51.3
+accelerate==1.6.0
+git+https://github.com/huggingface/diffusers.git@a3e0b8ec235c27a6c17a21976daf7fd32d819d05

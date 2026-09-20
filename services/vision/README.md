@@ -43,9 +43,14 @@ to inspect the reviewed checkpoint before explicitly downloading it. Configure
 `TINY_SOHO_SAM2_DEVICE` only after that review; the sidecar never fetches it.
 
 `requirements/qwen.txt` is opt-in and excluded from base CI. Qwen Image
-Layered is deliberately unavailable until an operator configures a reviewed
-local model directory through `TINY_SOHO_QWEN_LAYERS_MODEL_PATH` on a suitable
-CUDA runtime; the sidecar never fetches weights.
+Layered supports a local CUDA backend configured with
+`TINY_SOHO_QWEN_LAYERS_MODEL_PATH`, or a separately reviewed server-side HTTPS
+backend configured with `TINY_SOHO_QWEN_LAYERS_REMOTE_URL` and the server-only
+`TINY_SOHO_QWEN_LAYERS_REMOTE_TOKEN`; the endpoint hostname must also appear
+in `TINY_SOHO_QWEN_LAYERS_REMOTE_ALLOWED_HOSTS`. Neither mode is available until a real
+decomposition succeeds; the sidecar never fetches weights and never sends the
+remote token to a browser. `npm run vision:qwen:smoke` is an explicit real
+decomposition check; it cannot provision a runtime or fetch weights.
 
 `POST /v1/compose` accepts only owned MP4 and PNG artifact IDs. It resolves
 their server-side paths, validates their dimensions with FFprobe, then invokes

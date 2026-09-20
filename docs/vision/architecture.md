@@ -32,7 +32,7 @@ the local model is installed or usable.
 | --- | --- | --- |
 | `image.ocr` | unavailable until an explicit PaddleOCR v5-mobile runtime/checkpoint is provisioned; ready only after a real local inference | deterministic OCR adapter |
 | `image.segment` | unavailable until explicit SAM 2.1 tiny runtime/checkpoint configuration; ready only after a real prompted inference | deterministic PNG-mask adapter |
-| `image.layers` | unavailable until reviewed local Qwen model on suitable CUDA | deterministic RGBA-layer adapter |
+| `image.layers` | Enhanced-only: unavailable until a reviewed local CUDA or authenticated remote backend completes a real decomposition | deterministic RGBA-layer adapter |
 | `video.compose.typography` | local FFmpeg only | command-contract tests |
 
 No runtime silently substitutes a model or downloads code, checkpoints, or
@@ -152,6 +152,29 @@ On the validated Apple Silicon target, `auto` uses CPU: SAM 2.1 tiny hit an
 unsupported PyTorch MPS operator during a real inference. CUDA remains the
 preferred automatic accelerator; use explicit `mps` only after a fresh MPS
 smoke succeeds for the exact runtime/model combination.
+
+Qwen Image Layered is never required for the Standard OCR/SAM path. The local
+backend loads `QwenImageLayeredPipeline` only from an explicitly provisioned
+directory, requires CUDA and a configurable free-VRAM floor, and uses the
+official 4-layer/640 defaults. The remote backend accepts only a server-configured
+HTTPS URL whose hostname is explicitly allowlisted alongside the server-only token,
+sends decoded image bytes as bounded Base64,
+does not follow redirects, and validates every returned PNG before use. Neither
+backend downloads weights at request time. Returned layers must be RGBA and
+share one canvas; the sidecar deterministically resizes Qwen's bucketed output
+to the source canvas before it is stored. Recomposition reports a mean absolute
+error and a 2% warning threshold. A material diagnostic failure is an unsafe
+decomposition, not a successful Enhanced result.
+
+This Apple Silicon target has no CUDA device and no configured remote backend,
+so `image.layers` remains explicitly unavailable. That is the intended Standard
+mode degradation, not a model failure hidden behind a fake response.
+
+The Qwen local runtime candidate is pinned in `requirements/qwen.txt`, but is
+not installed or exercised by CI. It needs an operator-provisioned model
+directory outside this repository and a CUDA host. Its explicit smoke command
+reports a warning rather than claiming pixel identity when recomposition differs
+materially from the source.
 
 ## Smoke and verification
 

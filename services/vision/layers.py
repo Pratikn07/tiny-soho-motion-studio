@@ -10,6 +10,9 @@ from .image_input import DecodedImage
 from .schemas.layers import EvidenceOverlap, LayerClassification, LayerPrediction, RecompositionDiagnostics
 
 
+RECOMPOSITION_WARNING_THRESHOLD = 0.02
+
+
 def alpha_coverage(image: Image.Image) -> float:
     alpha = image.getchannel("A")
     return sum(1 for value in alpha.get_flattened_data() if value > 0) / (image.width * image.height)
@@ -33,12 +36,21 @@ def recomposition_diagnostics(image: DecodedImage, layers: Sequence[LayerPredict
             if overlay.size != composed.size or overlay.mode != "RGBA":
                 return RecompositionDiagnostics(
                     recompositionMatchesInput=False,
+                    meanAbsoluteError=1,
+                    warningThreshold=RECOMPOSITION_WARNING_THRESHOLD,
+                    warning="A returned layer was not RGBA at the source canvas dimensions.",
                     overlap=classify_evidence_overlap([], []),
                     classifications=classify_layers(layers),
                 )
             composed.alpha_composite(overlay)
+    difference = ImageChops.difference(composed, decoded_rgba(image))
+    mean_absolute_error = sum(difference.tobytes()) / (image.width * image.height * 4 * 255)
+    matches = difference.getbbox() is None
     return RecompositionDiagnostics(
-        recompositionMatchesInput=ImageChops.difference(composed, decoded_rgba(image)).getbbox() is None,
+        recompositionMatchesInput=matches,
+        meanAbsoluteError=mean_absolute_error,
+        warningThreshold=RECOMPOSITION_WARNING_THRESHOLD,
+        warning=None if matches or mean_absolute_error <= RECOMPOSITION_WARNING_THRESHOLD else "Layer recomposition differs materially from the source; use a conservative fallback.",
         overlap=classify_evidence_overlap([], []),
         classifications=classify_layers(layers),
     )
