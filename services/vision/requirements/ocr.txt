@@ -1,0 +1,5 @@
+# Optional local OCR runtime. This file is intentionally excluded from the
+# base sidecar requirements and GitHub CI. Installing packages here does not
+# download or configure a PaddleOCR checkpoint.
+paddleocr==3.7.0
+paddlepaddle==3.3.1

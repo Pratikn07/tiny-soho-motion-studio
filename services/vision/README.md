@@ -1,9 +1,9 @@
 # Tiny Soho Vision sidecar
 
-This is a local-only FastAPI preflight service. VISION-01 through VISION-03
-intentionally ship no PaddleOCR, Qwen Image Layered, SAM 2, PyTorch, or model
-checkpoint dependency. Starting the service neither installs packages nor
-downloads model weights.
+This is a local-only FastAPI vision service. The base installation intentionally
+ships no PaddleOCR, Qwen Image Layered, SAM 2, PyTorch, or model checkpoint
+dependency. Starting the service neither installs packages nor downloads model
+weights.
 
 ## Run locally
 
@@ -27,3 +27,38 @@ operate if this process is stopped.
 The shared manifest is [`lib/capabilities/manifest.json`](../../lib/capabilities/manifest.json).
 It pins upstream source commits and records code and model/checkpoint licensing
 separately. It is provenance metadata only; it does not enable inference.
+
+## Optional OCR runtime
+
+`requirements/ocr.txt` pins the optional PaddleOCR package and is never
+installed by the base requirements or CI. The current adapter remains
+unavailable until an operator supplies a separately reviewed checkpoint with a
+verified license. No code path downloads checkpoints automatically.
+
+`requirements/sam2.txt` is also opt-in and excluded from base CI. It may only
+be used after an operator has supplied a reviewed checkpoint through
+`TINY_SOHO_SAM2_CHECKPOINT_PATH`; the sidecar never fetches it.
+
+`requirements/qwen.txt` is opt-in and excluded from base CI. Qwen Image
+Layered is deliberately unavailable until an operator configures a reviewed
+local model directory through `TINY_SOHO_QWEN_LAYERS_MODEL_PATH` on a suitable
+CUDA runtime; the sidecar never fetches weights.
+
+`POST /v1/compose` accepts only owned MP4 and PNG artifact IDs. It resolves
+their server-side paths, validates their dimensions with FFprobe, then invokes
+FFmpeg with an argument array; it never accepts browser filesystem paths or a
+shell command. Generated MP4s are adopted atomically from sidecar-owned
+temporary files, so composition does not load the completed video into Python
+memory.
+
+## Artifact limits
+
+`TINY_SOHO_VISION_MAX_UPLOAD_BYTES` defaults to 16 MB and limits browser image
+uploads. `TINY_SOHO_VISION_MAX_IMAGE_ARTIFACT_BYTES` defaults to 64 MB for
+masks, overlays, and RGBA layers. `TINY_SOHO_VISION_MAX_VIDEO_ARTIFACT_BYTES`
+defaults to 1 GB for locally composed MP4 output. The sidecar validates image
+uploads before persistence and accepts video output only from its own private
+temporary directory; browser requests never choose a filesystem path.
+
+For the full artifact lifecycle, optional-runtime policy, and typography-safe
+motion flow, see [`docs/vision/architecture.md`](../../docs/vision/architecture.md).
