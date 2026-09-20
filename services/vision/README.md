@@ -35,9 +35,12 @@ installed by the base requirements or CI. The current adapter remains
 unavailable until an operator supplies a separately reviewed checkpoint with a
 verified license. No code path downloads checkpoints automatically.
 
-`requirements/sam2.txt` is also opt-in and excluded from base CI. It may only
-be used after an operator has supplied a reviewed checkpoint through
-`TINY_SOHO_SAM2_CHECKPOINT_PATH`; the sidecar never fetches it.
+`requirements/sam2.txt` is also opt-in and excluded from base CI. It pins the
+SAM 2 source with torch/torchvision versions; use
+`python -m services.vision.sam2_provisioning --destination /external/path --dry-run`
+to inspect the reviewed checkpoint before explicitly downloading it. Configure
+`TINY_SOHO_SAM2_CHECKPOINT_PATH`, `TINY_SOHO_SAM2_MODEL_CONFIG`, and
+`TINY_SOHO_SAM2_DEVICE` only after that review; the sidecar never fetches it.
 
 `requirements/qwen.txt` is opt-in and excluded from base CI. Qwen Image
 Layered is deliberately unavailable until an operator configures a reviewed

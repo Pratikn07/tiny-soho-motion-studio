@@ -31,7 +31,7 @@ the local model is installed or usable.
 | Capability | Default runtime state | Test backend |
 | --- | --- | --- |
 | `image.ocr` | unavailable until an explicit PaddleOCR v5-mobile runtime/checkpoint is provisioned; ready only after a real local inference | deterministic OCR adapter |
-| `image.segment` | unavailable until explicit SAM 2 runtime/checkpoint configuration | deterministic PNG-mask adapter |
+| `image.segment` | unavailable until explicit SAM 2.1 tiny runtime/checkpoint configuration; ready only after a real prompted inference | deterministic PNG-mask adapter |
 | `image.layers` | unavailable until reviewed local Qwen model on suitable CUDA | deterministic RGBA-layer adapter |
 | `video.compose.typography` | local FFmpeg only | command-contract tests |
 
@@ -126,7 +126,32 @@ source /path/to/vision-venv/bin/activate
 npm run vision:doctor  # configuration and hardware only; no model load
 npm run vision:start   # FastAPI on 127.0.0.1 only
 npm run vision:smoke   # explicit local OCR on three textual fixtures
+npm run vision:sam2:smoke  # explicit local SAM 2 point/negative/box smoke
 ```
+
+SAM 2 is a separate optional capability. Its adapter accepts user-supplied
+positive/negative points and/or a bounding box; it does not claim to identify a
+subject without a prompt. The provisioner downloads exactly the reviewed tiny
+checkpoint to an external path and records a local SHA-256 manifest. It never
+runs at sidecar startup or in CI.
+
+```sh
+/path/to/vision-venv/bin/python -m pip install -r services/vision/requirements.txt \
+  -r services/vision/requirements/sam2.txt
+/path/to/vision-venv/bin/python -m services.vision.sam2_provisioning \
+  --destination "$HOME/Library/Application Support/Tiny Soho Studio/vision-runtime/sam2/sam2.1_hiera_tiny.pt" \
+  --dry-run
+```
+
+After an explicit non-dry-run provision, configure
+`TINY_SOHO_SAM2_ENABLED=1`, `TINY_SOHO_SAM2_CHECKPOINT_PATH`,
+`TINY_SOHO_SAM2_MODEL_CONFIG`, `TINY_SOHO_SAM2_DEVICE`, and
+`TINY_SOHO_SAM2_TIMEOUT_SECONDS`. The sidecar validates that returned masks are
+binary, nonempty, and exactly source-sized before persisting them.
+On the validated Apple Silicon target, `auto` uses CPU: SAM 2.1 tiny hit an
+unsupported PyTorch MPS operator during a real inference. CUDA remains the
+preferred automatic accelerator; use explicit `mps` only after a fresh MPS
+smoke succeeds for the exact runtime/model combination.
 
 ## Smoke and verification
 

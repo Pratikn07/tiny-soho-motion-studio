@@ -15,7 +15,7 @@ from .artifacts.manager import ArtifactManager, ArtifactNotFound
 from .adapters.base import VisionCapabilityUnavailable
 from .adapters.paddle_ocr import PaddleOcrAdapter, default_paddle_ocr_adapter
 from .adapters.qwen_layers import default_qwen_layers_backend
-from .adapters.sam2 import default_sam2_adapter
+from .adapters.sam2 import Sam2Adapter, default_sam2_adapter
 from .config import VisionConfig
 from .hardware import detect_hardware
 from .image_input import ImageInputError, decode_upload
@@ -146,7 +146,13 @@ runtime_registry.transition(
     state="unloaded",
     reason=ocr_configuration_reason or "PaddleOCR is configured; awaiting a real local inference.",
 )
-segmentation_adapter = default_sam2_adapter(vision_config.sam2_enabled, vision_config.sam2_checkpoint_path)
+segmentation_adapter = default_sam2_adapter(vision_config.sam2)
+segmentation_configuration_reason = segmentation_adapter.configuration_reason()
+runtime_registry.transition(
+    "image.segment",
+    state="unloaded",
+    reason=segmentation_configuration_reason or "SAM 2 is configured; awaiting a real local inference.",
+)
 layers_backend = default_qwen_layers_backend(vision_config.qwen_layers_enabled, vision_config.qwen_layers_model_path)
 
 
@@ -219,11 +225,18 @@ async def segment(image: UploadFile = File(...), prompts: str = Form(...)) -> Se
         parsed_prompts = SegmentationPrompts.model_validate(json.loads(prompts))
     except (ImageInputError, ValueError, json.JSONDecodeError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    is_real_adapter = isinstance(segmentation_adapter, Sam2Adapter)
     try:
         async with inference_locks.get("image.segment"):
+            if is_real_adapter:
+                runtime_registry.transition("image.segment", state="loading")
             predictions = await segmentation_adapter.segment(decoded, parsed_prompts)
     except VisionCapabilityUnavailable as error:
+        if is_real_adapter:
+            runtime_registry.transition("image.segment", state="error", reason=str(error))
         raise HTTPException(status_code=503, detail=str(error)) from error
+    if is_real_adapter:
+        runtime_registry.transition("image.segment", state="ready", reason=None)
     masks = []
     for prediction in predictions:
         metadata = artifact_manager.write_bytes(kind="segmentation-mask", mime_type="image/png", data=prediction.png)
