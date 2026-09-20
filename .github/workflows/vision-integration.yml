@@ -1,0 +1,60 @@
+name: Vision integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Explicit integration profile to run against a pre-provisioned self-hosted runtime.
+        required: true
+        type: choice
+        options:
+          - real-ocr-smoke
+          - real-sam2-smoke
+          - real-qwen-smoke
+          - compose-canary
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  run-profile:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && vars.TINY_SOHO_VISION_NIGHTLY_PROFILE != '')
+    runs-on: [self-hosted, tiny-soho-vision]
+    timeout-minutes: 20
+    env:
+      PROFILE: ${{ inputs.profile || vars.TINY_SOHO_VISION_NIGHTLY_PROFILE }}
+      VISION_PYTHON: ${{ vars.TINY_SOHO_VISION_PYTHON }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require a pre-provisioned Python runtime
+        shell: bash
+        run: |
+          if [[ -z "$VISION_PYTHON" || ! -x "$VISION_PYTHON" ]]; then
+            echo "Set repository variable TINY_SOHO_VISION_PYTHON to the executable in the approved self-hosted vision virtual environment."
+            exit 1
+          fi
+      - name: Run selected non-provisioning profile
+        shell: bash
+        run: |
+          case "$PROFILE" in
+            real-ocr-smoke)
+              "$VISION_PYTHON" -m services.vision.ocr_smoke
+              ;;
+            real-sam2-smoke)
+              "$VISION_PYTHON" -m services.vision.sam2_smoke
+              ;;
+            real-qwen-smoke)
+              "$VISION_PYTHON" -m services.vision.qwen_layers_smoke
+              ;;
+            compose-canary)
+              TINY_SOHO_RUN_COMPOSE_SMOKE=1 "$VISION_PYTHON" -m services.vision.compose_smoke
+              ;;
+            *)
+              echo "TINY_SOHO_VISION_NIGHTLY_PROFILE must be one of real-ocr-smoke, real-sam2-smoke, real-qwen-smoke, or compose-canary."
+              exit 1
+              ;;
+          esac

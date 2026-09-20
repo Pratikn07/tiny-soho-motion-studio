@@ -24,6 +24,11 @@ operate if this process is stopped.
 - `GET /v1/capabilities` returns the shared, versioned capability manifest and
   the current hardware preflight.
 
+`npm run vision:doctor` reports configuration, hardware, and FFmpeg/ffprobe
+readiness without loading a model. `npm run vision:compose:smoke` requires the
+exact `TINY_SOHO_RUN_COMPOSE_SMOKE=1` opt-in and validates a generated local
+MP4-plus-overlay composition without model inference or provider traffic.
+
 The shared manifest is [`lib/capabilities/manifest.json`](../../lib/capabilities/manifest.json).
 It pins upstream source commits and records code and model/checkpoint licensing
 separately. It is provenance metadata only; it does not enable inference.
@@ -83,3 +88,5 @@ temporary directory; browser requests never choose a filesystem path.
 
 For the full artifact lifecycle, optional-runtime policy, and typography-safe
 motion flow, see [`docs/vision/architecture.md`](../../docs/vision/architecture.md).
+For startup, self-hosted model-smoke profiles, release checks, and rollback,
+see [`docs/vision/production-runbook.md`](../../docs/vision/production-runbook.md).
