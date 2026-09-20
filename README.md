@@ -57,6 +57,7 @@ The browser uses internal media roles such as `start-image` and `end-image`. Onl
 - **Director:** drafts a schema-validated motion proposal. It cannot submit media work without a separate one-shot approval.
 - **Local export API:** `POST /api/exports` accepts completed local video asset IDs and an optional transparent typography overlay; it uses FFmpeg to compose the overlay and encode a local H.264 export. This is intentionally server-side so text layers never leave the Mac.
 - **MotionPackageV2 validation:** `POST /api/vision/motion-packages` validates a persistent source image, generation plate, and transparent typography overlay against one project and the existing generation preflight. It does not create or submit a job; the later Vision Generation Bridge owns that approved action.
+- **Vision Generation Bridge:** `POST /api/vision/motion-packages/generate` revalidates a MotionPackageV2 and queues it through the same quota-aware GenerationDraft/preflight path as every other studio entry point. It accepts one explicit generation-attempt ID, uses the persistent generation plate only as the first frame, limits carousel motion to 3–5 seconds, and keeps package lineage local rather than sending it to Alibaba.
 
 ## Architecture
 
