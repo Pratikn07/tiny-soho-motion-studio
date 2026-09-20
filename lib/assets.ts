@@ -3,6 +3,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { assetsDir } from "./config";
+import type { Asset } from "./store";
+
+export type PublicAsset = Omit<Asset, "path">;
+
+export function toPublicAsset(asset: Asset): PublicAsset {
+  const { path: _path, ...publicAsset } = asset;
+  return publicAsset;
+}
 
 export async function saveAsset(bytes: Buffer, name: string, mime: string) {
   if (bytes.length > 25 * 1024 * 1024) throw new Error("Assets must be 25 MB or smaller.");

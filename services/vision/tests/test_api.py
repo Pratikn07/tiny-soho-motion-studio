@@ -138,6 +138,20 @@ class VisionSidecarContractTests(unittest.TestCase):
         self.assertEqual(response.headers["content-type"], "image/png")
         self.assertEqual(traversal_response.status_code, 404)
 
+    def test_artifact_metadata_endpoint_exposes_validation_fields_without_a_filesystem_path(self) -> None:
+        app_module = load_module("services.vision.app")
+        artifact_manager = getattr(app_module, "artifact_manager")
+        metadata = artifact_manager.write_bytes(kind="typography-overlay", mime_type="image/png", data=ONE_PIXEL_PNG)
+
+        response = get(app_module.app, f"/v1/artifacts/{metadata.id}/metadata")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["id"], metadata.id)
+        self.assertEqual(payload["kind"], "typography-overlay")
+        self.assertEqual(payload["mimeType"], "image/png")
+        self.assertNotIn("path", payload)
+
     def test_ocr_endpoint_returns_normalized_regions_and_an_opaque_safety_mask(self) -> None:
         app_module = load_module("services.vision.app")
         ocr_module = load_module("services.vision.adapters.paddle_ocr")
