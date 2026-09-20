@@ -16,7 +16,10 @@ begin
     from pg_constraint
     where conrelid = 'public.creative_studio_assets'::regclass
       and contype = 'c'
-      and pg_get_constraintdef(oid) like '%kind%'
+      and (
+        pg_get_constraintdef(oid) like '%kind%'
+        or pg_get_constraintdef(oid) like '%mime_type%'
+      )
   loop
     execute format('alter table public.creative_studio_assets drop constraint %I', constraint_name);
   end loop;
