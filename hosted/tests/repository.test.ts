@@ -93,4 +93,38 @@ describe("hosted Studio repository ownership", () => {
       project_id: "project-a",
     }));
   });
+
+  it("assigns the authenticated owner when creating a queued job", async () => {
+    const insert = vi.fn();
+    const single = vi.fn().mockResolvedValue({
+      data: { id: "job-a", owner_user_id: "owner-a", status: "queued" },
+      error: null,
+    });
+    const query = {
+      insert: insert.mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single,
+    };
+    const repository = new StudioRepository(
+      { from: vi.fn().mockReturnValue(query) },
+      { userId: "owner-a", email: "owner@tinysoho.test" },
+    );
+
+    await repository.createJob({
+      id: "job-a",
+      projectId: "project-a",
+      idempotencyKey: "ce82a151-4c9d-47b0-a112-48fa8bcbe9cf",
+      fingerprint: "a".repeat(64),
+      modelId: "wan2.7-i2v",
+      prompt: "Move",
+      inputAssets: [{ assetId: "asset-a", role: "start-image" }],
+      options: { duration: 5, resolution: "720P", aspectRatio: "adaptive" },
+    });
+
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
+      owner_user_id: "owner-a",
+      project_id: "project-a",
+      status: "queued",
+    }));
+  });
 });

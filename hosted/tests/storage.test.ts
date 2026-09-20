@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  ingestGeneratedVideo,
   signAssetDownload,
   sourceObjectPath,
   uploadSourceImage,
@@ -66,6 +67,31 @@ describe("hosted Studio source images", () => {
     expect(createSignedUrl).toHaveBeenCalledWith(
       "owners/owner-a/projects/project-a/sources/asset-a-Frame.png",
       300,
+    );
+  });
+
+  it("ingests a provider video into the owner's private generated path", async () => {
+    const upload = vi.fn().mockResolvedValue({ data: { path: "ignored" }, error: null });
+    const client = { storage: { from: vi.fn().mockReturnValue({ upload }) } };
+    const fetcher = vi.fn().mockResolvedValue(new Response(Buffer.from("video"), {
+      headers: { "content-type": "video/mp4" },
+    }));
+
+    await expect(ingestGeneratedVideo({
+      client,
+      fetcher,
+      ownerUserId: "owner-a",
+      projectId: "project-a",
+      assetId: "asset-a",
+      providerUrl: "https://provider.test/result.mp4",
+    })).resolves.toMatchObject({
+      objectPath: "owners/owner-a/projects/project-a/generated/asset-a.mp4",
+      mimeType: "video/mp4",
+    });
+    expect(upload).toHaveBeenCalledWith(
+      "owners/owner-a/projects/project-a/generated/asset-a.mp4",
+      expect.any(Buffer),
+      { contentType: "video/mp4", upsert: false },
     );
   });
 });

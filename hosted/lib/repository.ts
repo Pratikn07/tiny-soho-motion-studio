@@ -1,4 +1,5 @@
 import { StudioError } from "@/lib/errors";
+import type { StudioJobStatus } from "@/lib/jobs";
 import type { OwnedRecord, Owner } from "@/lib/types";
 
 export const projectFilter = (ownerUserId: string) => ({ owner_user_id: ownerUserId });
@@ -30,6 +31,24 @@ export type StudioAsset = OwnedRecord & {
   sha256: string;
   provenance: Record<string, unknown>;
   created_at: string;
+};
+
+export type StudioJob = OwnedRecord & {
+  project_id: string;
+  idempotency_key: string;
+  fingerprint: string;
+  model_id: string;
+  task: "image-to-video";
+  prompt: string;
+  input_assets: Array<{ assetId: string; role: "start-image" | "end-image" }>;
+  options: { duration: number; resolution: string; aspectRatio: string };
+  status: StudioJobStatus;
+  provider_task_id: string | null;
+  output_asset_id: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type DatabaseResult<T> = {
@@ -168,5 +187,126 @@ export class StudioRepository {
       .eq("owner_user_id", this.owner.userId)
       .order("created_at", { ascending: false }) as DatabaseResult<StudioAsset[]>;
     return databaseResult(result) ?? [];
+  }
+
+  async findJobByIdempotency(projectId: string, idempotencyKey: string): Promise<StudioJob | null> {
+    const result = await this.client
+      .from("creative_studio_jobs")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("owner_user_id", this.owner.userId)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle() as DatabaseResult<StudioJob>;
+    return databaseResult(result);
+  }
+
+  async createJob(input: {
+    id: string;
+    projectId: string;
+    idempotencyKey: string;
+    fingerprint: string;
+    modelId: string;
+    prompt: string;
+    inputAssets: StudioJob["input_assets"];
+    options: StudioJob["options"];
+  }): Promise<StudioJob> {
+    const result = await this.client
+      .from("creative_studio_jobs")
+      .insert({
+        id: input.id,
+        project_id: input.projectId,
+        owner_user_id: this.owner.userId,
+        idempotency_key: input.idempotencyKey,
+        fingerprint: input.fingerprint,
+        model_id: input.modelId,
+        task: "image-to-video",
+        prompt: input.prompt,
+        input_assets: input.inputAssets,
+        options: input.options,
+        status: "queued",
+      })
+      .select("*")
+      .single() as DatabaseResult<StudioJob>;
+    const job = databaseResult(result);
+    if (!job) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return job;
+  }
+
+  async getJob(jobId: string): Promise<StudioJob | null> {
+    const result = await this.client
+      .from("creative_studio_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioJob>;
+    return databaseResult(result);
+  }
+
+  async listJobs(projectId: string): Promise<StudioJob[]> {
+    const result = await this.client
+      .from("creative_studio_jobs")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("owner_user_id", this.owner.userId)
+      .order("created_at", { ascending: false }) as DatabaseResult<StudioJob[]>;
+    return databaseResult(result) ?? [];
+  }
+
+  async transitionJob(
+    jobId: string,
+    expectedStatus: StudioJobStatus,
+    patch: Partial<{
+      status: StudioJobStatus;
+      providerTaskId: string | null;
+      outputAssetId: string | null;
+      errorCode: string | null;
+      errorMessage: string | null;
+    }>,
+  ): Promise<StudioJob | null> {
+    const result = await this.client
+      .from("creative_studio_jobs")
+      .update({
+        ...(patch.status ? { status: patch.status } : {}),
+        ...(patch.providerTaskId !== undefined ? { provider_task_id: patch.providerTaskId } : {}),
+        ...(patch.outputAssetId !== undefined ? { output_asset_id: patch.outputAssetId } : {}),
+        ...(patch.errorCode !== undefined ? { error_code: patch.errorCode } : {}),
+        ...(patch.errorMessage !== undefined ? { error_message: patch.errorMessage } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .eq("owner_user_id", this.owner.userId)
+      .eq("status", expectedStatus)
+      .select("*")
+      .maybeSingle() as DatabaseResult<StudioJob>;
+    return databaseResult(result);
+  }
+
+  async updateJob(
+    jobId: string,
+    patch: Partial<{
+      status: StudioJobStatus;
+      providerTaskId: string | null;
+      outputAssetId: string | null;
+      errorCode: string | null;
+      errorMessage: string | null;
+    }>,
+  ): Promise<StudioJob | null> {
+    const result = await this.client
+      .from("creative_studio_jobs")
+      .update({
+        ...(patch.status ? { status: patch.status } : {}),
+        ...(patch.providerTaskId !== undefined ? { provider_task_id: patch.providerTaskId } : {}),
+        ...(patch.outputAssetId !== undefined ? { output_asset_id: patch.outputAssetId } : {}),
+        ...(patch.errorCode !== undefined ? { error_code: patch.errorCode } : {}),
+        ...(patch.errorMessage !== undefined ? { error_message: patch.errorMessage } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .eq("owner_user_id", this.owner.userId)
+      .select("*")
+      .maybeSingle() as DatabaseResult<StudioJob>;
+    return databaseResult(result);
   }
 }

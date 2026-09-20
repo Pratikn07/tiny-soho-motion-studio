@@ -6,6 +6,7 @@ import { StudioError } from "@/lib/errors";
 
 const MAX_SOURCE_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_SOURCE_IMAGE_PIXELS = 40_000_000;
+const MAX_GENERATED_VIDEO_BYTES = 250 * 1024 * 1024;
 const sourceImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const mimeTypeForFormat: Record<string, string> = {
@@ -132,4 +133,49 @@ export async function signAssetDownload(client: StorageSigningClient, objectPath
     throw new StudioError(502, "studio_storage_sign_failed", "Asset download is temporarily unavailable.");
   }
   return data.signedUrl;
+}
+
+export async function ingestGeneratedVideo(input: {
+  client: StorageUploadClient;
+  fetcher?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  ownerUserId: string;
+  projectId: string;
+  assetId: string;
+  providerUrl: string;
+}) {
+  let providerUrl: URL;
+  try {
+    providerUrl = new URL(input.providerUrl);
+  } catch {
+    throw new StudioError(502, "provider_result_invalid", "Provider result URL is invalid.");
+  }
+  if (providerUrl.protocol !== "https:") {
+    throw new StudioError(502, "provider_result_invalid", "Provider result URL is invalid.");
+  }
+
+  const response = await (input.fetcher ?? fetch)(providerUrl, { signal: AbortSignal.timeout(60_000) });
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0];
+  const contentLength = Number(response.headers.get("content-length") ?? 0);
+  if (!response.ok || contentType !== "video/mp4" || contentLength > MAX_GENERATED_VIDEO_BYTES) {
+    throw new StudioError(502, "provider_result_invalid", "Provider result could not be imported.");
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (!bytes.byteLength || bytes.byteLength > MAX_GENERATED_VIDEO_BYTES) {
+    throw new StudioError(502, "provider_result_invalid", "Provider result could not be imported.");
+  }
+
+  const objectPath = `owners/${input.ownerUserId}/projects/${input.projectId}/generated/${input.assetId}.mp4`;
+  const { error } = await input.client.storage
+    .from("creative-studio")
+    .upload(objectPath, bytes, { contentType: "video/mp4", upsert: false });
+  if (error) {
+    throw new StudioError(502, "studio_storage_upload_failed", "Generated video upload failed.");
+  }
+
+  return {
+    objectPath,
+    bytes,
+    mimeType: "video/mp4" as const,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+  };
 }
