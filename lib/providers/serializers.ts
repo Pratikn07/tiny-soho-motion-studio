@@ -4,7 +4,12 @@ export type ProviderInput = { mime: string; bytes: Buffer; role: string };
 export type SerializedAlibabaRequest = { path: string; async: boolean; timeoutMs: number; body: Record<string, unknown> };
 
 const dataUrl = (input: ProviderInput) => `data:${input.mime};base64,${input.bytes.toString("base64")}`;
-const effectiveOptions = (modelId: string, rawOptions: string) => ({ ...getModel(modelId).defaultOptions, ...JSON.parse(rawOptions) as GenerationOptions });
+const providerOptionNames = ["duration", "resolution", "aspectRatio", "promptExtend", "watermark", "audio", "negativePrompt", "size", "n"] as const;
+const effectiveOptions = (modelId: string, rawOptions: string) => {
+  const parsed = JSON.parse(rawOptions) as Record<string, unknown>;
+  const providerOptions = Object.fromEntries(providerOptionNames.filter((name) => parsed[name] !== undefined).map((name) => [name, parsed[name]])) as GenerationOptions;
+  return { ...getModel(modelId).defaultOptions, ...providerOptions };
+};
 const videoInput = (prompt: string, inputs: ProviderInput[], roles: Record<string, string>, negativePrompt?: string) => ({ prompt, ...(negativePrompt ? { negative_prompt: negativePrompt } : {}), media: inputs.map((input) => ({ type: roles[normalizeMediaRole(input.role)], url: dataUrl(input) })) });
 
 export function serializeWanImageRequest(job: { modelId: string; prompt: string; options: string }, inputs: ProviderInput[]): SerializedAlibabaRequest {

@@ -8,11 +8,21 @@ export type JobStatus = "queued" | "submitting" | "submitted" | "running" | "dow
 export type Project = { id: string; name: string; canvas: string; storyboard: string; createdAt: string; updatedAt: string };
 export type Asset = { id: string; projectId: string | null; kind: string; name: string; mime: string; path: string; width: number | null; height: number | null; duration: number | null; hash: string; provenance: string; createdAt: string };
 export type Job = { id: string; projectId: string; idempotencyKey: string; modelId: string; task: string; prompt: string; inputAssetIds: string; options: string; status: JobStatus; providerTaskId: string | null; outputAssetId: string | null; error: string | null; createdAt: string; updatedAt: string };
+export type PublicJob = Omit<Job, "options"> & { options: string };
 export type WorkflowRun = { id: string; workflowId: string; projectId: string; graph: string; state: string; createdAt: string; updatedAt: string };
 
 function now() { return new Date().toISOString(); }
 function id(prefix: string) { return `${prefix}_${randomUUID()}`; }
 function parse<T>(value: string): T { return JSON.parse(value) as T; }
+export function toPublicJob(job: Job): PublicJob {
+  try {
+    const options = parse<Record<string, unknown>>(job.options);
+    delete options.internalProvenance;
+    return { ...job, options: JSON.stringify(options) };
+  } catch {
+    return { ...job, options: "{}" };
+  }
+}
 
 const BASELINE_SCHEMA = `
   CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, canvas TEXT NOT NULL, storyboard TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);

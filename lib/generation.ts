@@ -12,8 +12,9 @@ export type GenerationDraft = {
   inputAssetIds?: string[];
   inputRoles?: string[];
   options?: Record<string, unknown>;
+  internalProvenance?: Record<string, unknown>;
 };
-export type ValidatedGenerationRequest = { projectId: string; idempotencyKey: string; model: ModelCapability; task: GenerationTask; prompt: string; media: GenerationMedia[]; options: GenerationOptions };
+export type ValidatedGenerationRequest = { projectId: string; idempotencyKey: string; model: ModelCapability; task: GenerationTask; prompt: string; media: GenerationMedia[]; options: GenerationOptions; internalProvenance: Record<string, unknown> | undefined };
 
 const optionNames = new Set(["duration", "resolution", "aspectRatio", "ratio", "promptExtend", "watermark", "audio", "negativePrompt", "size", "n"]);
 const mimeForRole: Record<MediaRole, string> = { "source-image": "image/", "start-image": "image/", "end-image": "image/", "reference-image": "image/", "reference-video": "video/", "reference-audio": "audio/" };
@@ -39,7 +40,8 @@ export function normalizeGenerationDraft(draft: GenerationDraft) {
   const { ratio, ...rest } = rawOptions as Record<string, unknown>;
   const options: GenerationOptions = { ...rest };
   if (ratio !== undefined) { if (options.aspectRatio !== undefined && options.aspectRatio !== ratio) throw new Error("Use one aspect ratio value."); options.aspectRatio = String(ratio); }
-  return { projectId: draft.projectId, idempotencyKey: draft.idempotencyKey, modelId: draft.modelId, prompt: draft.prompt.trim(), media, options };
+  if (draft.internalProvenance !== undefined && (!draft.internalProvenance || Array.isArray(draft.internalProvenance) || typeof draft.internalProvenance !== "object")) throw new Error("Internal generation provenance must be an object.");
+  return { projectId: draft.projectId, idempotencyKey: draft.idempotencyKey, modelId: draft.modelId, prompt: draft.prompt.trim(), media, options, internalProvenance: draft.internalProvenance };
 }
 
 export function inferTask(model: ModelCapability, media: GenerationMedia[]): GenerationTask {
@@ -66,10 +68,10 @@ export function preflightGeneration(store: ReturnType<typeof createStore>, draft
   const task = inferTask(model, normalized.media);
   const options = { ...model.defaultOptions, ...normalized.options };
   validateGeneration(model, { task, prompt: normalized.prompt, inputRoles: normalized.media.map((input) => input.role), options, freeQuotaConfirmed: eligibleModels.has(model.id) });
-  return { projectId: normalized.projectId, idempotencyKey: normalized.idempotencyKey, model, task, prompt: normalized.prompt, media: normalized.media, options };
+  return { projectId: normalized.projectId, idempotencyKey: normalized.idempotencyKey, model, task, prompt: normalized.prompt, media: normalized.media, options, internalProvenance: normalized.internalProvenance };
 }
 
 export function queueGeneration(store: ReturnType<typeof createStore>, draft: GenerationDraft, eligibleModels: Set<string>) {
   const request = preflightGeneration(store, draft, eligibleModels);
-  return store.createJob({ projectId: request.projectId, idempotencyKey: request.idempotencyKey, modelId: request.model.id, task: request.task, prompt: request.prompt, inputAssetIds: request.media.map((input) => input.assetId), options: { ...request.options, media: request.media } });
+  return store.createJob({ projectId: request.projectId, idempotencyKey: request.idempotencyKey, modelId: request.model.id, task: request.task, prompt: request.prompt, inputAssetIds: request.media.map((input) => input.assetId), options: { ...request.options, media: request.media, ...(request.internalProvenance ? { internalProvenance: request.internalProvenance } : {}) } });
 }

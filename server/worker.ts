@@ -25,6 +25,7 @@ async function outputFor(job: NonNullable<ReturnType<typeof db.getJob>>, url: st
   const processing = db.transitionJob(job.id, ["downloading"], { status: "processing" });
   if (!processing) return;
   const saved = await adoptProviderDownload(download);
+  const jobOptions = JSON.parse(job.options) as { internalProvenance?: Record<string, unknown> };
   const asset = db.addAsset({
     projectId: job.projectId,
     kind: download.mime.startsWith("image/") ? "image" : "video",
@@ -35,7 +36,7 @@ async function outputFor(job: NonNullable<ReturnType<typeof db.getJob>>, url: st
     height: saved.height,
     duration: saved.duration,
     hash: saved.hash,
-    provenance: JSON.stringify({ jobId: job.id, providerTaskId: job.providerTaskId, media: { codec: saved.codec, container: saved.container } }),
+    provenance: JSON.stringify({ jobId: job.id, providerTaskId: job.providerTaskId, media: { codec: saved.codec, container: saved.container }, ...(jobOptions.internalProvenance ? { internalProvenance: jobOptions.internalProvenance } : {}) }),
   });
   db.transitionJob(job.id, ["processing"], { status: "completed", outputAssetId: asset.id, error: null });
 }
