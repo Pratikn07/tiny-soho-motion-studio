@@ -16,6 +16,36 @@ type ApiError = {
   error?: { message?: string };
 };
 
+type ApiProject = {
+  id: string;
+  name: string;
+  canvas: string;
+  free_quota_models: string[];
+  free_quota_confirmed_at: Record<string, string>;
+};
+
+type ApiAsset = {
+  id: string;
+  kind: StudioAssetView["kind"];
+  name: string;
+  mime_type: string;
+};
+
+const projectView = (project: ApiProject): StudioProjectView => ({
+  id: project.id,
+  name: project.name,
+  canvas: project.canvas,
+  freeQuotaModels: project.free_quota_models,
+  freeQuotaConfirmedAt: project.free_quota_confirmed_at,
+});
+
+const assetView = (asset: ApiAsset): StudioAssetView => ({
+  id: asset.id,
+  kind: asset.kind,
+  name: asset.name,
+  mimeType: asset.mime_type,
+});
+
 export function createStudioApi(client: SessionClient, fetcher: Fetcher = fetch) {
   const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
     const { data: { session } } = await client.auth.getSession();
@@ -35,33 +65,33 @@ export function createStudioApi(client: SessionClient, fetcher: Fetcher = fetch)
 
   return {
     async listProjects(): Promise<StudioProjectView[]> {
-      const body = await request<{ projects: StudioProjectView[] }>("/api/projects");
-      return body.projects;
+      const body = await request<{ projects: ApiProject[] }>("/api/projects");
+      return body.projects.map(projectView);
     },
     async createProject(input: { name: string; canvas: string }): Promise<StudioProjectView> {
-      const body = await request<{ project: StudioProjectView }>("/api/projects", {
+      const body = await request<{ project: ApiProject }>("/api/projects", {
         method: "POST",
         body: JSON.stringify(input),
       });
-      return body.project;
+      return projectView(body.project);
     },
     async updateProjectQuota(projectId: string, input: { freeQuotaModels: string[]; freeQuotaConfirmedAt: Record<string, string> }): Promise<StudioProjectView> {
-      const body = await request<{ project: StudioProjectView }>(`/api/projects/${projectId}`, {
+      const body = await request<{ project: ApiProject }>(`/api/projects/${projectId}`, {
         method: "PUT",
         body: JSON.stringify(input),
       });
-      return body.project;
+      return projectView(body.project);
     },
     async listAssets(projectId: string): Promise<StudioAssetView[]> {
-      const body = await request<{ assets: StudioAssetView[] }>(`/api/assets?projectId=${encodeURIComponent(projectId)}`);
-      return body.assets;
+      const body = await request<{ assets: ApiAsset[] }>(`/api/assets?projectId=${encodeURIComponent(projectId)}`);
+      return body.assets.map(assetView);
     },
     async uploadAsset(projectId: string, file: File): Promise<StudioAssetView> {
       const formData = new FormData();
       formData.set("projectId", projectId);
       formData.set("file", file);
-      const body = await request<{ asset: StudioAssetView }>("/api/assets", { method: "POST", body: formData });
-      return body.asset;
+      const body = await request<{ asset: ApiAsset }>("/api/assets", { method: "POST", body: formData });
+      return assetView(body.asset);
     },
     async createJob(input: {
       projectId: string;
