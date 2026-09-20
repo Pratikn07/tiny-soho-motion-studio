@@ -1,7 +1,8 @@
-import fs from "node:fs/promises";
 import { store } from "../lib/store";
 import { submitAlibabaJob, checkAlibabaTask } from "../lib/provider";
 import { adoptProviderDownload, downloadProviderAsset } from "../lib/assets";
+import { resolveJobMedia } from "../lib/job-media";
+import { providerOutputProvenance } from "../lib/media-transport/provider-output";
 import { executeWorkflowRun } from "../lib/workflows";
 import { createSingleFlightRunner } from "../lib/worker-loop";
 
@@ -36,7 +37,7 @@ async function outputFor(job: NonNullable<ReturnType<typeof db.getJob>>, url: st
     height: saved.height,
     duration: saved.duration,
     hash: saved.hash,
-    provenance: JSON.stringify({ jobId: job.id, providerTaskId: job.providerTaskId, media: { codec: saved.codec, container: saved.container }, ...(jobOptions.internalProvenance ? { internalProvenance: jobOptions.internalProvenance } : {}) }),
+    provenance: JSON.stringify({ jobId: job.id, providerTaskId: job.providerTaskId, providerOutput: providerOutputProvenance(url), media: { codec: saved.codec, container: saved.container }, ...(jobOptions.internalProvenance ? { internalProvenance: jobOptions.internalProvenance } : {}) }),
   });
   db.transitionJob(job.id, ["processing"], { status: "completed", outputAssetId: asset.id, error: null });
 }
@@ -74,24 +75,22 @@ async function pollActiveJobs() {
 async function submitQueuedJob() {
   const job = db.claimNextJob();
   if (!job) return;
-  let inputs: Array<{ mime: string; bytes: Buffer; role: string }>;
+  let resolved;
   try {
-    const assets = JSON.parse(job.inputAssetIds) as string[];
-    const options = JSON.parse(job.options) as { media?: Array<{ assetId?: string; role?: string }>; inputRoles?: string[] };
-    const roles = options.media?.map((media) => media.role) || options.inputRoles;
-    if (!roles || roles.length !== assets.length || roles.some((role) => typeof role !== "string")) throw new Error("Job is missing explicit media roles and cannot be submitted safely.");
-    inputs = await Promise.all(assets.map(async (assetId, index) => {
-      const asset = db.getAsset(assetId);
-      if (!asset) throw new Error("Referenced asset is missing.");
-      return { mime: asset.mime, bytes: await fs.readFile(asset.path), role: roles[index] as string };
-    }));
+    resolved = await resolveJobMedia(db, job);
   } catch (error) {
-    db.transitionJob(job.id, ["submitting"], { status: "failed", error: failureMessage(error, "Job validation failed") });
+    db.transitionJob(job.id, ["preparing_media"], { status: "failed", error: failureMessage(error, "Job media preparation failed") });
     return;
   }
+  if (!resolved.ok) {
+    db.transitionJob(job.id, ["preparing_media"], { status: "failed", error: resolved.reason });
+    return;
+  }
+  const submitting = db.transitionJob(job.id, ["preparing_media"], { status: "submitting", error: null });
+  if (!submitting) return;
 
   try {
-    const result = await submitAlibabaJob(job, inputs);
+    const result = await submitAlibabaJob(submitting, resolved.media);
     if (result.outputUrl) {
       const downloading = db.transitionJob(job.id, ["submitting"], { status: "downloading", error: null });
       if (downloading) {

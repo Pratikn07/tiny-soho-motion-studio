@@ -81,8 +81,12 @@ npm run vision:doctor
 npm run vision:start
 ```
 
-`vision:doctor` loads no model and downloads nothing. It reports configuration,
-CPU/MPS/CUDA detection, and whether FFmpeg/ffprobe are runnable. With the
+`vision:doctor` loads no model and downloads nothing. It reports the base
+sidecar dependency presence (`fastapi`, `pillow`, `uvicorn`), configuration,
+CPU/MPS/CUDA detection, and whether FFmpeg/ffprobe are runnable. A missing base
+dependency means the operator must create the documented owner-controlled
+environment before attempting a smoke; it is not an invitation for the app to
+install anything automatically. With the
 sidecar running, check the app and sidecar independently:
 
 ```sh

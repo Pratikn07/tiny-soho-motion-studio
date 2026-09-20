@@ -17,11 +17,11 @@ Open [http://127.0.0.1:3001](http://127.0.0.1:3001).
 
 ## Optional Tiny Soho creative knowledge
 
-Creative-knowledge retrieval is temporarily disabled while its Supabase read boundary is remediated. The previous publishable-key Data API reader is deliberately fail-closed: a local browser app must not imply that an anonymous table reader is private simply because the key stays on the Next.js server.
+Creative-knowledge retrieval is disabled by default until its owner supplies an existing reader-specific Postgres connection URL and trusted CA path through local runtime configuration. The previous publishable-key Data API reader is deliberately fail-closed: a local browser app must not imply that an anonymous table reader is private simply because the key stays on the Next.js server.
 
-TS-R01 selected a dedicated, server-only database reader role. The exact **unapplied** proposal and the audit basis are in [the knowledge-access decision](docs/architecture/tiny-soho-knowledge-access.md). Do not run it or add Supabase credentials to `.env` until TS-R02 implements the private reader and you explicitly approve the production migration.
+TS-R01 selected a dedicated, server-only database reader role, which has been read-only verified in production. The historical proposal and the audit basis are in [the knowledge-access decision](docs/architecture/tiny-soho-knowledge-access.md); do not apply it again or place credentials in source control.
 
-Until then, the Director continues to draft without external Tiny Soho evidence and never fabricates citations.
+Until an owner performs the CA-pinned runtime smoke, the Director continues to draft without external Tiny Soho evidence and never fabricates citations.
 
 ## Before generating
 
@@ -43,10 +43,12 @@ Studio / Storyboard / Director / Workflow
 The browser uses internal media roles such as `start-image` and `end-image`. Only the Alibaba adapter turns those into provider wire fields such as `first_frame` and `last_frame`.
 
 - Wan 2.7 I2V accepts a start frame or a start-and-end pair, at 2–15 seconds and 720P/1080P.
-- Wan 3 accepts text-only, start-frame, start-and-end, and image-reference requests at 2–30 seconds or smart duration, with model-aware resolution and ratio controls.
+- Wan 2.7 R2V accepts a start frame plus up to five mixed image/video references, with a per-reference WAV/MP3 voice where validated.
+- Wan 3 accepts text-only, start-frame, start-and-end, and mixed image/video/audio references at 2–30 seconds or smart duration, with model-aware resolution and ratio controls.
+- Local video or audio stays blocked unless the exact model has verified zero-cost temporary transport. A reusable, unexpired provider output remains private; an explicit query-free public HTTPS URL is accepted only server-side.
 - The worker refuses a job whose stored media roles are incomplete; it does not infer provider inputs.
 - Director proposals are schema-validated and preflight every shot before approval mutates state or queues work.
-- Workflow generation waits for explicit completed dependency edges and preserves checkpoints across restarts.
+- Workflow generation waits for explicit completed dependency edges, maps V2 named output ports to `media:<role>` inputs, and preserves checkpoints across restarts. Legacy role edges are normalized safely.
 
 ## Included studios
 
@@ -81,6 +83,19 @@ becomes `submission_unknown` and a job interrupted during local result handling
 becomes `needs_attention`; neither is silently resubmitted. Only a still-queued
 job can be canceled locally. A provider-submitted job may continue consuming
 quota even if its downstream handling is stopped.
+
+## Zero-cost media transport
+
+The default capability is `probe-required`: no paid storage, tunnel, or hosted
+database is created as a fallback. The local worker prepares images as bounded
+data URLs and reports URL-required local video/audio as unavailable until the
+exact Singapore model is verified. A no-generation, owner-run probe is available
+as `npm run media:probe-bailian <provider-model>`; it requires an explicit
+confirmation value and independently confirmed expiry, then checks the local
+CLI version, upload help, and masked authentication status before it creates
+any fixture. It never prints or writes a temporary locator and does not submit
+generation. See the
+[media transport policy](docs/architecture/media-transport.md).
 
 ## Verification
 

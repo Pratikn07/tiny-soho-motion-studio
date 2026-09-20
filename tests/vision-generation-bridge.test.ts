@@ -22,7 +22,7 @@ describe("VisionGenerationBridge", () => {
       expect(second.id).toBe(first.id);
       expect(third.id).not.toBe(first.id);
       expect(JSON.parse(first.options)).toMatchObject({ internalProvenance: { source: "vision-motion-package-v2", generationAttemptId: "attempt-1", generationPlateAssetId: plate.id } });
-      expect(JSON.stringify(serializeAlibabaJob(first, [{ role: "start-image", mime: "image/png", bytes: Buffer.from("plate") }]).body)).not.toContain("internalProvenance");
+      expect(JSON.stringify(serializeAlibabaJob(first, [{ role: "start-image", mime: "image/png", locator: { kind: "data-url", value: "data:image/png;base64,cGxhdGU=" } }] as any).body)).not.toContain("internalProvenance");
       expect(JSON.stringify(serializeAlibabaJob({ ...first, modelId: "alibaba:wan2.7-image" }, []).body)).not.toContain("internalProvenance");
       expect(() => bridge.queue({ ...pkg, generation: { ...pkg.generation, duration: 6 } }, "attempt-3")).toThrow(/3–5 seconds/i);
     } finally { db.close(); }
