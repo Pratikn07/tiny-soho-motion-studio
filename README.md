@@ -91,8 +91,10 @@ database is created as a fallback. The local worker prepares images as bounded
 data URLs and reports URL-required local video/audio as unavailable until the
 exact Singapore model is verified. A no-generation, owner-run probe is available
 as `npm run media:probe-bailian <provider-model>`; it requires an explicit
-confirmation value and independently confirmed expiry, never prints or writes a
-temporary locator, and does not submit generation. See the
+confirmation value and independently confirmed expiry, then checks the local
+CLI version, upload help, and masked authentication status before it creates
+any fixture. It never prints or writes a temporary locator and does not submit
+generation. See the
 [media transport policy](docs/architecture/media-transport.md).
 
 ## Verification
