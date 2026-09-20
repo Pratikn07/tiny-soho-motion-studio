@@ -77,6 +77,27 @@ describe("workflows and approved proposals", () => {
     expect(store.getProposal(proposal.id).approved_at).toBeNull(); expect(store.listJobs(project.id)).toHaveLength(0);
   });
 
+  it("does not approve or queue a Director proposal with an untransportable local reference video", () => {
+    const store = storeFor(); const project = store.createProject("Director transport");
+    const video = store.addAsset({ projectId: project.id, kind: "reference", name: "reference.mp4", mime: "video/mp4", path: "/tmp/reference.mp4", width: 320, height: 320, duration: 2, hash: "reference", provenance: "{}" });
+    const proposal = store.createProposal(project.id, "Use local video", { shots: [{ prompt: "Move", modelId: "alibaba:wan2.7-r2v", duration: 5, resolution: "720P", media: [{ assetId: video.id, role: "reference-video" }] }] });
+
+    expect(() => approveProposalJobs(store, proposal.id, new Set(["alibaba:wan2.7-r2v"]))).toThrow(/reference video.*transport is not verified/i);
+    expect(store.getProposal(proposal.id).approved_at).toBeNull(); expect(store.listJobs(project.id)).toHaveLength(0);
+  });
+
+  it("resumes a completed generation job as structured named workflow outputs", () => {
+    const store = storeFor(); const project = store.createProject("Workflow resume"); const source = imageAsset(store, project.id); const output = store.addAsset({ projectId: project.id, kind: "video", name: "result.mp4", mime: "video/mp4", path: "/tmp/result.mp4", width: 1080, height: 1440, duration: 5, hash: "output", provenance: "{}" });
+    const workflow = store.createWorkflow("Resumed output", { version: 2, nodes: [{ id: "source", type: "asset", data: { assetId: source.id } }, { id: "shot", type: "generate-video", data: { modelId: "alibaba:wan2.7-i2v", prompt: "Move" } }], edges: [{ source: "source", sourceOutput: "asset", target: "shot", targetInput: "media:start-image" }] });
+    const run = store.createWorkflowRun(workflow.id, project.id, JSON.parse(workflow.graph));
+    const first = executeWorkflowRun(store, run.id, new Set(["alibaba:wan2.7-i2v"]));
+    const job = store.getJob(first.createdJobs[0].id)!;
+    store.updateJob(job.id, { status: "completed", outputAssetId: output.id });
+
+    const resumed = executeWorkflowRun(store, run.id, new Set(["alibaba:wan2.7-i2v"]));
+    expect(resumed.state).toMatchObject({ status: "completed", nodes: { shot: { status: "completed", outputs: { output: { assetId: output.id }, "raw-video": { assetId: output.id } } } } });
+  });
+
   it("rejects a Director draft that invents a project media reference", () => {
     expect(() => validateDirectorProposal({ projectId: "project_1", shots: [{ prompt: "Move", modelId: "alibaba:wan2.7-r2v", media: [{ assetId: "asset_invented", role: "reference-image" }] }] }, { projectId: "project_1", allowedAssetIds: new Set(["asset_real"]) })).toThrow(/not available in this project/i);
   });
