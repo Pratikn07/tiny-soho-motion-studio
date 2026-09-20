@@ -14,10 +14,18 @@ const knowledgeSchema = z.object({ status: z.enum(["available", "no-match", "not
 const proposalSchema = z.object({ version: z.number().int().optional(), projectId: z.string().optional(), title: z.string().max(200).optional(), motionMode: z.string().max(100).optional(), note: z.string().max(1000).optional(), evidence: knowledgeSchema.optional(), shots: z.array(shotSchema).min(1).max(20) }).strict();
 export type DirectorProposal = z.infer<typeof proposalSchema>;
 export type ProposalKnowledge = { status: KnowledgeStatus; evidence: CreativeEvidence[]; warning?: string };
+type ProposalValidationScope = { projectId: string; allowedAssetIds: Set<string> };
 
-export function validateDirectorProposal(value: unknown): DirectorProposal {
+export function validateDirectorProposal(value: unknown, scope?: ProposalValidationScope): DirectorProposal {
   const proposal = proposalSchema.parse(value);
+  if (scope && proposal.projectId !== undefined && proposal.projectId !== scope.projectId) throw new Error("Director proposal is for a different project.");
   for (const shot of proposal.shots) getModel(shot.modelId);
+  if (scope) {
+    for (const shot of proposal.shots) {
+      const assetIds = [...(shot.media || []).map((media) => media.assetId), ...(shot.inputAssetIds || [])];
+      if (assetIds.some((assetId) => !scope.allowedAssetIds.has(assetId))) throw new Error("Director proposal references an asset that is not available in this project.");
+    }
+  }
   return proposal;
 }
 

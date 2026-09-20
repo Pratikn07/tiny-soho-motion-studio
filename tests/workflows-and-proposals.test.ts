@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createStore } from "@/lib/store";
 import { executeWorkflowRun } from "@/lib/workflows";
-import { approveProposalJobs } from "@/lib/proposals";
+import { approveProposalJobs, validateDirectorProposal } from "@/lib/proposals";
 
 describe("workflows and approved proposals", () => {
   const stores: ReturnType<typeof createStore>[] = [];
@@ -18,6 +18,16 @@ describe("workflows and approved proposals", () => {
     const second = executeWorkflowRun(store, run.id, new Set(["alibaba:wan2.7-i2v"]));
     const [job] = store.listJobs(project.id);
     expect(first.createdJobs).toHaveLength(1); expect(second.createdJobs).toHaveLength(0); expect(JSON.parse(job.inputAssetIds)).toEqual([asset.id]);
+  });
+
+  it("executes a V2 named output port and preserves its explicit input role", () => {
+    const store = storeFor(); const project = store.createProject("Port graph"); const asset = imageAsset(store, project.id);
+    const workflow = store.createWorkflow("V2 one shot", { version: 2, nodes: [{ id: "shot", type: "generate-video", data: { modelId: "alibaba:wan2.7-i2v", prompt: "Move" } }, { id: "source", type: "asset", data: { assetId: asset.id } }], edges: [{ source: "source", sourcePort: "asset", target: "shot", targetPort: "media:start-image" }] });
+    const run = store.createWorkflowRun(workflow.id, project.id, JSON.parse(workflow.graph));
+    const result = executeWorkflowRun(store, run.id, new Set(["alibaba:wan2.7-i2v"]));
+
+    expect(result.createdJobs).toHaveLength(1);
+    expect(JSON.parse(store.listJobs(project.id)[0].options).media).toEqual([{ assetId: asset.id, role: "start-image" }]);
   });
 
   it("fails an invalid image-to-video workflow before it creates a job", () => {
@@ -40,5 +50,9 @@ describe("workflows and approved proposals", () => {
     const proposal = store.createProposal(project.id, "Make a shot", { shots: [{ prompt: "First", modelId: "alibaba:wan2.7-i2v", duration: 5, resolution: "720P" }] });
     expect(() => approveProposalJobs(store, proposal.id, new Set(["alibaba:wan2.7-i2v"]))).toThrow(/start image|required/i);
     expect(store.getProposal(proposal.id).approved_at).toBeNull(); expect(store.listJobs(project.id)).toHaveLength(0);
+  });
+
+  it("rejects a Director draft that invents a project media reference", () => {
+    expect(() => validateDirectorProposal({ projectId: "project_1", shots: [{ prompt: "Move", modelId: "alibaba:wan2.7-r2v", media: [{ assetId: "asset_invented", role: "reference-image" }] }] }, { projectId: "project_1", allowedAssetIds: new Set(["asset_real"]) })).toThrow(/not available in this project/i);
   });
 });
