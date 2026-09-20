@@ -51,6 +51,13 @@ describe("shared generation preflight", () => {
     expect(JSON.parse(job.options).media).toEqual([{ assetId: reference.id, role: "reference-image", referenceVoiceAssetId: voice.id }]);
   });
 
+  it("rejects a supplied URL with query data so it cannot become a browser-visible secret", () => {
+    const store = storeFor(); const project = store.createProject("Public URL safety");
+    const reference = store.addAsset({ projectId: project.id, kind: "reference", name: "reference.mp4", mime: "video/mp4", path: "/tmp/reference.mp4", width: 320, height: 320, duration: 2, hash: "reference", provenance: "{}" });
+
+    expect(() => queueGeneration(store, { projectId: project.id, idempotencyKey: "query-url", modelId: "alibaba:wan2.7-r2v", prompt: "Use the reference video.", media: [{ assetId: reference.id, role: "reference-video", publicUrl: "https://media.example.test/reference.mp4?token=secret" }], options: { duration: 5, resolution: "720P" } }, new Set(["alibaba:wan2.7-r2v"]))).toThrow(/safe HTTPS URL/i);
+  });
+
   it("enforces Wan 3 aggregate input-video and output duration before a job is queued", () => {
     const store = storeFor(); const project = store.createProject("Video duration");
     const videos = Array.from({ length: 5 }, (_, index) => store.addAsset({ projectId: project.id, kind: "reference", name: `reference-${index}.mp4`, mime: "video/mp4", path: `/tmp/reference-${index}.mp4`, width: 320, height: 320, duration: 3, sizeBytes: 1024, hash: `video-${index}`, provenance: "{}" }));

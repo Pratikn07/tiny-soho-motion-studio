@@ -58,4 +58,12 @@ describe("Alibaba payload serialization", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     expect(body.input.media.map((item: { type: string }) => item.type)).toEqual(["first_frame", "driving_audio"]);
   });
+
+  it("adds the DashScope OSS resolution header only for an exact provider OSS locator", async () => {
+    const fetchMock = queueResponse();
+    await submitAlibabaJob({ modelId: "alibaba:wan2.7-r2v", task: "reference-to-video", prompt: "Move", inputAssetIds: "[]", options: JSON.stringify({ duration: 5, resolution: "720P" }) }, [{ role: "reference-video", mime: "video/mp4", locator: { kind: "dashscope-oss", value: "oss://temporary-bucket/reference.mp4" } } as any]);
+
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers["X-DashScope-OssResourceResolve"]).toBe("enable");
+  });
 });

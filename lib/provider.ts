@@ -10,7 +10,7 @@ export async function submitAlibabaJob(job: { modelId: string; task: string; pro
   if (!configPresent()) throw new Error("Alibaba credentials are not configured. Run npm run setup.");
   const model = getModel(job.modelId);
   const serialized = serializeAlibabaJob(job, inputs);
-  const response = await fetch(`${workspaceBaseUrl()}${serialized.path}`, { method: "POST", headers: { ...auth(), "Content-Type": "application/json", ...(serialized.async ? { "X-DashScope-Async": "enable" } : {}) }, body: JSON.stringify(serialized.body), signal: AbortSignal.timeout(serialized.timeoutMs) });
+  const response = await fetch(`${workspaceBaseUrl()}${serialized.path}`, { method: "POST", headers: { ...auth(), "Content-Type": "application/json", ...(serialized.async ? { "X-DashScope-Async": "enable" } : {}), ...(serialized.requiresOssResourceResolve ? { "X-DashScope-OssResourceResolve": "enable" } : {}) }, body: JSON.stringify(serialized.body), signal: AbortSignal.timeout(serialized.timeoutMs) });
   const body = await json(response);
   if (model.media === "image") {
     const url = body.output?.choices?.[0]?.message?.content?.find((item: any) => item.image)?.image || body.output?.results?.[0]?.url;

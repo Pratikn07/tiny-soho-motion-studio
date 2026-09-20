@@ -45,6 +45,24 @@ describe("provider media resolution", () => {
     expect(result).toEqual({ ok: false, reason: "Local reference video is unavailable because free Singapore URL transport is not verified." });
   });
 
+  it("accepts a verified provider OSS locator only from the temporary-upload path", async () => {
+    const result = await resolveProviderMedia({
+      model: getModel("alibaba:wan2.7-r2v"),
+      media: [{ role: "reference-video", asset: asset({ mime: "video/mp4", name: "reference.mp4", duration: 2 }) }],
+      capability: {
+        id: "bailian-temporary-upload",
+        state: "verified",
+        region: "ap-southeast-1",
+        models: ["wan2.7-r2v-2026-06-12"],
+        expiresAfterSeconds: 1800,
+        lastVerifiedAt: "2026-09-20T12:00:00.000Z",
+      },
+      temporaryUpload: async () => ({ url: "oss://temporary-bucket/reference.mp4", expiresAt: "2026-09-20T12:30:00.000Z" }),
+    });
+
+    expect(result).toEqual({ ok: true, media: [{ role: "reference-video", mime: "video/mp4", locator: { kind: "dashscope-oss", value: "oss://temporary-bucket/reference.mp4", expiresAt: "2026-09-20T12:30:00.000Z" } }] });
+  });
+
   it("uses only a validated explicitly supplied HTTPS URL for URL-required media", async () => {
     const result = await resolveProviderMedia({
       model: getModel("alibaba:wan2.7-r2v"),
@@ -52,6 +70,34 @@ describe("provider media resolution", () => {
     });
 
     expect(result).toEqual({ ok: true, media: [{ role: "reference-video", mime: "video/mp4", locator: { kind: "public-url", value: "https://media.example.test/reference.mp4" } }] });
+  });
+
+  it("reuses an unexpired server-only provider output without requiring temporary upload", async () => {
+    const result = await resolveProviderMedia({
+      model: getModel("alibaba:wan2.7-r2v"),
+      media: [{ role: "reference-video", asset: asset({
+        mime: "video/mp4",
+        name: "generated.mp4",
+        duration: 2,
+        provenance: JSON.stringify({ providerOutput: { url: "https://bucket.aliyuncs.com/generated.mp4", expiresAt: "2099-01-01T00:00:00.000Z" } }),
+      }) }],
+    });
+
+    expect(result).toEqual({ ok: true, media: [{ role: "reference-video", mime: "video/mp4", locator: { kind: "public-url", value: "https://bucket.aliyuncs.com/generated.mp4", expiresAt: "2099-01-01T00:00:00.000Z" } }] });
+  });
+
+  it("does not trust an unapproved host even when it appears in private provenance", async () => {
+    const result = await resolveProviderMedia({
+      model: getModel("alibaba:wan2.7-r2v"),
+      media: [{ role: "reference-video", asset: asset({
+        mime: "video/mp4",
+        name: "generated.mp4",
+        duration: 2,
+        provenance: JSON.stringify({ providerOutput: { url: "https://not-a-provider.example/generated.mp4", expiresAt: "2099-01-01T00:00:00.000Z" } }),
+      }) }],
+    });
+
+    expect(result).toEqual({ ok: false, reason: "Local reference video is unavailable because free Singapore URL transport is not verified." });
   });
 
   it("rejects a local or credential-bearing supplied URL without fetching it", async () => {

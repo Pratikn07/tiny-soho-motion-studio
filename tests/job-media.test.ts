@@ -26,4 +26,13 @@ describe("queued job media resolution", () => {
 
     await expect(resolveJobMedia(db, job)).resolves.toEqual({ ok: false, reason: "Local reference video is unavailable because free Singapore URL transport is not verified." });
   });
+
+  it("uses a validated existing public URL attached to a project-owned media record", async () => {
+    const db = storeFor(); const project = db.createProject("Public media job");
+    const video = db.addAsset({ projectId: project.id, kind: "reference", name: "reference.mp4", mime: "video/mp4", path: "/owner-only/reference.mp4", width: 320, height: 320, duration: 2, hash: "video", provenance: "{}" });
+    const job = queueGeneration(db, { projectId: project.id, idempotencyKey: "public-video", modelId: "alibaba:wan2.7-r2v", prompt: "Use the reference video.", media: [{ assetId: video.id, role: "reference-video", publicUrl: "https://media.example.test/reference.mp4" }], options: { duration: 5, resolution: "720P" } } as any, new Set(["alibaba:wan2.7-r2v"]));
+
+    await expect(resolveJobMedia(db, job)).resolves.toEqual({ ok: true, media: [{ role: "reference-video", mime: "video/mp4", locator: { kind: "public-url", value: "https://media.example.test/reference.mp4" } }] });
+    expect(JSON.parse(job.options).media).toEqual([{ assetId: video.id, role: "reference-video", publicUrl: "https://media.example.test/reference.mp4" }]);
+  });
 });

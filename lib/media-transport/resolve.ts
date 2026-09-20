@@ -1,15 +1,17 @@
 import fs from "node:fs/promises";
 import { isIP } from "node:net";
+import { isAllowedProviderResultUrl } from "../assets";
 import type { ModelCapability, MediaRole } from "../models";
 import type { Asset } from "../store";
+import { isSafeBailianTemporaryLocator } from "./bailian";
 import { configuredTransportCapability, effectiveTransportCapability, type MediaTransportCapability } from "./capability";
 
-export type ProviderLocator = { kind: "data-url" | "public-url"; value: string; expiresAt?: string };
+export type ProviderLocator = { kind: "data-url" | "public-url" | "dashscope-oss"; value: string; expiresAt?: string };
 export type ResolvedProviderMedia = { role: MediaRole; mime: string; locator: ProviderLocator; referenceVoice?: ProviderLocator };
 export type ProviderMediaInput = { role: MediaRole; asset: Asset; publicUrl?: string; referenceVoice?: { asset: Asset; publicUrl?: string } };
 export type ProviderMediaResolution = { ok: true; media: ResolvedProviderMedia[] } | { ok: false; reason: string };
 
-type TemporaryUpload = (input: { asset: Asset; model: ModelCapability }) => Promise<string | { url: string; expiresAt?: string }>;
+type TemporaryUpload = (input: { asset: Asset; model: ModelCapability; expiresAfterSeconds: number }) => Promise<string | { url: string; expiresAt?: string }>;
 export type ResolveProviderMediaOptions = {
   model: ModelCapability;
   media: ProviderMediaInput[];
@@ -25,7 +27,7 @@ export function isSafePublicMediaUrl(value: string) {
   try {
     const url = new URL(value);
     const hostname = url.hostname.toLowerCase();
-    return url.protocol === "https:" && !url.username && !url.password && !url.port && !isIP(hostname) && hostname.includes(".") && hostname !== "localhost" && !hostname.endsWith(".local") && !hostname.endsWith(".internal");
+    return url.protocol === "https:" && !url.username && !url.password && !url.port && !url.search && !url.hash && !isIP(hostname) && hostname.includes(".") && hostname !== "localhost" && !hostname.endsWith(".local") && !hostname.endsWith(".internal");
   } catch {
     return false;
   }
@@ -35,7 +37,7 @@ function privateProviderUrl(asset: Asset): { url: string; expiresAt?: string } |
   try {
     const provenance = JSON.parse(asset.provenance) as { providerOutput?: { url?: unknown; expiresAt?: unknown } };
     const output = provenance.providerOutput;
-    if (!output || typeof output.url !== "string" || !isSafePublicMediaUrl(output.url)) return null;
+    if (!output || typeof output.url !== "string" || !isAllowedProviderResultUrl(output.url)) return null;
     if (output.expiresAt !== undefined && (typeof output.expiresAt !== "string" || Number.isNaN(Date.parse(output.expiresAt)) || Date.parse(output.expiresAt) <= Date.now())) return null;
     return { url: output.url, ...(typeof output.expiresAt === "string" ? { expiresAt: output.expiresAt } : {}) };
   } catch {
@@ -61,10 +63,10 @@ async function locatorFor(input: { asset: Asset; publicUrl?: string }, role: Med
 
   const capability = effectiveTransportCapability(options.capability || configuredTransportCapability(), options.model.providerModel);
   if (capability.state !== "verified" || !options.temporaryUpload) return { ok: false, reason: `Local ${role.replace("-", " ")} is unavailable because free Singapore URL transport is not verified.` };
-  const result = await options.temporaryUpload({ asset: input.asset, model: options.model });
+  const result = await options.temporaryUpload({ asset: input.asset, model: options.model, expiresAfterSeconds: capability.expiresAfterSeconds || 0 });
   const temporary = typeof result === "string" ? { url: result } : result;
-  if (!isSafePublicMediaUrl(temporary.url)) return { ok: false, reason: "Temporary upload returned an unsafe provider locator." };
-  return { kind: "public-url", value: temporary.url, ...(temporary.expiresAt ? { expiresAt: temporary.expiresAt } : {}) };
+  if (!isSafeBailianTemporaryLocator(temporary.url)) return { ok: false, reason: "Temporary upload returned an unsafe provider locator." };
+  return { kind: temporary.url.startsWith("oss://") ? "dashscope-oss" : "public-url", value: temporary.url, ...(temporary.expiresAt ? { expiresAt: temporary.expiresAt } : {}) };
 }
 
 export async function resolveProviderMedia(options: ResolveProviderMediaOptions): Promise<ProviderMediaResolution> {

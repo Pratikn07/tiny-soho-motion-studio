@@ -15,9 +15,10 @@ export function GET(request: NextRequest) {
     transport,
     models: listModels().map((model) => {
       const effective = effectiveTransportCapability(transport, model.providerModel);
-      const media: Array<{ role: MediaRole | "existing-public-url"; available: boolean; reason: string | null }> = model.mediaRules.allowedRoles.map((role) => inlineRoles.has(role)
+      const media: Array<{ role: MediaRole | "reference-voice" | "existing-public-url"; available: boolean; reason: string | null }> = model.mediaRules.allowedRoles.map((role) => inlineRoles.has(role)
         ? { role, available: true, reason: null }
         : { role, available: effective.state === "verified", reason: effective.state === "verified" ? null : effective.reason || "Free Singapore URL transport is not verified." });
+      if (model.family === "wan2.7-r2v") media.push({ role: "reference-voice", available: effective.state === "verified", reason: effective.state === "verified" ? null : effective.reason || "Free Singapore URL transport is not verified." });
       if (model.mediaRules.allowedRoles.some((role) => !inlineRoles.has(role))) media.push({ role: "existing-public-url", available: true, reason: null });
       return { modelId: model.id, providerModel: model.providerModel, media };
     }),

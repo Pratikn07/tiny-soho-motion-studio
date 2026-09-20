@@ -21,7 +21,8 @@
     "vision:compose:smoke": "python3 -m services.vision.compose_smoke",
     "vision:sam2:smoke": "python3 -m services.vision.sam2_smoke",
     "vision:qwen:smoke": "python3 -m services.vision.qwen_layers_smoke",
-    "verify:vision-repository": "tsx scripts/verify-vision-repository.ts"
+    "verify:vision-repository": "tsx scripts/verify-vision-repository.ts",
+    "media:probe-bailian": "tsx scripts/probe-bailian-transport.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.8.6",

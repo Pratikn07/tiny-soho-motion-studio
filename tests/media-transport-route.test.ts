@@ -22,6 +22,7 @@ describe("media transport capability API", () => {
     expect(r2v).toBeDefined();
     expect(r2v.media.find((item: { role: string }) => item.role === "reference-image")).toMatchObject({ available: true, reason: null });
     expect(r2v.media.find((item: { role: string }) => item.role === "reference-video")).toMatchObject({ available: false, reason: expect.stringMatching(/not .*verified/i) });
+    expect(r2v.media.find((item: { role: string }) => item.role === "reference-voice")).toMatchObject({ available: false, reason: expect.stringMatching(/not .*verified/i) });
     expect(r2v.media.find((item: { role: string }) => item.role === "existing-public-url")).toMatchObject({ available: true, reason: null });
   });
 });

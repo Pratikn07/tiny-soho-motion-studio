@@ -1,13 +1,14 @@
 import { getModel, normalizeMediaRole, validateGeneration, type GenerationOptions, type GenerationTask, type MediaRole, type ModelCapability } from "./models";
+import { isSafePublicMediaUrl } from "./media-transport/resolve";
 import type { createStore } from "./store";
 
-export type GenerationMedia = { assetId: string; role: MediaRole; referenceVoiceAssetId?: string };
+export type GenerationMedia = { assetId: string; role: MediaRole; publicUrl?: string; referenceVoiceAssetId?: string; referenceVoicePublicUrl?: string };
 export type GenerationDraft = {
   projectId: string;
   idempotencyKey: string;
   modelId: string;
   prompt: string;
-  media?: Array<{ assetId: string; role: string; referenceVoiceAssetId?: string }>;
+  media?: Array<{ assetId: string; role: string; publicUrl?: string; referenceVoiceAssetId?: string; referenceVoicePublicUrl?: string }>;
   // Compatibility with jobs stored before the normalized media contract.
   inputAssetIds?: string[];
   inputRoles?: string[];
@@ -33,8 +34,10 @@ export function normalizeGenerationDraft(draft: GenerationDraft) {
   if (!Array.isArray(mediaSource)) throw new Error("Media must be a list.");
   const media = mediaSource.map((item) => {
     if (!item || typeof item.assetId !== "string" || !item.assetId.trim() || typeof item.role !== "string") throw new Error("Each media input needs an asset and role.");
+    if (item.publicUrl !== undefined && (typeof item.publicUrl !== "string" || !isSafePublicMediaUrl(item.publicUrl))) throw new Error("A supplied public media URL must be a safe HTTPS URL.");
     if (item.referenceVoiceAssetId !== undefined && (typeof item.referenceVoiceAssetId !== "string" || !item.referenceVoiceAssetId.trim())) throw new Error("A reference voice needs an asset ID.");
-    return { assetId: item.assetId, role: normalizeMediaRole(item.role), ...(item.referenceVoiceAssetId ? { referenceVoiceAssetId: item.referenceVoiceAssetId } : {}) };
+    if (item.referenceVoicePublicUrl !== undefined && (typeof item.referenceVoicePublicUrl !== "string" || !isSafePublicMediaUrl(item.referenceVoicePublicUrl))) throw new Error("A supplied reference voice URL must be a safe HTTPS URL.");
+    return { assetId: item.assetId, role: normalizeMediaRole(item.role), ...(item.publicUrl ? { publicUrl: item.publicUrl } : {}), ...(item.referenceVoiceAssetId ? { referenceVoiceAssetId: item.referenceVoiceAssetId } : {}), ...(item.referenceVoicePublicUrl ? { referenceVoicePublicUrl: item.referenceVoicePublicUrl } : {}) };
   });
   const rawOptions = draft.options || {};
   if (!rawOptions || Array.isArray(rawOptions) || typeof rawOptions !== "object") throw new Error("Generation options must be an object.");

@@ -11,7 +11,7 @@ import sharp from "sharp";
 import { assetsDir } from "./config";
 import type { Asset } from "./store";
 
-export type PublicAsset = Omit<Asset, "path" | "provenance">;
+export type PublicAsset = Omit<Asset, "path" | "provenance"> & { reusableProviderOutput: boolean };
 export type SavedAsset = {
   path: string;
   hash: string;
@@ -50,7 +50,16 @@ const providerStorageDomains = ["aliyuncs.com", "alicdn.com"];
 
 export function toPublicAsset(asset: Asset): PublicAsset {
   const { path: _path, provenance: _provenance, ...publicAsset } = asset;
-  return publicAsset;
+  return { ...publicAsset, reusableProviderOutput: hasReusableProviderOutput(asset.provenance) };
+}
+
+function hasReusableProviderOutput(provenance: string) {
+  try {
+    const output = (JSON.parse(provenance) as { providerOutput?: { url?: unknown; expiresAt?: unknown } }).providerOutput;
+    return typeof output?.url === "string" && isAllowedProviderResultUrl(output.url) && typeof output.expiresAt === "string" && !Number.isNaN(Date.parse(output.expiresAt)) && Date.parse(output.expiresAt) > Date.now();
+  } catch {
+    return false;
+  }
 }
 
 export function extensionForMime(mime: string) {

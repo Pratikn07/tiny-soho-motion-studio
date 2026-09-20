@@ -2,6 +2,7 @@ import { store } from "../lib/store";
 import { submitAlibabaJob, checkAlibabaTask } from "../lib/provider";
 import { adoptProviderDownload, downloadProviderAsset } from "../lib/assets";
 import { resolveJobMedia } from "../lib/job-media";
+import { providerOutputProvenance } from "../lib/media-transport/provider-output";
 import { executeWorkflowRun } from "../lib/workflows";
 import { createSingleFlightRunner } from "../lib/worker-loop";
 
@@ -36,7 +37,7 @@ async function outputFor(job: NonNullable<ReturnType<typeof db.getJob>>, url: st
     height: saved.height,
     duration: saved.duration,
     hash: saved.hash,
-    provenance: JSON.stringify({ jobId: job.id, providerTaskId: job.providerTaskId, media: { codec: saved.codec, container: saved.container }, ...(jobOptions.internalProvenance ? { internalProvenance: jobOptions.internalProvenance } : {}) }),
+    provenance: JSON.stringify({ jobId: job.id, providerTaskId: job.providerTaskId, providerOutput: providerOutputProvenance(url), media: { codec: saved.codec, container: saved.container }, ...(jobOptions.internalProvenance ? { internalProvenance: jobOptions.internalProvenance } : {}) }),
   });
   db.transitionJob(job.id, ["processing"], { status: "completed", outputAssetId: asset.id, error: null });
 }
