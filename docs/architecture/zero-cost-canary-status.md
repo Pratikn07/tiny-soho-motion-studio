@@ -30,13 +30,17 @@ valid outcome; no storage service, tunnel, or paid infrastructure was created.
 
 ## Optional Vision runtime
 
-**Base sidecar ready; inference runtimes unavailable, correctly reported.** A
-local ignored Python 3.11 environment now has the five base sidecar
-dependencies, and the local FFmpeg/FFprobe typography-composition smoke
-passed. `vision:doctor` still reports no PyTorch, OCR/SAM2/Qwen runtime, model
-weights, or approved remote backend. The repository verification passed without
-tracked model or checkpoint artifacts. The implementation does not install
-optional packages, download weights, or acquire GPU infrastructure
+**OCR and Standard Safe Motion are locally provisioned and smoke-tested.** An
+ignored Python 3.11 environment contains the pinned PaddleOCR and SAM 2
+dependencies. The reviewed PP-OCRv5 mobile detection and English recognition
+models, plus the `sam2.1_hiera_tiny` checkpoint, live in an owner-controlled
+cache outside the repository. On 20 September, real CPU OCR succeeded on all
+three textual fixtures and real SAM 2 point, negative-point, and box smokes
+succeeded. The local FFmpeg/FFprobe typography-composition smoke also passed.
+Those runtimes remain opt-in through local process configuration; no `.env` was
+written and no model/checkpoint artifact is tracked in Git. Qwen Layers remains
+unavailable because this Mac has no CUDA backend and no reviewed remote backend
+is configured. The implementation does not acquire GPU infrastructure
 automatically.
 
 ## Knowledge retrieval smoke
