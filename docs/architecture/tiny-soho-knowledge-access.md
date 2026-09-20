@@ -1,6 +1,6 @@
 # Tiny Soho creative-knowledge access decision (TS-R01)
 
-Status: decision recorded; no Supabase DDL has been applied.
+Status: production reader reconciled on 20 September 2026. This document retains the earlier decision history; the current runtime state is recorded in [current-runtime-state.md](./current-runtime-state.md).
 
 ## Decision
 
@@ -8,7 +8,7 @@ Tiny Soho creative knowledge is proprietary and must use a private, server-only 
 
 TS-R02 will add a direct Postgres reader authenticated as the dedicated `tiny_soho_studio_reader` role. Its connection string and password remain in owner-readable local configuration and are never exposed to the browser, source tree, logs, or proposal data. The role receives `SELECT` only on the five tables used by the current retrieval implementation: `ts_techniques`, `ts_segments`, `ts_shots`, `ts_carousel_slides`, and `ts_tool_guides`.
 
-The exact proposed database change is [ts-r01-private-reader.sql](../../supabase/proposed/ts-r01-private-reader.sql). It is deliberately outside `supabase/migrations/` and must not be applied without a separate explicit approval.
+The historical proposed database changes are deliberately outside `supabase/migrations/`. They are audit artifacts, not migrations to rerun. The production `tiny_soho_studio_reader` role now exists, so a proposal that creates it must never be applied again.
 
 ## Audit boundary
 
@@ -28,14 +28,14 @@ Status: completed in a separate, no-production-data Supabase staging project. Th
 
 The application reader is server-only and disabled by default. It requires all of the following before it can connect: `TINY_SOHO_KNOWLEDGE_ENABLED=true`, a direct PostgreSQL URL whose user is exactly `tiny_soho_studio_reader`, and an absolute `TINY_SOHO_KNOWLEDGE_DATABASE_CA_PATH`. It uses CA-pinned TLS verification, a two-connection pool, a three-second connect/statement timeout, static allowlisted SQL, bound search values, and read-only transactions. `sslmode` is deliberately rejected in the URL because the Node driver can let a URL-level SSL mode override the explicit CA configuration.
 
-The staging bootstrap is [ts-r02c-staging-reader.sql](../../supabase/staging/ts-r02c-staging-reader.sql). It is not a production migration. The [production draft](../../supabase/proposed/ts-r02c-production-reader.sql) and [rollback draft](../../supabase/proposed/ts-r02c-production-reader-rollback.sql) remain unapplied proposals.
+The staging bootstrap is [ts-r02c-staging-reader.sql](../../supabase/staging/ts-r02c-staging-reader.sql). It is not a production migration. The [production draft](../../supabase/proposed/ts-r02c-production-reader.sql) and [rollback draft](../../supabase/proposed/ts-r02c-production-reader-rollback.sql) are historical proposals. They do not describe the current production state and must not be re-applied.
 
-The 2026-09-18 production preflight found legacy public read access on the five target tables and a publicly executable `SECURITY DEFINER` function. The draft fails closed on both conditions, so it was not applied and retrieval remains disabled. Remediation of those existing production exposures must be separately approved and validated with the external writer before the dedicated reader can be enabled.
+The 2026-09-18 production preflight found legacy public read access on the five target tables and a publicly executable `SECURITY DEFINER` function. On 20 September 2026, a fresh read-only production check confirmed the dedicated reader has the intended least-privilege grants and policies, while `anon`/`authenticated` do not have grants to those five tables and neither `PUBLIC` nor the reader can execute `public.rls_auto_enable()`. See the current state record for the exact evidence and remaining activation gate.
 
 ## TS-R02 entry criteria
 
-1. Keep `TINY_SOHO_KNOWLEDGE_ENABLED=false` in every production environment.
-2. Remediate the preflight blockers without interrupting the external writer, through an explicitly approved migration and secure credential provisioning path.
-3. Verify policies, grants, public-role denial, private-reader retrieval, and ingestion before enabling the feature.
+1. Keep `TINY_SOHO_KNOWLEDGE_ENABLED=false` in repository defaults.
+2. Obtain the existing owner-controlled reader credential and trusted CA path; do not rotate the role automatically.
+3. Verify an authenticated, CA-pinned server-side retrieval smoke before enabling the feature in an owner-controlled runtime configuration.
 
 The Supabase security advisors also report findings outside this `ts_*` scope. They are not remediated by this ticket.
