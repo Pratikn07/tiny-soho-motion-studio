@@ -85,6 +85,6 @@ const canonicalJson = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
-export function generationFingerprint(request: PreparedGeneration) {
+export function generationFingerprint(request: unknown) {
   return createHash("sha256").update(canonicalJson(request)).digest("hex");
 }

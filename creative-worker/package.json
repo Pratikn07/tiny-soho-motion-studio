@@ -1,0 +1,23 @@
+{
+  "name": "tiny-soho-creative-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.106.2",
+    "tsx": "4.20.6"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "typescript": "5.9.2",
+    "vitest": "5.0.1"
+  }
+}

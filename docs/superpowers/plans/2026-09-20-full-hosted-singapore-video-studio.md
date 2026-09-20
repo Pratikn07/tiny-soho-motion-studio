@@ -118,7 +118,7 @@ Expected: FAIL because no acknowledgement module exists.
 
 - [ ] **Step 3: Implement the migration and server-only repository operations.**
 
-Create acknowledgement, job-media, and job-events tables with UUID keys, timestamptz, RLS, indexed foreign keys, unique acknowledgement (owner_user_id, model_id, contract_version), unique job media (job_id, role, ordinal), and a partial pending-job index. Add a private-schema claim function using FOR UPDATE SKIP LOCKED, fixed search_path, explicit status filter, and revoked public execute. Repository methods scope all reads/writes by owner_user_id and verify media ownership before insertion.
+Create acknowledgement, job-media, and job-events tables with UUID keys, timestamptz, RLS, indexed foreign keys, unique acknowledgement (owner_user_id, model_id, contract_version), unique job media (job_id, role, ordinal), and a partial pending-job index. Add a public-schema claim RPC using FOR UPDATE SKIP LOCKED, fixed search_path, explicit status filter, and execute revoked from public, anon, and authenticated then granted only to service_role. Repository methods scope all reads/writes by owner_user_id and verify media ownership before insertion.
 
 - [ ] **Step 4: Run focused green verification.**
 
@@ -341,4 +341,3 @@ Verify Vercel SHA, canonical health, and unauthenticated 401; verify Worker SHA 
 - [ ] **Step 6: Record factual release state.**
 
 Document merged SHA, migration id, Vercel and Worker deployments, tests, owner smoke, no-provider limitation, and Instagram health. If docs change main, redeploy both services from the new main SHA before declaring release complete.
-

@@ -7,7 +7,11 @@ import { StudioError } from "@/lib/errors";
 const MAX_SOURCE_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_SOURCE_IMAGE_PIXELS = 40_000_000;
 const MAX_GENERATED_VIDEO_BYTES = 250 * 1024 * 1024;
+const MAX_SOURCE_VIDEO_BYTES = 200 * 1024 * 1024;
+const MAX_SOURCE_AUDIO_BYTES = 25 * 1024 * 1024;
 const sourceImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const sourceVideoMimeTypes = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+const sourceAudioMimeTypes = new Set(["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4"]);
 
 const mimeTypeForFormat: Record<string, string> = {
   jpeg: "image/jpeg",
@@ -36,6 +40,15 @@ export type ValidatedSourceImage = {
   mimeType: "image/jpeg" | "image/png" | "image/webp";
   width: number;
   height: number;
+  sha256: string;
+};
+
+export type ValidatedSourceMedia = ValidatedSourceImage | {
+  bytes: Buffer;
+  mimeType: "video/mp4" | "video/quicktime" | "video/webm" | "audio/mpeg" | "audio/wav" | "audio/x-wav" | "audio/mp4";
+  kind: "source-video" | "source-audio";
+  width: null;
+  height: null;
   sha256: string;
 };
 
@@ -100,6 +113,32 @@ export async function validateSourceImage(file: File): Promise<ValidatedSourceIm
   };
 }
 
+export async function validateSourceMedia(file: File): Promise<ValidatedSourceMedia & { kind: "source-image" | "source-video" | "source-audio" }> {
+  if (sourceImageMimeTypes.has(file.type)) {
+    return { ...await validateSourceImage(file), kind: "source-image" };
+  }
+  const maxBytes = sourceVideoMimeTypes.has(file.type)
+    ? MAX_SOURCE_VIDEO_BYTES
+    : sourceAudioMimeTypes.has(file.type)
+      ? MAX_SOURCE_AUDIO_BYTES
+      : 0;
+  if (!maxBytes) {
+    throw new StudioError(400, "unsupported_source_media", "Upload a PNG, JPEG, WebP, MP4, MOV, WebM, MP3, WAV, or M4A source file.");
+  }
+  if (!file.size || file.size > maxBytes) {
+    throw new StudioError(400, "source_media_too_large", "This source media file is too large.");
+  }
+  const bytes = Buffer.from(await file.arrayBuffer());
+  return {
+    bytes,
+    mimeType: file.type as Exclude<ValidatedSourceMedia["mimeType"], ValidatedSourceImage["mimeType"]>,
+    kind: sourceVideoMimeTypes.has(file.type) ? "source-video" : "source-audio",
+    width: null,
+    height: null,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+  };
+}
+
 export async function uploadSourceImage(input: {
   client: StorageUploadClient;
   ownerUserId: string;
@@ -123,6 +162,29 @@ export async function uploadSourceImage(input: {
   }
 
   return { ...image, objectPath };
+}
+
+export async function uploadSourceMedia(input: {
+  client: StorageUploadClient;
+  ownerUserId: string;
+  projectId: string;
+  assetId: string;
+  file: File;
+}) {
+  const media = await validateSourceMedia(input.file);
+  const objectPath = sourceObjectPath(
+    input.ownerUserId,
+    input.projectId,
+    input.assetId,
+    input.file.name,
+  );
+  const { error } = await input.client.storage
+    .from("creative-studio")
+    .upload(objectPath, media.bytes, { contentType: media.mimeType, upsert: false });
+  if (error) {
+    throw new StudioError(502, "studio_storage_upload_failed", "Source media upload failed.");
+  }
+  return { ...media, objectPath };
 }
 
 export async function signAssetDownload(client: StorageSigningClient, objectPath: string) {

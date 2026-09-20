@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getVideoModelContract,
   SINGAPORE_VIDEO_MODELS,
   preflightVideoGeneration,
 } from "@/lib/video-catalog";
@@ -27,5 +28,20 @@ describe("Singapore video catalogue", () => {
       options: {},
       acknowledgements: [],
     })).toThrow(/acknowledge/i);
+  });
+
+  it("allows the documented prompt-free image-to-action request shape", () => {
+    const model = getVideoModelContract("wan2.2-animate-move");
+    expect(model).not.toBeNull();
+    expect(() => preflightVideoGeneration({
+      modelId: "wan2.2-animate-move",
+      prompt: "",
+      media: [
+        { assetId: "character", role: "first_frame" },
+        { assetId: "motion", role: "driving_video" },
+      ],
+      options: { mode: "wan-std" },
+      acknowledgements: [{ modelId: "wan2.2-animate-move", contractVersion: model!.contractVersion }],
+    })).not.toThrow();
   });
 });

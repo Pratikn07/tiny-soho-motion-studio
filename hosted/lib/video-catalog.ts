@@ -14,6 +14,7 @@ export type VideoTask =
 export type MediaRole =
   | "first_frame"
   | "last_frame"
+  | "mask_image"
   | "reference_image"
   | "reference_video"
   | "source_video"
@@ -35,6 +36,7 @@ const standardOptions = z.object({
   watermark: z.boolean().optional(),
   audio: z.boolean().optional(),
   mode: z.enum(["wan-std", "wan-pro"]).optional(),
+  operation: z.enum(["image_reference", "video_repainting", "video_edit", "video_extension", "video_outpainting"]).optional(),
 }).strict();
 
 export type VideoOptions = z.infer<typeof standardOptions>;
@@ -45,6 +47,7 @@ export type VideoModelContract = Readonly<{
   providerModel: string;
   task: VideoTask;
   contractVersion: string;
+  promptRequired: boolean;
   requiredRoles: readonly MediaRole[];
   optionalRoles: readonly MediaRole[];
   maxByRole: Partial<Record<MediaRole, number>>;
@@ -65,6 +68,7 @@ const textVideo = (id: string, label: string): VideoModelContract => ({
   label,
   providerModel: id,
   task: "text-to-video",
+  promptRequired: true,
   requiredRoles: [],
   optionalRoles: [],
   maxByRole: {},
@@ -76,6 +80,7 @@ const imageVideo = (id: string, label: string, extended = false): VideoModelCont
   label,
   providerModel: id,
   task: "image-to-video",
+  promptRequired: true,
   requiredRoles: ["first_frame"],
   optionalRoles: extended ? ["last_frame", "driving_audio", "first_clip"] : [],
   maxByRole: extended
@@ -92,6 +97,7 @@ const wan3 = (
   label: `${providerModel === "wan3.0-video-prime" ? "Wan 3 Video Prime" : "Wan 3 Video"} ${task.replaceAll("-", " ")}`,
   providerModel,
   task,
+  promptRequired: true,
   requiredRoles: task === "image-to-video" ? ["first_frame"] : [],
   optionalRoles: task === "text-to-video" ? [] : ["last_frame", "reference_image", "reference_video", "driving_audio"],
   requiresAnyRole: task === "reference-to-video" ? ["reference_image", "reference_video"] : undefined,
@@ -99,17 +105,36 @@ const wan3 = (
   ...videoOptions({ duration: 5, resolution: "720P", aspectRatio: "adaptive", promptExtend: true, watermark: false, audio: false }),
 });
 
+const vace = (
+  id: string,
+  label: string,
+  requiredRoles: readonly MediaRole[],
+  optionalRoles: readonly MediaRole[],
+  requiresAnyRole?: readonly MediaRole[],
+): VideoModelContract => ({
+  id: `wan2.1-vace-plus:${id.replaceAll("_", "-")}`,
+  label: `Wan 2.1 VACE Plus — ${label}`,
+  providerModel: "wan2.1-vace-plus",
+  task: "video-edit",
+  promptRequired: true,
+  requiredRoles,
+  optionalRoles,
+  requiresAnyRole,
+  maxByRole: { source_video: 1, first_clip: 1, mask_image: 1, reference_image: 3 },
+  ...videoOptions({ promptExtend: true, watermark: false, operation: id as NonNullable<VideoOptions["operation"]> }),
+});
+
 export const SINGAPORE_VIDEO_MODELS: readonly VideoModelContract[] = [
-  textVideo("wan2.7-t2v-2026-04-25", "Wan 2.7 Text to Video"),
+  textVideo("wan2.7-t2v-2026-04-25", "Wan 2.7 Text to Video (April 2026 snapshot)"),
   textVideo("wan2.7-t2v-2026-06-12", "Wan 2.7 Text to Video (June 2026 snapshot)"),
-  textVideo("wan2.7-t2v", "Wan 2.7 Text to Video"),
+  textVideo("wan2.7-t2v", "Wan 2.7 Text to Video (current)"),
   textVideo("wan2.6-t2v", "Wan 2.6 Text to Video"),
   textVideo("wan2.5-t2v-preview", "Wan 2.5 Text to Video Preview"),
   textVideo("wan2.2-t2v-plus", "Wan 2.2 Text to Video Plus"),
   textVideo("wan2.1-t2v-turbo", "Wan 2.1 Text to Video Turbo"),
   textVideo("wan2.1-t2v-plus", "Wan 2.1 Text to Video Plus"),
-  imageVideo("wan2.7-i2v-2026-04-25", "Wan 2.7 Image to Video", true),
-  imageVideo("wan2.7-i2v", "Wan 2.7 Image to Video", true),
+  imageVideo("wan2.7-i2v-2026-04-25", "Wan 2.7 Image to Video (April 2026 snapshot)", true),
+  imageVideo("wan2.7-i2v", "Wan 2.7 Image to Video (current)", true),
   imageVideo("wan2.6-i2v-flash", "Wan 2.6 Image to Video Flash"),
   imageVideo("wan2.6-i2v", "Wan 2.6 Image to Video"),
   imageVideo("wan2.5-i2v-preview", "Wan 2.5 Image to Video Preview"),
@@ -128,6 +153,7 @@ export const SINGAPORE_VIDEO_MODELS: readonly VideoModelContract[] = [
     label: "Wan 2.2 Keyframe to Video Flash",
     providerModel: "wan2.2-kf2v-flash",
     task: "keyframe-to-video",
+    promptRequired: true,
     requiredRoles: ["first_frame", "last_frame"],
     optionalRoles: [],
     maxByRole: { first_frame: 1, last_frame: 1 },
@@ -138,6 +164,7 @@ export const SINGAPORE_VIDEO_MODELS: readonly VideoModelContract[] = [
     label: "Wan 2.1 Keyframe to Video Plus",
     providerModel: "wan2.1-kf2v-plus",
     task: "keyframe-to-video",
+    promptRequired: true,
     requiredRoles: ["first_frame", "last_frame"],
     optionalRoles: [],
     maxByRole: { first_frame: 1, last_frame: 1 },
@@ -153,6 +180,7 @@ export const SINGAPORE_VIDEO_MODELS: readonly VideoModelContract[] = [
     label,
     providerModel: id,
     task: "reference-to-video",
+    promptRequired: true,
     requiredRoles: [],
     optionalRoles: ["first_frame", "reference_image", "reference_video"],
     requiresAnyRole: ["reference_image", "reference_video"],
@@ -161,17 +189,22 @@ export const SINGAPORE_VIDEO_MODELS: readonly VideoModelContract[] = [
   })),
   ...[
     ["wan2.7-videoedit", "Wan 2.7 Video Edit"],
-    ["wan2.1-vace-plus", "Wan 2.1 VACE Plus"],
   ].map(([id, label]): VideoModelContract => ({
     id,
     label,
     providerModel: id,
     task: "video-edit",
+    promptRequired: true,
     requiredRoles: ["source_video"],
     optionalRoles: ["reference_image", "reference_video"],
-    maxByRole: { source_video: 1, reference_image: 10, reference_video: 5 },
+    maxByRole: { source_video: 1, reference_image: 4 },
     ...videoOptions({ duration: 5, resolution: "720P", promptExtend: true, watermark: false }),
   })),
+  vace("image_reference", "image reference", [], ["reference_image"], ["reference_image"]),
+  vace("video_repainting", "video repainting", ["source_video"], []),
+  vace("video_edit", "local video edit", ["source_video", "mask_image"], []),
+  vace("video_extension", "video extension", ["first_clip"], []),
+  vace("video_outpainting", "video outpainting", ["source_video"], []),
   ...[
     ["wan2.2-animate-move", "Wan 2.2 Animate Move", "animate-move"],
     ["wan2.2-animate-mix", "Wan 2.2 Animate Mix", "animate-mix"],
@@ -180,6 +213,7 @@ export const SINGAPORE_VIDEO_MODELS: readonly VideoModelContract[] = [
     label,
     providerModel: id,
     task: task as VideoTask,
+    promptRequired: false,
     requiredRoles: ["first_frame", "driving_video"],
     optionalRoles: ["reference_image"],
     maxByRole: { first_frame: 1, driving_video: 1, reference_image: 1 },
@@ -209,13 +243,14 @@ const invalid = (code: string, message: string): never => {
 
 const rolePriority: Record<MediaRole, number> = {
   first_frame: 1,
-  first_clip: 2,
-  last_frame: 3,
-  source_video: 4,
-  driving_video: 5,
-  driving_audio: 6,
-  reference_image: 7,
-  reference_video: 8,
+  mask_image: 2,
+  first_clip: 3,
+  last_frame: 4,
+  source_video: 5,
+  driving_video: 6,
+  driving_audio: 7,
+  reference_image: 8,
+  reference_video: 9,
 };
 
 export function preflightVideoGeneration(input: {
@@ -234,7 +269,9 @@ export function preflightVideoGeneration(input: {
   }
 
   const prompt = input.prompt.trim();
-  if (!prompt || prompt.length > 5000) invalid("invalid_prompt", "Enter a prompt from 1 to 5,000 characters.");
+  if (prompt.length > 5000 || (contract.promptRequired && !prompt)) {
+    invalid("invalid_prompt", contract.promptRequired ? "Enter a prompt from 1 to 5,000 characters." : "Enter a prompt up to 5,000 characters.");
+  }
 
   const roles = input.media.map((media) => media.role);
   const allowedRoles = new Set([...contract.requiredRoles, ...contract.optionalRoles]);

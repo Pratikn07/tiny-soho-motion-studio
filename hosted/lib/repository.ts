@@ -1,6 +1,7 @@
 import { StudioError } from "@/lib/errors";
 import type { StudioJobStatus } from "@/lib/jobs";
 import type { OwnedRecord, Owner } from "@/lib/types";
+import type { MediaRole, VideoTask } from "@/lib/video-catalog";
 
 export const projectFilter = (ownerUserId: string) => ({ owner_user_id: ownerUserId });
 
@@ -20,7 +21,7 @@ export type StudioProject = OwnedRecord & {
 
 export type StudioAsset = OwnedRecord & {
   project_id: string;
-  kind: "source-image" | "generated-video";
+  kind: "source-image" | "source-video" | "source-audio" | "generated-video";
   name: string;
   mime_type: string;
   object_path: string;
@@ -33,15 +34,23 @@ export type StudioAsset = OwnedRecord & {
   created_at: string;
 };
 
+export type StudioModelAcknowledgement = OwnedRecord & {
+  model_id: string;
+  contract_version: string;
+  acknowledgement_text_version: string;
+  billing_acknowledged_at: string;
+  created_at: string;
+};
+
 export type StudioJob = OwnedRecord & {
   project_id: string;
   idempotency_key: string;
   fingerprint: string;
   model_id: string;
-  task: "image-to-video";
+  task: VideoTask;
   prompt: string;
-  input_assets: Array<{ assetId: string; role: "start-image" | "end-image" }>;
-  options: { duration: number; resolution: string; aspectRatio: string };
+  input_assets: Array<{ assetId: string; role: string; ordinal?: number }>;
+  options: Record<string, unknown>;
   status: StudioJobStatus;
   provider_task_id: string | null;
   output_asset_id: string | null;
@@ -169,6 +178,34 @@ export class StudioRepository {
     return asset;
   }
 
+  async listModelAcknowledgements(): Promise<StudioModelAcknowledgement[]> {
+    const result = await this.client
+      .from("creative_studio_model_acknowledgements")
+      .select("*")
+      .eq("owner_user_id", this.owner.userId)
+      .order("billing_acknowledged_at", { ascending: false }) as DatabaseResult<StudioModelAcknowledgement[]>;
+    return databaseResult(result) ?? [];
+  }
+
+  async acknowledgeModel(input: { modelId: string; contractVersion: string }): Promise<StudioModelAcknowledgement> {
+    const result = await this.client
+      .from("creative_studio_model_acknowledgements")
+      .upsert({
+        owner_user_id: this.owner.userId,
+        model_id: input.modelId,
+        contract_version: input.contractVersion,
+        acknowledgement_text_version: "alibaba-billing-v1",
+        billing_acknowledged_at: new Date().toISOString(),
+      }, { onConflict: "owner_user_id,model_id,contract_version" })
+      .select("*")
+      .single() as DatabaseResult<StudioModelAcknowledgement>;
+    const acknowledgement = databaseResult(result);
+    if (!acknowledgement) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return acknowledgement;
+  }
+
   async getAsset(assetId: string): Promise<StudioAsset | null> {
     const result = await this.client
       .from("creative_studio_assets")
@@ -206,6 +243,8 @@ export class StudioRepository {
     idempotencyKey: string;
     fingerprint: string;
     modelId: string;
+    task?: VideoTask;
+    initialStatus?: StudioJobStatus;
     prompt: string;
     inputAssets: StudioJob["input_assets"];
     options: StudioJob["options"];
@@ -219,11 +258,11 @@ export class StudioRepository {
         idempotency_key: input.idempotencyKey,
         fingerprint: input.fingerprint,
         model_id: input.modelId,
-        task: "image-to-video",
+        task: input.task ?? "image-to-video",
         prompt: input.prompt,
         input_assets: input.inputAssets,
         options: input.options,
-        status: "queued",
+        status: input.initialStatus ?? "queued",
       })
       .select("*")
       .single() as DatabaseResult<StudioJob>;
@@ -232,6 +271,25 @@ export class StudioRepository {
       throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
     }
     return job;
+  }
+
+  async createJobMedia(input: { jobId: string; assetId: string; role: MediaRole; ordinal: number }) {
+    const asset = await this.getAsset(input.assetId);
+    if (!asset) throw new StudioError(400, "invalid_generation_asset", "Generation media must be owned by this Studio account.");
+    const result = await this.client
+      .from("creative_studio_job_media")
+      .insert({
+        job_id: input.jobId,
+        asset_id: input.assetId,
+        owner_user_id: this.owner.userId,
+        role: input.role,
+        ordinal: input.ordinal,
+      })
+      .select("*")
+      .single() as DatabaseResult<{ id: string }>;
+    const media = databaseResult(result);
+    if (!media) throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    return media;
   }
 
   async getJob(jobId: string): Promise<StudioJob | null> {

@@ -86,7 +86,7 @@ create table if not exists public.creative_studio_job_media (
   owner_user_id uuid not null,
   role text not null check (role in (
     'first_frame', 'last_frame', 'reference_image', 'reference_video',
-    'source_video', 'driving_video', 'driving_audio', 'first_clip'
+    'source_video', 'driving_video', 'driving_audio', 'first_clip', 'mask_image'
   )),
   ordinal integer not null check (ordinal > 0),
   created_at timestamptz not null default now(),
@@ -119,7 +119,7 @@ alter table public.creative_studio_model_acknowledgements enable row level secur
 alter table public.creative_studio_job_media enable row level security;
 alter table public.creative_studio_job_events enable row level security;
 
-create or replace function private.claim_creative_studio_job()
+create or replace function public.claim_creative_studio_job()
 returns public.creative_studio_jobs
 language plpgsql
 security definer
@@ -153,6 +153,5 @@ begin
 end;
 $$;
 
-revoke all on function private.claim_creative_studio_job() from public;
-grant usage on schema private to service_role;
-grant execute on function private.claim_creative_studio_job() to service_role;
+revoke all on function public.claim_creative_studio_job() from public, anon, authenticated;
+grant execute on function public.claim_creative_studio_job() to service_role;

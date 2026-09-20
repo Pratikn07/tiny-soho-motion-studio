@@ -38,7 +38,7 @@ The existing project, asset, and job rows remain. A follow-up migration adds:
 - `creative_studio_job_events`, append-only safe lifecycle events with no secrets, headers, signed URLs, or raw provider bodies.
 - `creative_studio_storyboards`, `creative_studio_storyboard_scenes`, `creative_studio_workflows`, `creative_studio_workflow_runs`, and `creative_studio_director_proposals` for durable hosted planning.
 
-All new tables use UUID keys compatible with existing data, `timestamptz`, RLS with no browser Data API policy, foreign keys with supporting indexes, and status-specific partial indexes for worker claims. A narrow private-schema claim function uses `FOR UPDATE SKIP LOCKED`, a fixed `search_path`, and revoked public execution. It cannot claim a non-Creative job.
+All new tables use UUID keys compatible with existing data, `timestamptz`, RLS with no browser Data API policy, foreign keys with supporting indexes, and status-specific partial indexes for worker claims. A narrow public-schema claim RPC uses `FOR UPDATE SKIP LOCKED` and a fixed `search_path`; all grants are revoked from public, anon, and authenticated roles and restored only for `service_role`, which lets the isolated server worker call it while keeping it unreachable to browsers. It cannot claim a non-Creative job.
 
 ## Provider contract boundary
 

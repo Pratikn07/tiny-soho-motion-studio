@@ -40,7 +40,7 @@ export async function GET(request: Request, context: RouteContext) {
     const job = await repository.getJob(jobId.data);
     if (!job) throw new StudioError(404, "job_not_found", "Job was not found.");
 
-    const synchronized = await synchronizeJob(job, {
+    const synchronized = job.status === "queued" || job.status === "submitting" ? job : await synchronizeJob(job, {
       checkTask: async (providerTaskId) => {
         const serverEnv = requireServerEnv();
         return checkWanTask(providerTaskId, {
