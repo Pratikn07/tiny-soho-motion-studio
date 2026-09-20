@@ -60,6 +60,21 @@ to `TINY_SOHO_VISION_ARTIFACT_TTL_SECONDS` (24 hours by default). Stop the
 sidecar and remove that exact configured cache directory to clean it up; do
 not remove a broader temporary or home directory.
 
+## Promotion into project history
+
+Sidecar artifacts are temporary and must never be submitted as durable job
+inputs by UUID alone. `POST /api/vision/promote` first reads sidecar metadata
+over the loopback-only boundary, then requires the requested kind, MIME type,
+and byte count to agree. It streams the content into the core content-addressed
+asset directory while hashing it, probes image dimensions or MP4 metadata, and
+creates a normal project-scoped asset row. SQLite receives only the core path,
+media metadata, SHA-256, and JSON lineage; it never receives media bytes.
+
+The promotion provenance identifies `vision-safe-motion`, the temporary
+artifact ID/kind/MIME/size, the promotion timestamp, and caller-supplied parent
+source/analysis IDs. The temporary sidecar ID is not a durable reference after
+its cache TTL expires.
+
 ## Typography-safe motion pipeline
 
 1. OCR returns every region, including low-confidence text, plus a dilated

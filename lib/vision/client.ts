@@ -37,6 +37,15 @@ export type VisionSidecarUnavailable = { status: "unavailable"; reason: string }
 export type VisionHealth = z.infer<typeof healthSchema> | VisionSidecarUnavailable;
 export type VisionCapabilities = z.infer<typeof sidecarCapabilitiesSchema> | VisionSidecarUnavailable;
 export type VisionArtifact = { status: "ready"; body: ReadableStream<Uint8Array>; contentType: string } | { status: "not-found" } | VisionSidecarUnavailable;
+export const visionArtifactMetadataSchema = z.object({
+  id: z.string().uuid(),
+  kind: z.string().min(1),
+  mimeType: z.string().min(1),
+  createdAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  sizeBytes: z.number().int().positive(),
+});
+export type VisionArtifactMetadata = z.infer<typeof visionArtifactMetadataSchema>;
 
 export function resolveVisionSidecarUrl(value = process.env.TINY_SOHO_VISION_SIDECAR_URL || DEFAULT_SIDECAR_URL):
   | { ok: true; url: string }
@@ -163,4 +172,9 @@ export async function getVisionArtifact(artifactId: string, configuredUrl?: stri
   } catch {
     return { status: "unavailable", reason: "Vision sidecar is not running or did not respond in time." };
   }
+}
+
+export function getVisionArtifactMetadata(artifactId: string, configuredUrl?: string): Promise<VisionArtifactMetadata | VisionSidecarUnavailable> {
+  if (!parseVisionArtifactId(artifactId)) return Promise.resolve({ status: "unavailable", reason: "Vision artifact ID is invalid." });
+  return requestSidecar(`/v1/artifacts/${artifactId}/metadata`, visionArtifactMetadataSchema, configuredUrl);
 }

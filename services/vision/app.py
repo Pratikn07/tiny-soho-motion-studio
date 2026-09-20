@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl, TypeAdapter, model_validator
 
 from .artifacts.manager import ArtifactManager, ArtifactNotFound
+from .schemas.artifacts import ArtifactMetadata
 from .adapters.base import VisionCapabilityUnavailable
 from .adapters.paddle_ocr import PaddleOcrAdapter, default_paddle_ocr_adapter
 from .adapters.qwen_layers import QwenLocalCudaBackend, QwenRemoteHttpsBackend, default_qwen_layers_backend
@@ -190,6 +191,14 @@ def artifact(artifact_id: str) -> FileResponse:
     try:
         metadata = artifact_manager.metadata(artifact_id)
         return FileResponse(artifact_manager.file_path(metadata.id), media_type=metadata.mimeType, filename=f"{metadata.id}.bin")
+    except ArtifactNotFound as error:
+        raise HTTPException(status_code=404, detail="Unknown artifact.") from error
+
+
+@app.get("/v1/artifacts/{artifact_id}/metadata", response_model=ArtifactMetadata)
+def artifact_metadata(artifact_id: str) -> ArtifactMetadata:
+    try:
+        return artifact_manager.metadata(artifact_id)
     except ArtifactNotFound as error:
         raise HTTPException(status_code=404, detail="Unknown artifact.") from error
 

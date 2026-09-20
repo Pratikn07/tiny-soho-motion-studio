@@ -67,6 +67,11 @@ layer overlaps OCR protection, and a real second OCR pass finds no protected
 text left. If any check is unavailable or fails, it returns the original plate
 with truthful warnings; it never claims inpainting is available.
 
+`GET /v1/artifacts/{id}/metadata` exposes only an artifact's opaque ID, kind,
+MIME type, size, and lifecycle timestamps. The Next.js promotion bridge uses
+it to validate a temporary artifact before streaming a durable project copy;
+it never exposes a sidecar filesystem path.
+
 ## Artifact limits
 
 `TINY_SOHO_VISION_MAX_UPLOAD_BYTES` defaults to 16 MB and limits browser image
