@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -26,6 +27,39 @@ def load_module(module_name: str):
 
 
 class ArtifactManagerTests(unittest.TestCase):
+    def test_configures_distinct_upload_image_and_video_limits(self) -> None:
+        config_module = load_module("services.vision.config")
+
+        with patch.dict("os.environ", {
+            "TINY_SOHO_VISION_MAX_UPLOAD_BYTES": "3",
+            "TINY_SOHO_VISION_MAX_IMAGE_ARTIFACT_BYTES": "7",
+            "TINY_SOHO_VISION_MAX_VIDEO_ARTIFACT_BYTES": "11",
+        }, clear=False):
+            config = config_module.VisionConfig.from_env()
+
+        self.assertEqual(config.max_upload_bytes, 3)
+        self.assertEqual(config.max_image_artifact_bytes, 7)
+        self.assertEqual(config.max_video_artifact_bytes, 11)
+
+    def test_adopts_a_local_video_output_without_using_the_upload_limit(self) -> None:
+        manager_module = load_module("services.vision.artifacts.manager")
+        with tempfile.TemporaryDirectory() as directory:
+            manager = manager_module.ArtifactManager(
+                Path(directory),
+                ttl_seconds=60,
+                max_upload_bytes=3,
+                max_image_artifact_bytes=7,
+                max_video_artifact_bytes=11,
+            )
+            temporary_output = manager.create_temp_output_path(suffix=".mp4")
+            temporary_output.write_bytes(b"video-bytes")
+
+            metadata = manager.adopt_file(kind="composed-video", mime_type="video/mp4", source_path=temporary_output)
+
+            self.assertEqual(metadata.sizeBytes, len(b"video-bytes"))
+            self.assertFalse(temporary_output.exists())
+            self.assertTrue(manager.file_path(metadata.id).is_file())
+
     def test_writes_an_opaque_artifact_and_returns_only_metadata(self) -> None:
         manager_module = load_module("services.vision.artifacts.manager")
         with tempfile.TemporaryDirectory() as directory:
@@ -49,6 +83,8 @@ class ArtifactManagerTests(unittest.TestCase):
                 manager.read_bytes("../../etc/passwd")
             with self.assertRaises(manager_module.ArtifactTooLarge):
                 manager.write_bytes(kind="mask", mime_type="image/png", data=b"four")
+            with self.assertRaises(manager_module.ArtifactMimeTypeError):
+                manager.write_bytes(kind="video", mime_type="video/mp4", data=b"mp4")
 
     def test_expires_artifacts_without_scanning_user_paths(self) -> None:
         manager_module = load_module("services.vision.artifacts.manager")

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
-import tempfile
 from pathlib import Path
 
 from PIL import Image
@@ -79,22 +77,26 @@ def compose_typography_artifacts(
         overlay_height=overlay_height,
     )
 
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".composition-", suffix=".mp4", dir=manager.root)
-    os.close(descriptor)
-    Path(temporary_name).unlink(missing_ok=True)
+    temporary_output = manager.create_temp_output_path(suffix=".mp4")
     try:
-        command = build_overlay_command(video_path, overlay_path, Path(temporary_name), ffmpeg_path=ffmpeg_path)
+        command = build_overlay_command(video_path, overlay_path, temporary_output, ffmpeg_path=ffmpeg_path)
         try:
             subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=120)
         except FileNotFoundError as error:
             raise CompositionUnavailable("FFmpeg or FFprobe is not available for local composition.") from error
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
             raise CompositionError("Local typography composition failed.") from error
-        output = Path(temporary_name).read_bytes()
-        metadata = manager.write_bytes(kind="composed-video", mime_type="video/mp4", data=output)
+        output_width, output_height = video_dimensions(temporary_output, ffprobe_path=ffprobe_path)
+        validate_overlay_dimensions(
+            video_width=output_width,
+            video_height=output_height,
+            overlay_width=overlay_width,
+            overlay_height=overlay_height,
+        )
+        metadata = manager.adopt_file(kind="composed-video", mime_type="video/mp4", source_path=temporary_output)
         return CompositionArtifact(artifactId=metadata.id)
     finally:
-        Path(temporary_name).unlink(missing_ok=True)
+        temporary_output.unlink(missing_ok=True)
 
 
 def image_dimensions(path: Path) -> tuple[int, int]:

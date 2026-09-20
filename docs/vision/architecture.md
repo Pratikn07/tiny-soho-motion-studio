@@ -41,9 +41,13 @@ the package pin is recorded but no checkpoint has been selected or downloaded.
 
 ## Local artifacts and privacy
 
-Image uploads are fully decoded with Pillow, limited by bytes and decoded
-pixel count, then written only through the `ArtifactManager`. Each file has a
-random UUID, metadata, TTL, atomic write, and owner-only cache directory.
+Image uploads are fully decoded with Pillow, limited by a 16 MB default upload
+limit and decoded pixel count, then written only through the `ArtifactManager`.
+Generated image artifacts have a separate 64 MB default limit. Locally composed
+MP4 output has a 1 GB default limit and is adopted from a sidecar-managed
+temporary file using atomic rename (or a bounded streaming copy when needed),
+never a whole-file Python buffer. Each file has a random UUID, metadata, TTL,
+atomic write, and owner-only cache directory.
 Browser paths, filenames, provider URLs, and credentials are not artifact
 identifiers. Artifact reads accept only canonical UUIDs.
 
@@ -63,8 +67,11 @@ not remove a broader temporary or home directory.
    reduces or rejects risky subject movement using conservative swept bounds.
 4. Overlay generation copies original image pixels in protected polygons into
    a full-canvas transparent PNG.
-5. A MotionPackage records source and overlay IDs, the safe plan, and explicit
-   `avoidTextGeneration`/`preserveComposition` hints.
+5. A MotionPackage records source and overlay IDs, a generation-plate mode,
+   whether text was actually removed, protected-region provenance, the safe
+   plan, and explicit `avoidTextGeneration`/`preserveComposition` hints. An
+   original flattened slide is explicitly `original-with-protected-text`, never
+   described as a clean plate, and receives a conservative motion budget.
 6. FFmpeg can overlay the trusted PNG above a local MP4 while retaining source
    audio only when it exists. It accepts only owned artifacts and uses argument
    arrays, never a shell command.

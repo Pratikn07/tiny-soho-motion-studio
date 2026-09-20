@@ -133,7 +133,9 @@ vision_config = VisionConfig.from_env()
 artifact_manager = ArtifactManager(
     vision_config.cache_dir,
     ttl_seconds=vision_config.artifact_ttl_seconds,
-    max_bytes=vision_config.max_upload_bytes,
+    max_upload_bytes=vision_config.max_upload_bytes,
+    max_image_artifact_bytes=vision_config.max_image_artifact_bytes,
+    max_video_artifact_bytes=vision_config.max_video_artifact_bytes,
 )
 runtime_registry = RuntimeRegistry.default()
 inference_locks = InferenceLocks()

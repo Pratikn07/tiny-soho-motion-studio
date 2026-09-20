@@ -21,6 +21,8 @@ class VisionConfig:
     cache_dir: Path
     artifact_ttl_seconds: int
     max_upload_bytes: int
+    max_image_artifact_bytes: int
+    max_video_artifact_bytes: int
     max_image_pixels: int
     paddle_ocr_enabled: bool
     sam2_enabled: bool
@@ -37,6 +39,8 @@ class VisionConfig:
             cache_dir=cache_dir.expanduser(),
             artifact_ttl_seconds=_positive_int(os.environ.get("TINY_SOHO_VISION_ARTIFACT_TTL_SECONDS", "86400"), "TINY_SOHO_VISION_ARTIFACT_TTL_SECONDS"),
             max_upload_bytes=_positive_int(os.environ.get("TINY_SOHO_VISION_MAX_UPLOAD_BYTES", str(16 * 1024 * 1024)), "TINY_SOHO_VISION_MAX_UPLOAD_BYTES"),
+            max_image_artifact_bytes=_positive_int(os.environ.get("TINY_SOHO_VISION_MAX_IMAGE_ARTIFACT_BYTES", str(64 * 1024 * 1024)), "TINY_SOHO_VISION_MAX_IMAGE_ARTIFACT_BYTES"),
+            max_video_artifact_bytes=_positive_int(os.environ.get("TINY_SOHO_VISION_MAX_VIDEO_ARTIFACT_BYTES", str(1024 * 1024 * 1024)), "TINY_SOHO_VISION_MAX_VIDEO_ARTIFACT_BYTES"),
             max_image_pixels=_positive_int(os.environ.get("TINY_SOHO_VISION_MAX_IMAGE_PIXELS", "40000000"), "TINY_SOHO_VISION_MAX_IMAGE_PIXELS"),
             paddle_ocr_enabled=os.environ.get("TINY_SOHO_PADDLE_OCR_ENABLED") == "1",
             sam2_enabled=os.environ.get("TINY_SOHO_SAM2_ENABLED") == "1",

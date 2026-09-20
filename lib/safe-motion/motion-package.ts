@@ -12,18 +12,35 @@ export const typographyOverlaySchema = z.object({
 
 export type TypographyOverlay = z.infer<typeof typographyOverlaySchema>;
 
+export const generationPlateSchema = z.object({
+  artifactId: visionArtifactIdSchema,
+  sourceArtifactId: visionArtifactIdSchema,
+  mode: z.enum(["original-with-protected-text", "layers-text-removed", "inpainted-text-removed"]),
+  textRemoved: z.boolean(),
+  protectedRegionIds: z.array(z.string().min(1)),
+}).superRefine((plate, context) => {
+  const requiresTextRemoval = plate.mode !== "original-with-protected-text";
+  if (plate.textRemoved !== requiresTextRemoval) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Generation plate mode and textRemoved must agree." });
+  }
+});
+
+export type GenerationPlateDescriptor = z.infer<typeof generationPlateSchema>;
+
 export type MotionPackage = {
   version: "1";
   sourceBackgroundArtifactId: string;
   sourceImage: { artifactId: string };
-  generationPlate: { artifactId: string };
+  generationPlate: GenerationPlateDescriptor;
   typographyOverlay: TypographyOverlay;
   plan: SafeMotionPlan;
   generationHints: { avoidTextGeneration: true; preserveComposition: true };
   provenance: { overlayMode: "original-region-patch"; protectedRegionIds: string[] };
 };
 
-export type MotionPackageInput = Pick<MotionPackage, "sourceBackgroundArtifactId" | "typographyOverlay" | "plan">;
+export type MotionPackageInput = Pick<MotionPackage, "sourceBackgroundArtifactId" | "typographyOverlay" | "plan"> & {
+  generationPlate?: GenerationPlateDescriptor;
+};
 
 export function createMotionPackage(input: MotionPackageInput): MotionPackage {
   const typographyOverlay = typographyOverlaySchema.parse(input.typographyOverlay);
@@ -31,14 +48,40 @@ export function createMotionPackage(input: MotionPackageInput): MotionPackage {
     throw new Error("A rejected motion plan cannot become a generation package.");
   }
   const sourceBackgroundArtifactId = visionArtifactIdSchema.parse(input.sourceBackgroundArtifactId);
+  const generationPlate = generationPlateSchema.parse(input.generationPlate ?? {
+    artifactId: sourceBackgroundArtifactId,
+    sourceArtifactId: sourceBackgroundArtifactId,
+    mode: "original-with-protected-text",
+    textRemoved: false,
+    protectedRegionIds: typographyOverlay.protectedRegionIds,
+  });
+  if (generationPlate.sourceArtifactId !== sourceBackgroundArtifactId) {
+    throw new Error("Generation plate provenance must point to the supplied source artifact.");
+  }
+  if (!generationPlate.textRemoved) {
+    if (!sameRegionIds(generationPlate.protectedRegionIds, typographyOverlay.protectedRegionIds)) {
+      throw new Error("A text-retaining generation plate requires a trusted overlay for every protected region.");
+    }
+    if (vectorMagnitude(input.plan.final.subject) > 0.25 || vectorMagnitude(input.plan.final.camera) > 0.1) {
+      throw new Error("A generation plate with protected text requires conservative motion.");
+    }
+  }
   return {
     version: "1",
     sourceBackgroundArtifactId,
     sourceImage: { artifactId: sourceBackgroundArtifactId },
-    generationPlate: { artifactId: sourceBackgroundArtifactId },
+    generationPlate,
     typographyOverlay,
     plan: input.plan,
     generationHints: { avoidTextGeneration: true, preserveComposition: true },
     provenance: { overlayMode: typographyOverlay.mode, protectedRegionIds: typographyOverlay.protectedRegionIds },
   };
+}
+
+function sameRegionIds(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((id) => right.includes(id));
+}
+
+function vectorMagnitude(vector: { x: number; y: number }): number {
+  return Math.hypot(vector.x, vector.y);
 }

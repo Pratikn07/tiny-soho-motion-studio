@@ -47,7 +47,18 @@ CUDA runtime; the sidecar never fetches weights.
 `POST /v1/compose` accepts only owned MP4 and PNG artifact IDs. It resolves
 their server-side paths, validates their dimensions with FFprobe, then invokes
 FFmpeg with an argument array; it never accepts browser filesystem paths or a
-shell command.
+shell command. Generated MP4s are adopted atomically from sidecar-owned
+temporary files, so composition does not load the completed video into Python
+memory.
+
+## Artifact limits
+
+`TINY_SOHO_VISION_MAX_UPLOAD_BYTES` defaults to 16 MB and limits browser image
+uploads. `TINY_SOHO_VISION_MAX_IMAGE_ARTIFACT_BYTES` defaults to 64 MB for
+masks, overlays, and RGBA layers. `TINY_SOHO_VISION_MAX_VIDEO_ARTIFACT_BYTES`
+defaults to 1 GB for locally composed MP4 output. The sidecar validates image
+uploads before persistence and accepts video output only from its own private
+temporary directory; browser requests never choose a filesystem path.
 
 For the full artifact lifecycle, optional-runtime policy, and typography-safe
 motion flow, see [`docs/vision/architecture.md`](../../docs/vision/architecture.md).
