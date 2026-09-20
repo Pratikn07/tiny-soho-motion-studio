@@ -10,4 +10,10 @@ describe("Creative Studio full-video catalog migration", () => {
     expect(baseMigration).toMatch(/mime_type text not null check \(mime_type in \('image\/jpeg', 'image\/png', 'image\/webp', 'video\/mp4'\)\)/);
     expect(catalogMigration).toMatch(/pg_get_constraintdef\(oid\) like '%mime_type%'/);
   });
+
+  it("establishes the dedicated private bucket when the base bucket is absent", () => {
+    expect(catalogMigration).toMatch(/insert into storage\.buckets/);
+    expect(catalogMigration).toMatch(/'creative-studio',\s*'creative-studio',\s*false,\s*262144000/is);
+    expect(catalogMigration).toMatch(/on conflict \(id\) do update\s+set/is);
+  });
 });

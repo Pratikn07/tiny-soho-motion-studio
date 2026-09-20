@@ -61,13 +61,23 @@ alter table public.creative_studio_jobs
 alter table storage.buckets
   add column if not exists allowed_mime_types text[];
 
-update storage.buckets
-set allowed_mime_types = array[
-  'image/jpeg', 'image/png', 'image/webp',
-  'video/mp4', 'video/quicktime', 'video/webm',
-  'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4'
-]::text[]
-where id = 'creative-studio';
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'creative-studio',
+  'creative-studio',
+  false,
+  262144000,
+  array[
+    'image/jpeg', 'image/png', 'image/webp',
+    'video/mp4', 'video/quicktime', 'video/webm',
+    'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4'
+  ]::text[]
+)
+on conflict (id) do update
+set name = excluded.name,
+    public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
 
 create table if not exists public.creative_studio_model_acknowledgements (
   id uuid primary key default gen_random_uuid(),
