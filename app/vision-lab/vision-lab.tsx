@@ -13,7 +13,7 @@ type SegmentationResult = { masks: { artifactId: string; boundingBox: { x: numbe
 type OverlayResult = { artifactId: string; sourceArtifactId: string; width: number; height: number; protectedRegionIds: string[]; paddingPixels: number; mode: "original-region-patch" };
 type NormalizedPoint = { x: number; y: number };
 type LayerResult = { layers: { id: string; artifactId: string; zIndex: number; alphaCoverage: number }[]; diagnostics: unknown; options: unknown };
-type GenerationPlateResult = { artifactId: string; sourceArtifactId: string; typographyOverlayArtifactId: string; mode: "original-with-protected-text" | "layers-text-removed" | "inpainted-text-removed"; textRemoved: boolean; protectedRegionIds: string[]; width: number; height: number; warnings: string[]; provenance: unknown };
+type GenerationPlateResult = { artifactId: string; sourceArtifactId: string; typographyOverlayArtifactId: string; mode: "original-with-protected-text" | "layers-text-removed"; textRemoved: boolean; protectedRegionIds: string[]; width: number; height: number; warnings: string[]; provenance: unknown };
 
 const stateLabel: Record<VisionLabState, string> = {
   idle: "Choose a local image to begin.",

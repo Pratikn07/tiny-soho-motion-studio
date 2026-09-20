@@ -24,7 +24,7 @@ export const cameraMotionSchema = motionVectorSchema.extend({
 export const safeMotionInputSchema = z.object({
   sourceArtifactId: z.string().min(1).optional(),
   plateArtifactId: z.string().min(1).optional(),
-  plateMode: z.enum(["original-with-protected-text", "layers-text-removed", "inpainted-text-removed"]).default("original-with-protected-text"),
+  plateMode: z.enum(["original-with-protected-text", "layers-text-removed"]).default("original-with-protected-text"),
   subject: z.object({ id: z.string().min(1), maskArtifactId: z.string().min(1).optional(), bounds: normalizedBoundsSchema }),
   typography: z.array(z.object({ id: z.string().min(1), bounds: normalizedBoundsSchema })),
   segmentationBounds: z.array(normalizedBoundsSchema).default([]),

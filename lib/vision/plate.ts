@@ -5,7 +5,6 @@ import { visionArtifactIdSchema } from "./artifacts";
 export const generationPlateModeSchema = z.enum([
   "original-with-protected-text",
   "layers-text-removed",
-  "inpainted-text-removed",
 ]);
 
 export const generationPlateBuildRequestSchema = z.object({

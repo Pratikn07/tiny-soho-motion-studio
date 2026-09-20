@@ -15,7 +15,7 @@ export type TypographyOverlay = z.infer<typeof typographyOverlaySchema>;
 export const generationPlateSchema = z.object({
   artifactId: visionArtifactIdSchema,
   sourceArtifactId: visionArtifactIdSchema,
-  mode: z.enum(["original-with-protected-text", "layers-text-removed", "inpainted-text-removed"]),
+  mode: z.enum(["original-with-protected-text", "layers-text-removed"]),
   textRemoved: z.boolean(),
   protectedRegionIds: z.array(z.string().min(1)),
 }).superRefine((plate, context) => {
@@ -57,6 +57,9 @@ export function createMotionPackage(input: MotionPackageInput): MotionPackage {
   });
   if (generationPlate.sourceArtifactId !== sourceBackgroundArtifactId) {
     throw new Error("Generation plate provenance must point to the supplied source artifact.");
+  }
+  if (input.plan.sourceArtifactId !== sourceBackgroundArtifactId || input.plan.plateArtifactId !== generationPlate.artifactId) {
+    throw new Error("Safe Motion plan must identify the exact source and generation plate used by this package.");
   }
   if (input.plan.plateMode !== generationPlate.mode) {
     throw new Error("Safe Motion plan and generation plate mode must agree.");
