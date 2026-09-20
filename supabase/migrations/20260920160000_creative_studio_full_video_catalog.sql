@@ -58,9 +58,6 @@ alter table public.creative_studio_jobs
   add constraint creative_studio_jobs_prompt_check
     check (char_length(prompt) <= 5000);
 
-alter table storage.buckets
-  add column if not exists allowed_mime_types text[];
-
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'creative-studio',

@@ -12,6 +12,7 @@ describe("Creative Studio full-video catalog migration", () => {
   });
 
   it("establishes the dedicated private bucket when the base bucket is absent", () => {
+    expect(catalogMigration).not.toMatch(/alter table storage\.buckets/i);
     expect(catalogMigration).toMatch(/insert into storage\.buckets/);
     expect(catalogMigration).toMatch(/'creative-studio',\s*'creative-studio',\s*false,\s*262144000/is);
     expect(catalogMigration).toMatch(/on conflict \(id\) do update\s+set/is);
