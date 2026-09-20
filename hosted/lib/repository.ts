@@ -1,0 +1,172 @@
+import { StudioError } from "@/lib/errors";
+import type { OwnedRecord, Owner } from "@/lib/types";
+
+export const projectFilter = (ownerUserId: string) => ({ owner_user_id: ownerUserId });
+
+export const visibleAsset = <T extends OwnedRecord>(
+  asset: T | null,
+  ownerUserId: string,
+) => (asset?.owner_user_id === ownerUserId ? asset : null);
+
+export type StudioProject = OwnedRecord & {
+  name: string;
+  canvas: string;
+  free_quota_models: string[];
+  free_quota_confirmed_at: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StudioAsset = OwnedRecord & {
+  project_id: string;
+  kind: "source-image" | "generated-video";
+  name: string;
+  mime_type: string;
+  object_path: string;
+  byte_size: number;
+  width: number | null;
+  height: number | null;
+  duration_seconds: number | null;
+  sha256: string;
+  provenance: Record<string, unknown>;
+  created_at: string;
+};
+
+type DatabaseResult<T> = {
+  data: T | null;
+  error: { message: string } | null;
+};
+
+type StudioDataClient = {
+  from: (table: string) => any;
+};
+
+const databaseResult = <T>(result: DatabaseResult<T>) => {
+  if (result.error) {
+    throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+  }
+  return result.data;
+};
+
+export class StudioRepository {
+  constructor(
+    private readonly client: StudioDataClient,
+    private readonly owner: Owner,
+  ) {}
+
+  async getProject(projectId: string): Promise<StudioProject | null> {
+    const result = await this.client
+      .from("creative_studio_projects")
+      .select("*")
+      .eq("id", projectId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioProject>;
+
+    return databaseResult(result);
+  }
+
+  async listProjects(): Promise<StudioProject[]> {
+    const result = await this.client
+      .from("creative_studio_projects")
+      .select("*")
+      .eq("owner_user_id", this.owner.userId)
+      .order("updated_at", { ascending: false }) as DatabaseResult<StudioProject[]>;
+    return databaseResult(result) ?? [];
+  }
+
+  async createProject(input: { name: string; canvas: string }): Promise<StudioProject> {
+    const result = await this.client
+      .from("creative_studio_projects")
+      .insert({
+        owner_user_id: this.owner.userId,
+        name: input.name,
+        canvas: input.canvas,
+      })
+      .select("*")
+      .single() as DatabaseResult<StudioProject>;
+    const project = databaseResult(result);
+    if (!project) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return project;
+  }
+
+  async updateProjectQuota(input: {
+    projectId: string;
+    freeQuotaModels: string[];
+    freeQuotaConfirmedAt: Record<string, string>;
+  }): Promise<StudioProject | null> {
+    const result = await this.client
+      .from("creative_studio_projects")
+      .update({
+        free_quota_models: input.freeQuotaModels,
+        free_quota_confirmed_at: input.freeQuotaConfirmedAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.projectId)
+      .eq("owner_user_id", this.owner.userId)
+      .select("*")
+      .maybeSingle() as DatabaseResult<StudioProject>;
+    return databaseResult(result);
+  }
+
+  async createAsset(input: {
+    id: string;
+    projectId: string;
+    kind: StudioAsset["kind"];
+    name: string;
+    mimeType: string;
+    objectPath: string;
+    byteSize: number;
+    width: number | null;
+    height: number | null;
+    durationSeconds?: number | null;
+    sha256: string;
+    provenance?: Record<string, unknown>;
+  }): Promise<StudioAsset> {
+    const result = await this.client
+      .from("creative_studio_assets")
+      .insert({
+        id: input.id,
+        project_id: input.projectId,
+        owner_user_id: this.owner.userId,
+        kind: input.kind,
+        name: input.name,
+        mime_type: input.mimeType,
+        object_path: input.objectPath,
+        byte_size: input.byteSize,
+        width: input.width,
+        height: input.height,
+        duration_seconds: input.durationSeconds ?? null,
+        sha256: input.sha256,
+        provenance: input.provenance ?? {},
+      })
+      .select("*")
+      .single() as DatabaseResult<StudioAsset>;
+    const asset = databaseResult(result);
+    if (!asset) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return asset;
+  }
+
+  async getAsset(assetId: string): Promise<StudioAsset | null> {
+    const result = await this.client
+      .from("creative_studio_assets")
+      .select("*")
+      .eq("id", assetId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioAsset>;
+    return databaseResult(result);
+  }
+
+  async listAssets(projectId: string): Promise<StudioAsset[]> {
+    const result = await this.client
+      .from("creative_studio_assets")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("owner_user_id", this.owner.userId)
+      .order("created_at", { ascending: false }) as DatabaseResult<StudioAsset[]>;
+    return databaseResult(result) ?? [];
+  }
+}
