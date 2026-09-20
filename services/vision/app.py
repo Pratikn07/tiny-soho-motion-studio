@@ -27,6 +27,7 @@ from .schemas.segmentation import SegmentationMask, SegmentationPrompts, Segment
 from .schemas.layers import LayerArtifact, LayerOptions, LayerResult
 from .layers import recomposition_diagnostics
 from .overlay import OverlayArtifact, create_typography_overlay
+from .plate import GenerationPlateBuildRequest, GenerationPlateResult, build_generation_plate
 from .composition import CompositionArtifact, CompositionError, CompositionRequest, CompositionUnavailable, compose_typography_artifacts
 from .typography import create_typography_safety_mask
 
@@ -332,6 +333,35 @@ async def overlay(image: UploadFile = File(...), regions: str = Form(...)) -> Ov
         protectedRegionIds=result.protectedRegionIds,
         paddingPixels=result.paddingPixels,
     )
+
+
+@app.post("/v1/plates", response_model=GenerationPlateResult)
+async def generation_plate(request: GenerationPlateBuildRequest) -> GenerationPlateResult:
+    recognizer = _generation_plate_second_pass if isinstance(ocr_adapter, PaddleOcrAdapter) else None
+    try:
+        return await build_generation_plate(
+            artifact_manager,
+            request,
+            max_pixels=vision_config.max_image_pixels,
+            second_pass_recognizer=recognizer,
+        )
+    except VisionCapabilityUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except (ArtifactNotFound, ImageInputError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+async def _generation_plate_second_pass(image):
+    """Run plate verification through the same serialized, observable OCR runtime."""
+    try:
+        async with inference_locks.get("image.ocr"):
+            runtime_registry.transition("image.ocr", state="loading")
+            result = await ocr_adapter.recognize(image)
+    except VisionCapabilityUnavailable as error:
+        runtime_registry.transition("image.ocr", state="error", reason=str(error))
+        raise
+    runtime_registry.transition("image.ocr", state="ready", reason=None)
+    return result
 
 
 @app.post("/v1/compose", response_model=CompositionArtifact)

@@ -7,6 +7,8 @@ describe("motion package bridge", () => {
     const { buildWanCompatiblePrompt } = await import("@/lib/safe-motion/prompt");
     const { MockVisionGenerationBridge } = await import("@/lib/safe-motion/bridge");
     const plan = createSafeMotionPlan({
+      sourceArtifactId: "c9789826-61ce-4ffd-9934-827ce92b6bd5",
+      plateArtifactId: "c9789826-61ce-4ffd-9934-827ce92b6bd5",
       subject: { id: "product", bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } },
       typography: [],
       requested: { subject: { x: 0.1, y: 0 }, camera: { x: 0, y: 0 } },
@@ -43,6 +45,8 @@ describe("motion package bridge", () => {
     const { createSafeMotionPlan } = await import("@/lib/safe-motion/planner");
     const { createMotionPackage } = await import("@/lib/safe-motion/motion-package");
     const plan = createSafeMotionPlan({
+      sourceArtifactId: "c9789826-61ce-4ffd-9934-827ce92b6bd5",
+      plateArtifactId: "c9789826-61ce-4ffd-9934-827ce92b6bd5",
       subject: { id: "product", bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } },
       typography: [],
       requested: { subject: { x: 0.4, y: 0 }, camera: { x: 0, y: 0 } },
@@ -59,5 +63,60 @@ describe("motion package bridge", () => {
       },
       plan,
     })).toThrow(/conservative/i);
+  });
+
+  it("accepts a verified text-removed plate only when its plan records the same plate mode", async () => {
+    const { createSafeMotionPlan } = await import("@/lib/safe-motion/planner");
+    const { createMotionPackage } = await import("@/lib/safe-motion/motion-package");
+    const plan = createSafeMotionPlan({
+      sourceArtifactId: "c9789826-61ce-4ffd-9934-827ce92b6bd5",
+      plateArtifactId: "a9789826-61ce-4ffd-9934-827ce92b6bd5",
+      plateMode: "layers-text-removed",
+      subject: { id: "product", bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } },
+      typography: [],
+      requested: { subject: { x: 0.12, y: 0 }, camera: { x: 0, y: 0, type: "subtle-subject" } },
+    });
+    const pkg = createMotionPackage({
+      sourceBackgroundArtifactId: "c9789826-61ce-4ffd-9934-827ce92b6bd5",
+      typographyOverlay: {
+        artifactId: "8478f04b-53d8-465d-a52b-000403b7d6a5",
+        width: 100,
+        height: 80,
+        protectedRegionIds: ["headline"],
+        mode: "original-region-patch",
+      },
+      generationPlate: {
+        artifactId: "a9789826-61ce-4ffd-9934-827ce92b6bd5",
+        sourceArtifactId: "c9789826-61ce-4ffd-9934-827ce92b6bd5",
+        mode: "layers-text-removed",
+        textRemoved: true,
+        protectedRegionIds: ["headline"],
+      },
+      plan,
+    });
+
+    expect(pkg.version).toBe("2");
+    expect(pkg.generationPlate.textRemoved).toBe(true);
+    expect(pkg.provenance.plateMode).toBe("layers-text-removed");
+  });
+
+  it("rejects a package whose plan names a different generation plate", async () => {
+    const { createSafeMotionPlan } = await import("@/lib/safe-motion/planner");
+    const { createMotionPackage } = await import("@/lib/safe-motion/motion-package");
+    const plan = createSafeMotionPlan({
+      sourceArtifactId: "c9789826-61ce-4ffd-9934-827ce92b6bd5",
+      plateArtifactId: "a9789826-61ce-4ffd-9934-827ce92b6bd5",
+      plateMode: "layers-text-removed",
+      subject: { id: "product", bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } },
+      typography: [],
+      requested: { subject: { x: 0, y: 0 }, camera: { x: 0, y: 0 } },
+    });
+
+    expect(() => createMotionPackage({
+      sourceBackgroundArtifactId: "c9789826-61ce-4ffd-9934-827ce92b6bd5",
+      typographyOverlay: { artifactId: "8478f04b-53d8-465d-a52b-000403b7d6a5", width: 100, height: 80, protectedRegionIds: ["headline"], mode: "original-region-patch" },
+      generationPlate: { artifactId: "b9789826-61ce-4ffd-9934-827ce92b6bd5", sourceArtifactId: "c9789826-61ce-4ffd-9934-827ce92b6bd5", mode: "layers-text-removed", textRemoved: true, protectedRegionIds: ["headline"] },
+      plan,
+    })).toThrow(/exact source and generation plate/i);
   });
 });

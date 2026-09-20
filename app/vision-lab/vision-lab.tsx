@@ -5,14 +5,15 @@ import { createMotionPackage } from "@/lib/safe-motion/motion-package";
 import { createSafeMotionPlan } from "@/lib/safe-motion/planner";
 import { MockVisionGenerationBridge } from "@/lib/safe-motion/bridge";
 import type { SafeMotionPlan } from "@/lib/safe-motion/schema";
+import type { OcrRegion } from "@/lib/vision/contracts";
 import { planJson, stateFromResponse, type VisionLabState } from "./model";
 
-type OcrRegion = { id: string; text: string; boundingBox: { x: number; y: number; width: number; height: number } };
 type OcrResult = { image: { width: number; height: number }; regions: OcrRegion[]; typographySafetyMaskArtifactId: string | null };
 type SegmentationResult = { masks: { artifactId: string; boundingBox: { x: number; y: number; width: number; height: number } }[] };
 type OverlayResult = { artifactId: string; sourceArtifactId: string; width: number; height: number; protectedRegionIds: string[]; paddingPixels: number; mode: "original-region-patch" };
 type NormalizedPoint = { x: number; y: number };
 type LayerResult = { layers: { id: string; artifactId: string; zIndex: number; alphaCoverage: number }[]; diagnostics: unknown; options: unknown };
+type GenerationPlateResult = { artifactId: string; sourceArtifactId: string; typographyOverlayArtifactId: string; mode: "original-with-protected-text" | "layers-text-removed"; textRemoved: boolean; protectedRegionIds: string[]; width: number; height: number; warnings: string[]; provenance: unknown };
 
 const stateLabel: Record<VisionLabState, string> = {
   idle: "Choose a local image to begin.",
@@ -38,6 +39,7 @@ export default function VisionLab() {
   const [segmentation, setSegmentation] = useState<SegmentationResult | null>(null);
   const [overlay, setOverlay] = useState<OverlayResult | null>(null);
   const [layers, setLayers] = useState<LayerResult | null>(null);
+  const [plate, setPlate] = useState<GenerationPlateResult | null>(null);
   const [plan, setPlan] = useState<SafeMotionPlan | null>(null);
   const [draft, setDraft] = useState<unknown>(null);
   const [prompt, setPrompt] = useState("Separate the primary subject into local RGBA layers.");
@@ -48,6 +50,7 @@ export default function VisionLab() {
   const [boxStart, setBoxStart] = useState<NormalizedPoint | null>(null);
   const [layerCount, setLayerCount] = useState(4);
   const [layerSeed, setLayerSeed] = useState("17");
+  const [plateMode, setPlateMode] = useState<GenerationPlateResult["mode"]>("original-with-protected-text");
   const [subjectDx, setSubjectDx] = useState(0.08);
   const [subjectDy, setSubjectDy] = useState(0);
   const [cameraX, setCameraX] = useState(0);
@@ -74,7 +77,8 @@ export default function VisionLab() {
     segmentation?.masks[0]?.artifactId,
     overlay?.sourceArtifactId,
     overlay?.artifactId,
-  ].filter((value): value is string => Boolean(value)), [ocr, segmentation, overlay]);
+    plate?.artifactId,
+  ].filter((value): value is string => Boolean(value)), [ocr, segmentation, overlay, plate]);
 
   async function runForm(path: string, body: FormData) {
     setState("processing");
@@ -121,22 +125,53 @@ export default function VisionLab() {
     if (result) setOverlay(result);
   }
 
+  async function runGenerationPlate() {
+    if (!overlay || !ocr) return;
+    setState("processing");
+    setNotice("Building a local generation plate and validating typography protection…");
+    const { response, body: result } = await fetch("/api/vision/plates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sourceArtifactId: overlay.sourceArtifactId,
+        typographyOverlayArtifactId: overlay.artifactId,
+        regions: ocr.regions,
+        mode: plateMode,
+        layerArtifactIds: layers?.layers.map((layer) => layer.artifactId) || [],
+      }),
+    }).then(responseBody).catch(() => ({ response: new Response(null, { status: 503 }), body: { error: "Local sidecar did not respond." } }));
+    const nextState = stateFromResponse(response.status);
+    setState(nextState);
+    setNotice(nextState === "success" ? "Generation plate is ready for local Safe Motion planning." : String(result.error || stateLabel[nextState]));
+    if (nextState === "success") setPlate(result as GenerationPlateResult);
+  }
+
   function buildSafePlan() {
     const subject = segmentation?.masks[0]?.boundingBox || { x: 0.2, y: 0.35, width: 0.2, height: 0.2 };
     const nextPlan = createSafeMotionPlan({
+      sourceArtifactId: plate?.sourceArtifactId || overlay?.sourceArtifactId,
+      plateArtifactId: plate?.artifactId || overlay?.sourceArtifactId,
+      plateMode: plate?.mode || "original-with-protected-text",
       subject: { id: "primary-subject", bounds: subject },
       typography: regions.map((region) => ({ id: region.id, bounds: region.boundingBox })),
       requested: { subject: { x: subjectDx, y: subjectDy }, camera: { x: cameraX, y: cameraY } },
     });
     setPlan(nextPlan);
-    if (overlay && ocr && nextPlan.final) {
+    if (overlay && plate && nextPlan.final) {
       const pkg = createMotionPackage({
         sourceBackgroundArtifactId: overlay.sourceArtifactId,
         typographyOverlay: overlay,
+        generationPlate: {
+          artifactId: plate.artifactId,
+          sourceArtifactId: plate.sourceArtifactId,
+          mode: plate.mode,
+          textRemoved: plate.textRemoved,
+          protectedRegionIds: plate.protectedRegionIds,
+        },
         plan: nextPlan,
       });
       setDraft(new MockVisionGenerationBridge().prepare(pkg));
-    }
+    } else setDraft(null);
   }
 
   function normalizedPointer(event: PointerEvent<HTMLImageElement>): NormalizedPoint {
@@ -175,11 +210,13 @@ export default function VisionLab() {
       <label>Subject vertical motion ({subjectDy.toFixed(3)})<input type="range" min="-0.2" max="0.2" step="0.005" value={subjectDy} onChange={(event) => setSubjectDy(Number(event.target.value))} /></label>
       <label>Camera horizontal motion ({cameraX.toFixed(3)})<input type="range" min="-0.1" max="0.1" step="0.005" value={cameraX} onChange={(event) => setCameraX(Number(event.target.value))} /></label>
       <label>Camera vertical motion ({cameraY.toFixed(3)})<input type="range" min="-0.1" max="0.1" step="0.005" value={cameraY} onChange={(event) => setCameraY(Number(event.target.value))} /></label>
-      <button type="button" className="batch" disabled={!canInspect} onClick={() => void runOcr()}>Run OCR contract</button>
-      <button type="button" className="batch" disabled={!canInspect} onClick={() => void runSegment()}>Run segmentation contract</button>
-      <button type="button" className="batch" disabled={!canInspect} onClick={() => void runLayers()}>Inspect layers contract</button>
+      <label>Plate mode<select value={plateMode} onChange={(event) => setPlateMode(event.target.value as GenerationPlateResult["mode"])}><option value="original-with-protected-text">Original with fixed trusted text</option><option value="layers-text-removed">Qwen layers with text removed</option></select></label>
+      <button type="button" className="batch" disabled={!canInspect} onClick={() => void runOcr()}>Analyze text</button>
+      <button type="button" className="batch" disabled={!canInspect} onClick={() => void runSegment()}>Analyze subject</button>
+      <button type="button" className="batch" disabled={!canInspect} onClick={() => void runLayers()}>Analyze layers</button>
       <button type="button" className="batch" disabled={!ocr} onClick={() => void runOverlay()}>Create trusted overlay</button>
-      <button type="button" className="batch" disabled={!canInspect} onClick={buildSafePlan}>Build Safe Motion draft</button>
+      <button type="button" className="batch" disabled={!overlay} onClick={() => void runGenerationPlate()}>Build generation plate</button>
+      <button type="button" className="batch" disabled={!plate} onClick={buildSafePlan}>Build Safe Motion draft</button>
     </section>
     {previewUrl && <section className="director-card">
       <h2>Subject prompt canvas</h2>
@@ -193,7 +230,8 @@ export default function VisionLab() {
     {segmentation && <section className="director-card"><h2>Segmentation mask</h2><pre>{planJson(segmentation)}</pre></section>}
     {layers && <section className="director-card"><h2>Layer diagnostics</h2><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{layers.layers.map((layer) => <a key={layer.artifactId} href={`/api/vision/artifacts/${layer.artifactId}`} target="_blank"><img src={`/api/vision/artifacts/${layer.artifactId}`} alt={`${layer.id} RGBA layer`} style={{ width: 120, height: 90, objectFit: "contain", background: "#ddd7cd" }} /><small>{layer.id} · z{layer.zIndex} · α {layer.alphaCoverage.toFixed(2)}</small></a>)}</div><pre>{planJson(layers)}</pre></section>}
     {overlay && <section className="director-card"><h2>Trusted typography overlay</h2><a href={`/api/vision/artifacts/${overlay.artifactId}`} target="_blank">Open local PNG overlay</a><pre>{planJson(overlay)}</pre></section>}
-    {previewUrl && plan?.final && <section className="director-card"><h2>Deterministic local preview</h2><p>Camera movement is previewed locally; the trusted overlay remains fixed above it. Subject safety is enforced by the plan’s collision report.</p><div style={{ position: "relative", width: 320, maxWidth: "100%", overflow: "hidden", borderRadius: 10, background: "#171a20" }}><img src={previewUrl} alt="Selected local source" style={{ display: "block", width: "100%", transform: `translate(${plan.final.camera.x * 100}%, ${plan.final.camera.y * 100}%)`, transition: "transform 180ms linear" }} />{overlay && <img src={`/api/vision/artifacts/${overlay.artifactId}`} alt="Trusted typography overlay" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", pointerEvents: "none" }} />}</div><pre>{planJson(plan.collisions)}</pre></section>}
+    {plate && <section className="director-card"><h2>Generation plate</h2><p>{plate.textRemoved ? "OCR re-check found no remaining protected typography." : "Original source remains the plate; trusted typography stays fixed and motion is conservative."}</p><a href={`/api/vision/artifacts/${plate.artifactId}`} target="_blank">Open local generation plate</a><pre>{planJson(plate)}</pre></section>}
+    {previewUrl && plan?.final && <section className="director-card"><h2>Deterministic local preview</h2><p>Camera movement is previewed locally; the trusted overlay remains fixed above it. Subject safety is enforced by the plan’s collision report.</p><div style={{ position: "relative", width: 320, maxWidth: "100%", overflow: "hidden", borderRadius: 10, background: "#171a20" }}><img src={plate ? `/api/vision/artifacts/${plate.artifactId}` : previewUrl} alt="Selected local generation plate" style={{ display: "block", width: "100%", transform: `translate(${plan.final.camera.x * 100}%, ${plan.final.camera.y * 100}%) scale(${1 + plan.final.camera.zoom})`, transition: "transform 180ms linear" }} />{overlay && <img src={`/api/vision/artifacts/${overlay.artifactId}`} alt="Trusted typography overlay" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", pointerEvents: "none" }} />}</div><pre>{planJson(plan.collisions)}</pre></section>}
     {artifactIds.length > 0 && <section className="director-card"><h2>Owned local artifacts</h2>{artifactIds.map((artifactId) => <p key={artifactId}><a href={`/api/vision/artifacts/${artifactId}`} target="_blank">{artifactId}</a></p>)}</section>}
     {plan && <section className="director-card"><h2>Safe Motion plan</h2><pre>{planJson(plan)}</pre></section>}
     {draft !== null && <section className="director-card"><h2>Draft-only generation bridge</h2><pre>{planJson(draft)}</pre></section>}

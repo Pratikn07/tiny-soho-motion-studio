@@ -11,7 +11,7 @@ describe("vision layers contract", () => {
         { id: "layer-3", artifactId: "7af1f2c6-70b1-4d85-9f43-2b954ad4f5ef", zIndex: 2, alphaCoverage: 0.2, width: 100, height: 80 },
         { id: "layer-4", artifactId: "f02f4249-e793-41d0-b075-ef0c0a9d2ebe", zIndex: 3, alphaCoverage: 0.2, width: 100, height: 80 },
       ],
-      diagnostics: { recompositionMatchesInput: true, overlap: { classification: "not-evaluated", nonAuthoritative: true }, classifications: [
+      diagnostics: { recompositionMatchesInput: true, meanAbsoluteError: 0, warningThreshold: 0.02, warning: null, overlap: { classification: "not-evaluated", nonAuthoritative: true }, classifications: [
         { layerId: "background", textOverlap: 0, subjectOverlap: 0, inferredRole: "unknown", confidence: 0, nonAuthoritative: true },
         { layerId: "subject", textOverlap: 0, subjectOverlap: 0, inferredRole: "unknown", confidence: 0, nonAuthoritative: true },
         { layerId: "layer-3", textOverlap: 0, subjectOverlap: 0, inferredRole: "unknown", confidence: 0, nonAuthoritative: true },
