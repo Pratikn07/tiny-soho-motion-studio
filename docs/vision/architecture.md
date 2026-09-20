@@ -52,6 +52,8 @@ never a whole-file Python buffer. Each file has a random UUID, metadata, TTL,
 atomic write, and owner-only cache directory.
 Browser paths, filenames, provider URLs, and credentials are not artifact
 identifiers. Artifact reads accept only canonical UUIDs.
+Browser-facing core asset responses omit their server filesystem path; content
+is delivered only through the local asset-content route.
 
 The default cache is `$TMPDIR/tiny-soho-vision`; set
 `TINY_SOHO_VISION_CACHE_DIR` to an owner-controlled directory when project
