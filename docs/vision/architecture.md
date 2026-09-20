@@ -77,6 +77,18 @@ artifact ID/kind/MIME/size, the promotion timestamp, and caller-supplied parent
 source/analysis IDs. The temporary sidecar ID is not a durable reference after
 its cache TTL expires.
 
+## Persistent MotionPackageV2
+
+The production motion package never accepts sidecar artifact IDs. Its source,
+generation plate, typography overlay, optional segmentation mask, and optional
+RGBA layers are persistent project assets with their expected core kinds. The
+generation-plate promotion provenance must independently record `plateMode` and
+`plateTextRemoved`; the package cannot assert text removal from browser input.
+It validates the complete Safe Motion policy, source/plate/overlay dimensions,
+actual PNG transparency, and the existing model/quota preflight without queuing
+or submitting a job. The later Vision Generation Bridge is the only component
+that can turn a validated package into a durable generation request.
+
 ## Typography-safe motion pipeline
 
 1. OCR returns every region, including low-confidence text, plus a dilated

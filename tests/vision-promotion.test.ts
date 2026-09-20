@@ -43,7 +43,7 @@ describe("vision artifact promotion", () => {
       db,
       assetDirectory: directory,
       sidecar: {
-        metadata: async () => ({ id: visionArtifactId, kind: "typography-overlay", mimeType: "image/png", sizeBytes: ONE_PIXEL_PNG.length }),
+        metadata: async () => ({ id: visionArtifactId, kind: "typography-overlay", mimeType: "image/png", sizeBytes: ONE_PIXEL_PNG.length, producer: "overlay-builder", plateMode: null, plateTextRemoved: null }),
         content: async () => ({ body: streamChunks(ONE_PIXEL_PNG), contentType: "image/png" }),
       },
     });
@@ -57,7 +57,7 @@ describe("vision artifact promotion", () => {
     expect(JSON.parse(asset.provenance)).toMatchObject({
       source: "vision-safe-motion",
       sourceAssetId: "asset_source",
-      vision: { artifactId: visionArtifactId, kind: "typography-overlay", mime: "image/png" },
+      vision: { artifactId: visionArtifactId, kind: "typography-overlay", mime: "image/png", producer: "overlay-builder", plateMode: null, plateTextRemoved: null },
     });
   });
 

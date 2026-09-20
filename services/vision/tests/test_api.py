@@ -311,10 +311,14 @@ class VisionSidecarContractTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["artifactId"], overlay["sourceArtifactId"])
+        self.assertNotEqual(payload["artifactId"], overlay["sourceArtifactId"])
         self.assertEqual(payload["mode"], "original-with-protected-text")
         self.assertFalse(payload["textRemoved"])
         self.assertRegex(payload["artifactId"], r"^[0-9a-f-]{36}$")
+        metadata = app_module.artifact_manager.metadata(payload["artifactId"])
+        self.assertEqual(metadata.kind, "generation-plate")
+        self.assertEqual(metadata.producer, "generation-plate-builder")
+        self.assertFalse(metadata.plateTextRemoved)
 
 
 if __name__ == "__main__":

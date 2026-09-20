@@ -12,3 +12,6 @@ class ArtifactMetadata(BaseModel):
     createdAt: datetime
     expiresAt: datetime
     sizeBytes: int
+    producer: str | None = None
+    plateMode: str | None = None
+    plateTextRemoved: bool | None = None

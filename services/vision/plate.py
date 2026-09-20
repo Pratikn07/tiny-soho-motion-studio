@@ -81,6 +81,8 @@ async def build_generation_plate(
     }
     if request.mode == "original-with-protected-text":
         return _fallback_result(
+            manager,
+            source,
             source_metadata.id,
             source_hash,
             overlay_metadata.id,
@@ -92,6 +94,8 @@ async def build_generation_plate(
         raise VisionCapabilityUnavailable("Inpainted generation plates remain unavailable until a reviewed inpainting adapter is implemented.")
     if not request.layerArtifactIds:
         return _fallback_result(
+            manager,
+            source,
             source_metadata.id,
             source_hash,
             overlay_metadata.id,
@@ -104,6 +108,8 @@ async def build_generation_plate(
     diagnostics = recomposition_diagnostics(source, predictions)
     if diagnostics.warning or not diagnostics.recompositionMatchesInput:
         return _fallback_result(
+            manager,
+            source,
             source_metadata.id,
             source_hash,
             overlay_metadata.id,
@@ -117,6 +123,8 @@ async def build_generation_plate(
     text_layer_ids = {classification.layerId for classification in classifications if classification.inferredRole == "text-like"}
     if not text_layer_ids:
         return _fallback_result(
+            manager,
+            source,
             source_metadata.id,
             source_hash,
             overlay_metadata.id,
@@ -135,6 +143,8 @@ async def build_generation_plate(
     )
     if second_pass_recognizer is None:
         return _fallback_result(
+            manager,
+            source,
             source_metadata.id,
             source_hash,
             overlay_metadata.id,
@@ -148,6 +158,8 @@ async def build_generation_plate(
         second_pass = await second_pass_recognizer(plate)
     except VisionCapabilityUnavailable as error:
         return _fallback_result(
+            manager,
+            source,
             source_metadata.id,
             source_hash,
             overlay_metadata.id,
@@ -159,6 +171,8 @@ async def build_generation_plate(
         )
     if _has_remaining_protected_typography(second_pass.regions, request.regions):
         return _fallback_result(
+            manager,
+            source,
             source_metadata.id,
             source_hash,
             overlay_metadata.id,
@@ -169,7 +183,14 @@ async def build_generation_plate(
             classifications=[classification.model_dump() for classification in classifications],
             second_pass=second_pass,
         )
-    plate_metadata = manager.write_bytes(kind="generation-plate", mime_type="image/png", data=plate_png)
+    plate_metadata = manager.write_bytes(
+        kind="generation-plate",
+        mime_type="image/png",
+        data=plate_png,
+        producer="generation-plate-builder",
+        plate_mode="layers-text-removed",
+        plate_text_removed=True,
+    )
     provenance = _provenance(
         source_artifact_id=source_metadata.id,
         source_hash=source_hash,
@@ -194,6 +215,8 @@ async def build_generation_plate(
 
 
 def _fallback_result(
+    manager: ArtifactManager,
+    source: DecodedImage,
     source_artifact_id: str,
     source_hash: str,
     overlay_artifact_id: str,
@@ -205,12 +228,20 @@ def _fallback_result(
     classifications: list[dict[str, object]] | None = None,
     second_pass: OcrResult | None = None,
 ) -> GenerationPlateResult:
-    source = DecodedImage(data=b"", mimeType="image/png", width=int(common["width"]), height=int(common["height"]))
+    plate_png = _encode_png(source)
+    plate_metadata = manager.write_bytes(
+        kind="generation-plate",
+        mime_type="image/png",
+        data=plate_png,
+        producer="generation-plate-builder",
+        plate_mode="original-with-protected-text",
+        plate_text_removed=False,
+    )
     provenance = _provenance(
         source_artifact_id=source_artifact_id,
         source_hash=source_hash,
-        plate_artifact_id=source_artifact_id,
-        plate_hash=source_hash,
+        plate_artifact_id=plate_metadata.id,
+        plate_hash=_sha256(plate_png),
         source=source,
         overlay_artifact_id=overlay_artifact_id,
         mode="original-with-protected-text",
@@ -220,13 +251,20 @@ def _fallback_result(
         second_pass=second_pass,
     )
     return GenerationPlateResult(
-        artifactId=source_artifact_id,
+        artifactId=plate_metadata.id,
         mode="original-with-protected-text",
         textRemoved=False,
         warnings=warnings,
         provenance=provenance,
         **common,
     )
+
+
+def _encode_png(image: DecodedImage) -> bytes:
+    with Image.open(BytesIO(image.data)) as source:
+        output = BytesIO()
+        source.convert("RGBA").save(output, format="PNG")
+    return output.getvalue()
 
 
 def _validate_overlay_coverage(source: DecodedImage, overlay_png: bytes, regions: list[OcrRegion]) -> None:

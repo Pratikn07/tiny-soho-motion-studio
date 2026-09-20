@@ -21,12 +21,15 @@ export const cameraMotionSchema = motionVectorSchema.extend({
   type: z.enum(["static-subject", "tiny-push", "subtle-subject", "pan-safe", "custom"]).default("custom"),
 });
 
+export const motionSubjectSchema = z.object({ id: z.string().min(1), maskArtifactId: z.string().min(1).optional(), bounds: normalizedBoundsSchema });
+export const typographyRegionSchema = z.object({ id: z.string().min(1), bounds: normalizedBoundsSchema });
+
 export const safeMotionInputSchema = z.object({
   sourceArtifactId: z.string().min(1).optional(),
   plateArtifactId: z.string().min(1).optional(),
   plateMode: z.enum(["original-with-protected-text", "layers-text-removed"]).default("original-with-protected-text"),
-  subject: z.object({ id: z.string().min(1), maskArtifactId: z.string().min(1).optional(), bounds: normalizedBoundsSchema }),
-  typography: z.array(z.object({ id: z.string().min(1), bounds: normalizedBoundsSchema })),
+  subject: motionSubjectSchema,
+  typography: z.array(typographyRegionSchema),
   segmentationBounds: z.array(normalizedBoundsSchema).default([]),
   requested: z.object({ subject: motionVectorSchema, camera: cameraMotionSchema }),
   subjectLayerMode: z.enum(["avoid-typography", "behind-fixed-overlay"]).default("avoid-typography"),
@@ -46,22 +49,31 @@ export type MotionCollision = {
   bounds: NormalizedBounds;
 };
 
-export type SafeMotionPlan = {
-  version: "2";
-  sourceArtifactId?: string;
-  plateArtifactId?: string;
-  plateMode: SafeMotionInput["plateMode"];
-  status: "ready" | "reduced" | "rejected";
-  subject: SafeMotionInput["subject"];
-  subjects: SafeMotionInput["subject"][];
-  typographyRegions: SafeMotionInput["typography"];
-  typography: { alwaysOnTop: true; zIndex: number };
-  textPolicy: { keepOverlayFixed: true; preventSubjectTextOverlap: true; subjectLayerMode: SafeMotionInput["subjectLayerMode"] };
-  requested: SafeMotionInput["requested"];
-  final: SafeMotionInput["requested"] | null;
-  camera: CameraMotion | null;
-  collisions: MotionCollision[];
-  warnings: string[];
-  corrections: { subjectScale: number; cameraScale: number }[];
-  provenance: { planner: "SafeMotionPlan"; version: "2"; collisionPadding: number; noTypographyConfirmed: boolean };
-};
+export const motionCollisionSchema = z.object({
+  kind: z.enum(["typography", "segmentation", "canvas", "camera-edge"]),
+  id: z.string().min(1),
+  phase: z.enum(["initial", "requested", "candidate"]),
+  bounds: normalizedBoundsSchema,
+});
+
+export const safeMotionPlanSchema = z.object({
+  version: z.literal("2"),
+  sourceArtifactId: z.string().min(1).optional(),
+  plateArtifactId: z.string().min(1).optional(),
+  plateMode: z.enum(["original-with-protected-text", "layers-text-removed"]),
+  status: z.enum(["ready", "reduced", "rejected"]),
+  subject: motionSubjectSchema,
+  subjects: z.array(motionSubjectSchema),
+  typographyRegions: z.array(typographyRegionSchema),
+  typography: z.object({ alwaysOnTop: z.literal(true), zIndex: z.number().int() }),
+  textPolicy: z.object({ keepOverlayFixed: z.literal(true), preventSubjectTextOverlap: z.literal(true), subjectLayerMode: z.enum(["avoid-typography", "behind-fixed-overlay"]) }),
+  requested: z.object({ subject: motionVectorSchema, camera: cameraMotionSchema }),
+  final: z.object({ subject: motionVectorSchema, camera: cameraMotionSchema }).nullable(),
+  camera: cameraMotionSchema.nullable(),
+  collisions: z.array(motionCollisionSchema),
+  warnings: z.array(z.string()),
+  corrections: z.array(z.object({ subjectScale: z.number().min(0).max(1), cameraScale: z.number().min(0).max(1) })),
+  provenance: z.object({ planner: z.literal("SafeMotionPlan"), version: z.literal("2"), collisionPadding: z.number().min(0).max(0.1), noTypographyConfirmed: z.boolean() }),
+}).strict();
+
+export type SafeMotionPlan = z.infer<typeof safeMotionPlanSchema>;
