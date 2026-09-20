@@ -92,6 +92,10 @@ npm run build
 
 No live generation is performed by setup, tests, or build. Live capability remains dependent on your Alibaba account, regional model access, and free quota.
 
+For the local Vision sidecar, optional model provisioning, self-hosted smoke
+profiles, release checks, and rollback, see
+[the Vision production runbook](docs/vision/production-runbook.md).
+
 ## Attribution
 
 This repository was originally derived from Open Generative AI. The active runtime has been rewritten as a local Next.js application; unused Vite, Electron, MuAPI, and hosted-workflow material has been removed. The retained upstream MIT license remains in [LICENSE](LICENSE).

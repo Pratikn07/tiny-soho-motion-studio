@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -45,6 +46,23 @@ def _qwen_remote_status(url: str | None, token: str | None, allowed_hosts: tuple
         "tokenConfigured": bool(token),
         "allowedHosts": list(allowed_hosts),
     }
+
+
+def _media_tool_status(command: str, name: str) -> dict[str, object]:
+    try:
+        result = subprocess.run(
+            [command, "-version"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=3,
+        )
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        return {"available": False, "reason": f"{name} is not available."}
+
+    version = result.stdout.splitlines()[0] if result.stdout else name
+    return {"available": True, "version": version, "reason": None}
 
 
 def report() -> dict[str, object]:
@@ -96,6 +114,10 @@ def report() -> dict[str, object]:
             "remote": qwen_remote,
             "runtime": "configured-not-verified" if qwen_configured else "unavailable",
             "note": "Enhanced mode requires a real CUDA or reviewed remote decomposition smoke; this command does not load Qwen.",
+        },
+        "mediaTools": {
+            "ffmpeg": _media_tool_status(config.ffmpeg_path, "FFmpeg"),
+            "ffprobe": _media_tool_status(config.ffprobe_path, "FFprobe"),
         },
         "hardware": detect_hardware(),
     }

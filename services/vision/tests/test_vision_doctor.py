@@ -16,6 +16,25 @@ if str(REPOSITORY_ROOT) not in sys.path:
 
 
 class VisionDoctorTests(unittest.TestCase):
+    def test_media_tool_preflight_reports_missing_commands_without_loading_any_model(self) -> None:
+        doctor = importlib.import_module("services.vision.vision_doctor")
+        with patch.dict(
+            os.environ,
+            {
+                "FFMPEG_PATH": "/not-a-real/ffmpeg",
+                "FFPROBE_PATH": "/not-a-real/ffprobe",
+                "TINY_SOHO_PADDLE_OCR_ENABLED": "0",
+                "TINY_SOHO_SAM2_ENABLED": "0",
+                "TINY_SOHO_QWEN_LAYERS_ENABLED": "0",
+            },
+            clear=False,
+        ):
+            result = doctor.report()
+
+        self.assertEqual(result["mediaTools"]["ffmpeg"]["available"], False)
+        self.assertEqual(result["mediaTools"]["ffprobe"]["available"], False)
+        self.assertIn("not available", result["mediaTools"]["ffmpeg"]["reason"])
+
     def test_disabled_ocr_is_reported_unavailable_without_loading_a_model(self) -> None:
         doctor = importlib.import_module("services.vision.vision_doctor")
         with patch.dict(os.environ, {"TINY_SOHO_PADDLE_OCR_ENABLED": "0"}, clear=False):

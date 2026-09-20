@@ -14,6 +14,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -27,5 +29,31 @@ jobs:
       - run: npm test
       - run: npm run check
       - run: npm run build
+      - run: npm run verify:vision-repository
       - run: python -m pip install -r services/vision/requirements.txt
+      - name: Verify the base sidecar has no inference runtimes
+        run: |
+          python - <<'PY'
+          import importlib.util
+
+          forbidden = [name for name in ("torch", "paddleocr", "sam2", "diffusers") if importlib.util.find_spec(name)]
+          if forbidden:
+              raise SystemExit(f"Base CI must not install optional inference runtimes: {', '.join(forbidden)}")
+          print("Base sidecar has no optional inference runtimes installed.")
+          PY
       - run: python -m unittest discover -s services/vision/tests -p "test_*.py"
+      - name: Check the submitted diff for whitespace errors
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git diff --check "$PR_BASE_SHA...$PR_HEAD_SHA"
+          elif [[ "$PUSH_BEFORE_SHA" =~ ^0+$ ]]; then
+            git diff --check "$(git hash-object -t tree /dev/null)" "$HEAD_SHA"
+          else
+            git diff --check "$PUSH_BEFORE_SHA..$HEAD_SHA"
+          fi
