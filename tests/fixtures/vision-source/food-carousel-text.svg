@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1440" viewBox="0 0 1080 1440">
+  <rect width="1080" height="1440" fill="#fff1d5"/>
+  <circle cx="270" cy="600" r="160" fill="#e56749"/>
+  <circle cx="780" cy="620" r="195" fill="#7ca56e"/>
+  <text x="80" y="250" fill="#593a26" font-family="Arial, sans-serif" font-size="98" font-weight="700">MAKE LUNCH</text>
+  <text x="80" y="358" fill="#593a26" font-family="Arial, sans-serif" font-size="98" font-weight="700">FEEL EASY</text>
+  <text x="84" y="474" fill="#9b664b" font-family="Arial, sans-serif" font-size="40">Three bright ideas for a full plate</text>
+  <rect x="80" y="1050" width="920" height="2" fill="#c17458"/>
+  <text x="80" y="1150" fill="#593a26" font-family="Arial, sans-serif" font-size="38" font-weight="700">01  COLOR   02  CRUNCH   03  COMFORT</text>
+  <text x="80" y="1335" fill="#9b664b" font-family="Arial, sans-serif" font-size="26">TINY SOHO  /  KITCHEN EDIT</text>
+</svg>

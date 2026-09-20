@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1440" viewBox="0 0 1080 1440">
+  <rect width="1080" height="1440" fill="#eeeafa"/>
+  <circle cx="540" cy="700" r="325" fill="#6d5aac"/>
+  <rect x="70" y="630" width="940" height="220" fill="#fdfcff" opacity="0.97"/>
+  <text x="120" y="755" fill="#2e2457" font-family="Arial, sans-serif" font-size="86" font-weight="700">STAY WITH THE IDEA</text>
+  <text x="120" y="845" fill="#2e2457" font-family="Arial, sans-serif" font-size="34">Typography crossing a moving subject</text>
+  <text x="80" y="180" fill="#2e2457" font-family="Arial, sans-serif" font-size="34" font-weight="700">TINY SOHO STUDIO</text>
+  <text x="80" y="1260" fill="#51447f" font-family="Arial, sans-serif" font-size="42">PROTECTED TEXT TEST</text>
+  <text x="80" y="1335" fill="#51447f" font-family="Arial, sans-serif" font-size="26">OVERLAP / HIGH CONTRAST / LOCAL OCR</text>
+</svg>

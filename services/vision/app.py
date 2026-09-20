@@ -13,7 +13,7 @@ from pydantic import BaseModel, HttpUrl, TypeAdapter, model_validator
 
 from .artifacts.manager import ArtifactManager, ArtifactNotFound
 from .adapters.base import VisionCapabilityUnavailable
-from .adapters.paddle_ocr import default_paddle_ocr_adapter
+from .adapters.paddle_ocr import PaddleOcrAdapter, default_paddle_ocr_adapter
 from .adapters.qwen_layers import default_qwen_layers_backend
 from .adapters.sam2 import default_sam2_adapter
 from .config import VisionConfig
@@ -139,7 +139,13 @@ artifact_manager = ArtifactManager(
 )
 runtime_registry = RuntimeRegistry.default()
 inference_locks = InferenceLocks()
-ocr_adapter = default_paddle_ocr_adapter(vision_config.paddle_ocr_enabled)
+ocr_adapter = default_paddle_ocr_adapter(vision_config.paddle_ocr)
+ocr_configuration_reason = ocr_adapter.configuration_reason()
+runtime_registry.transition(
+    "image.ocr",
+    state="unloaded",
+    reason=ocr_configuration_reason or "PaddleOCR is configured; awaiting a real local inference.",
+)
 segmentation_adapter = default_sam2_adapter(vision_config.sam2_enabled, vision_config.sam2_checkpoint_path)
 layers_backend = default_qwen_layers_backend(vision_config.qwen_layers_enabled, vision_config.qwen_layers_model_path)
 
@@ -185,11 +191,18 @@ async def ocr(image: UploadFile = File(...)) -> OcrResult:
         )
     except ImageInputError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    is_real_adapter = isinstance(ocr_adapter, PaddleOcrAdapter)
     try:
         async with inference_locks.get("image.ocr"):
+            if is_real_adapter:
+                runtime_registry.transition("image.ocr", state="loading")
             result = await ocr_adapter.recognize(decoded)
     except VisionCapabilityUnavailable as error:
+        if is_real_adapter:
+            runtime_registry.transition("image.ocr", state="error", reason=str(error))
         raise HTTPException(status_code=503, detail=str(error)) from error
+    if is_real_adapter:
+        runtime_registry.transition("image.ocr", state="ready", reason=None)
     mask = create_typography_safety_mask(decoded.width, decoded.height, result.regions)
     metadata = artifact_manager.write_bytes(kind="typography-safety-mask", mime_type="image/png", data=mask.png)
     return result.model_copy(update={"typographySafetyMaskArtifactId": metadata.id})

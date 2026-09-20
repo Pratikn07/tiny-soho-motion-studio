@@ -1,17 +1,17 @@
 {
-  "verifiedAt": "2026-09-18",
+  "verifiedAt": "2026-09-20",
   "dependencies": [
     {
       "capability": "image.ocr",
       "name": "PaddleOCR",
       "upstreamRepository": "https://github.com/PaddlePaddle/PaddleOCR",
       "pinnedCommit": "dab3fe35379033fdcb2d0e9572fac0b36c9a9ebf",
-      "packageVersion": "3.7.0 (optional; not installed)",
+      "packageVersion": "3.7.0 (optional local runtime; excluded from base requirements and CI)",
       "codeLicense": "Apache-2.0",
-      "checkpointIdentifier": null,
-      "checkpointSource": null,
-      "checkpointLicense": "Unverified; no checkpoint selected or downloaded.",
-      "status": "blocked-on-checkpoint-license"
+      "checkpointIdentifier": "PP-OCRv5_mobile_det + en_PP-OCRv5_mobile_rec",
+      "checkpointSource": "https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det/tree/0d63e78e2b680928f6b1747d76a08db6e645efb7 and https://huggingface.co/PaddlePaddle/en_PP-OCRv5_mobile_rec/tree/267c36e24c331595590fe7bd72bde2436fd286f2",
+      "checkpointLicense": "Apache-2.0; source revisions are pinned in services/vision/paddle_provisioning.py. The operator records downloaded file hashes in an external provisioning manifest.",
+      "status": "explicit-provisioning-required"
     },
     {
       "capability": "image.segment",

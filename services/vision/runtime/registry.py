@@ -4,6 +4,9 @@ from dataclasses import dataclass, replace
 from typing import Literal
 
 
+_UNCHANGED = object()
+
+
 RuntimeState = Literal["unloaded", "loading", "ready", "error"]
 
 
@@ -54,13 +57,19 @@ class RuntimeRegistry:
         except KeyError as error:
             raise KeyError(f"No runtime status is registered for {capability_id}.") from error
 
-    def transition(self, capability_id: str, *, state: RuntimeState, reason: str | None = None) -> CapabilityRuntimeStatus:
+    def transition(
+        self,
+        capability_id: str,
+        *,
+        state: RuntimeState,
+        reason: str | None | object = _UNCHANGED,
+    ) -> CapabilityRuntimeStatus:
         current = self.status(capability_id)
         next_status = replace(
             current,
             state=state,
             available=state == "ready",
-            reason=reason if reason is not None else current.reason,
+            reason=current.reason if reason is _UNCHANGED else reason,
         )
         self._statuses[capability_id] = next_status
         return next_status
