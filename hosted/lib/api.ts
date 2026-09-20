@@ -3,6 +3,7 @@ import type {
   StudioJobView,
   StudioProjectView,
 } from "@/components/MotionStudio";
+import type { MediaRole, ModelAcknowledgement } from "@/lib/video-catalog";
 
 type SessionClient = {
   auth: {
@@ -29,6 +30,11 @@ type ApiAsset = {
   kind: StudioAssetView["kind"];
   name: string;
   mime_type: string;
+};
+
+type ApiAcknowledgement = {
+  model_id: string;
+  contract_version: string;
 };
 
 const projectView = (project: ApiProject): StudioProjectView => ({
@@ -93,13 +99,30 @@ export function createStudioApi(client: SessionClient, fetcher: Fetcher = fetch)
       const body = await request<{ asset: ApiAsset }>("/api/assets", { method: "POST", body: formData });
       return assetView(body.asset);
     },
+    async listAcknowledgements(): Promise<ModelAcknowledgement[]> {
+      const body = await request<{ acknowledgements: ApiAcknowledgement[] }>("/api/model-acknowledgements");
+      return body.acknowledgements.map((acknowledgement) => ({
+        modelId: acknowledgement.model_id,
+        contractVersion: acknowledgement.contract_version,
+      }));
+    },
+    async acknowledgeModel(input: { modelId: string; contractVersion: string }): Promise<ModelAcknowledgement> {
+      const body = await request<{ acknowledgement: ApiAcknowledgement }>("/api/model-acknowledgements", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      return {
+        modelId: body.acknowledgement.model_id,
+        contractVersion: body.acknowledgement.contract_version,
+      };
+    },
     async createJob(input: {
       projectId: string;
       idempotencyKey: string;
-      modelId: "wan2.7-i2v" | "wan3-video";
+      modelId: string;
       prompt: string;
-      media: Array<{ assetId: string; role: "start-image" | "end-image" }>;
-      options: { duration: number; resolution: string; aspectRatio?: string };
+      media: Array<{ assetId: string; role: MediaRole; ordinal?: number }>;
+      options: Record<string, unknown>;
     }): Promise<StudioJobView> {
       const body = await request<{ job: StudioJobView }>("/api/jobs", { method: "POST", body: JSON.stringify(input) });
       return body.job;
