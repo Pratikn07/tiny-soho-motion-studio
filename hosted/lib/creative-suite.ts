@@ -1,0 +1,69 @@
+import { z } from "zod";
+
+export type DirectorRequestStatus = "queued" | "running" | "drafted" | "failed" | "needs_attention" | "canceled";
+
+export type StudioDirectorRequest = {
+  id: string;
+  project_id: string;
+  owner_user_id: string;
+  idempotency_key: string;
+  brief: string;
+  status: DirectorRequestStatus;
+  error_code: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StudioWorkflowRun = {
+  id: string;
+  workflow_id: string;
+  project_id: string;
+  owner_user_id: string;
+  idempotency_key: string;
+  graph_snapshot: Record<string, unknown>;
+  node_state: Record<string, unknown>;
+  status: "queued" | "running" | "completed" | "failed" | "needs_attention" | "canceled";
+  error_code: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export const visionOperationSchema = z.enum([
+  "inspect", "overlay", "plate", "compose", "ocr", "segment", "layers",
+]);
+
+export type VisionOperation = z.infer<typeof visionOperationSchema>;
+
+export const visionJobStatusSchema = z.enum([
+  "queued", "running", "completed", "failed", "needs_attention", "canceled",
+]);
+
+export type VisionJobStatus = z.infer<typeof visionJobStatusSchema>;
+
+export type StudioVisionJob = {
+  id: string;
+  project_id: string;
+  owner_user_id: string;
+  source_asset_id: string;
+  idempotency_key: string;
+  operation: VisionOperation;
+  options: Record<string, unknown>;
+  input_asset_ids: string[];
+  output_asset_ids: string[];
+  status: VisionJobStatus;
+  error_code: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export const createVisionJobSchema = z.object({
+  projectId: z.string().uuid(),
+  sourceAssetId: z.string().uuid(),
+  operation: visionOperationSchema,
+  options: z.record(z.unknown()).default({}),
+  inputAssetIds: z.array(z.string().uuid()).max(10).default([]),
+  idempotencyKey: z.string().uuid(),
+});

@@ -1,4 +1,5 @@
 import { StudioError } from "@/lib/errors";
+import type { StudioDirectorRequest, StudioVisionJob, StudioWorkflowRun } from "@/lib/creative-suite";
 import type { StudioJobStatus } from "@/lib/jobs";
 import type { OwnedRecord, Owner } from "@/lib/types";
 import type { MediaRole, VideoTask } from "@/lib/video-catalog";
@@ -119,6 +120,91 @@ export class StudioRepository {
     return project;
   }
 
+  async createDirectorRequest(input: {
+    id: string;
+    projectId: string;
+    idempotencyKey: string;
+    brief: string;
+  }): Promise<StudioDirectorRequest> {
+    const result = await this.client
+      .from("creative_studio_director_requests")
+      .insert({
+        id: input.id,
+        project_id: input.projectId,
+        owner_user_id: this.owner.userId,
+        idempotency_key: input.idempotencyKey,
+        brief: input.brief,
+        status: "queued",
+      })
+      .select("*")
+      .single() as DatabaseResult<StudioDirectorRequest>;
+    const request = databaseResult(result);
+    if (!request) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return request;
+  }
+
+  async createWorkflowRun(input: {
+    id: string;
+    workflowId: string;
+    projectId: string;
+    idempotencyKey: string;
+    graphSnapshot: Record<string, unknown>;
+  }): Promise<StudioWorkflowRun> {
+    const result = await this.client
+      .from("creative_studio_workflow_runs")
+      .insert({
+        id: input.id,
+        workflow_id: input.workflowId,
+        project_id: input.projectId,
+        owner_user_id: this.owner.userId,
+        idempotency_key: input.idempotencyKey,
+        graph_snapshot: input.graphSnapshot,
+        node_state: {},
+        status: "queued",
+      })
+      .select("*")
+      .single() as DatabaseResult<StudioWorkflowRun>;
+    const run = databaseResult(result);
+    if (!run) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return run;
+  }
+
+  async createVisionJob(input: {
+    id: string;
+    projectId: string;
+    sourceAssetId: string;
+    idempotencyKey: string;
+    operation: StudioVisionJob["operation"];
+    options: Record<string, unknown>;
+    inputAssetIds: string[];
+  }): Promise<StudioVisionJob> {
+    const result = await this.client
+      .from("creative_studio_vision_jobs")
+      .insert({
+        id: input.id,
+        project_id: input.projectId,
+        owner_user_id: this.owner.userId,
+        source_asset_id: input.sourceAssetId,
+        idempotency_key: input.idempotencyKey,
+        operation: input.operation,
+        options: input.options,
+        input_asset_ids: input.inputAssetIds,
+        output_asset_ids: [],
+        status: "queued",
+      })
+      .select("*")
+      .single() as DatabaseResult<StudioVisionJob>;
+    const job = databaseResult(result);
+    if (!job) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return job;
+  }
+
   async updateProjectQuota(input: {
     projectId: string;
     freeQuotaModels: string[];
@@ -213,6 +299,16 @@ export class StudioRepository {
       .eq("id", assetId)
       .eq("owner_user_id", this.owner.userId)
       .maybeSingle() as DatabaseResult<StudioAsset>;
+    return databaseResult(result);
+  }
+
+  async getVisionJob(jobId: string): Promise<StudioVisionJob | null> {
+    const result = await this.client
+      .from("creative_studio_vision_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioVisionJob>;
     return databaseResult(result);
   }
 
