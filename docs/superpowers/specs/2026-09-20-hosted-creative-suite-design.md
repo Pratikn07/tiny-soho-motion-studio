@@ -21,13 +21,12 @@ Use four isolated responsibilities:
 
 ## Owner experience
 
-The authenticated Creative Studio navigation contains five functional sections:
+The authenticated Creative Studio navigation contains four functional views:
 
-1. **Motion** — the existing Singapore Wan model picker and job history.
-2. **Assets** — the existing private source and generated asset library.
-3. **Director** — a brief creates an immutable, reviewable proposal; approval alone creates video jobs.
-4. **Workflows** — the owner saves a versioned directed graph and explicitly starts a durable run.
-5. **Vision Lab** — the owner can inspect real capability availability, queue a typography-protection operation, and review derived assets and composed outputs.
+1. **Motion & Assets** — the existing Singapore Wan model picker, job history, and private source/generated asset library.
+2. **Director** — a brief creates an immutable, reviewable proposal; approval alone creates video jobs.
+3. **Workflows** — the owner saves a versioned directed graph and explicitly starts a durable run.
+4. **Vision Lab** — the owner can inspect real capability availability, queue a typography-protection operation, and review derived assets and composed outputs.
 
 The dashboard never renders a control for a route that is not deployed. Each section shows an owner-safe recovery message and the durable record status rather than relying on in-memory browser state.
 
@@ -130,7 +129,7 @@ Automated coverage must include:
 - migration contracts for every table/index/RPC/RLS restriction and the `creative-studio` bucket's continued privacy;
 - hosted and worker type checks, builds, unit suites, and the Vision Python tests/container build.
 
-Release verification must use an authenticated owner account to create a project, upload a harmless source asset, draft but not approve a Director proposal, save and validate a non-generating workflow, and run a non-provider Vision overlay path. A real Alibaba/Qwen call or optional-model inference is a separate owner-controlled, potentially billable verification and is not performed merely to deploy.
+Release verification must use an authenticated owner account to create a project, upload a harmless source asset, save and validate a non-generating workflow, and run a non-provider Vision overlay path. A Director draft invokes Qwen after its worker claim, so even a draft is a separate owner-controlled, potentially billable verification; it is not performed merely to deploy.
 
 ## Explicit non-goals
 
