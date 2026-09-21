@@ -7,10 +7,25 @@ export type StudioDirectorRequest = {
   project_id: string;
   owner_user_id: string;
   idempotency_key: string;
+  fingerprint: string;
   brief: string;
   status: DirectorRequestStatus;
   error_code: string | null;
   error_message: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StudioDirectorProposal = {
+  id: string;
+  request_id: string;
+  project_id: string;
+  owner_user_id: string;
+  snapshot: Record<string, unknown>;
+  evidence: Record<string, unknown>;
+  fingerprint: string;
+  status: "drafted" | "approved" | "failed" | "canceled";
+  approved_at: string | null;
   created_at: string;
   updated_at: string;
 };

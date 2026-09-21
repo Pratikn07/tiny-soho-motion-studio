@@ -26,6 +26,7 @@ create table public.creative_studio_director_requests (
   project_id uuid not null references public.creative_studio_projects(id) on delete cascade,
   owner_user_id uuid not null,
   idempotency_key uuid not null,
+  fingerprint text not null check (fingerprint ~ '^[a-f0-9]{64}$'),
   brief text not null check (char_length(btrim(brief)) between 1 and 5000),
   status text not null check (status in ('queued', 'running', 'drafted', 'failed', 'needs_attention', 'canceled')),
   worker_lease_id uuid,
@@ -247,9 +248,129 @@ begin
 end;
 $$;
 
+create or replace function public.approve_creative_studio_director_proposal(
+  proposal_id uuid,
+  proposal_owner_user_id uuid,
+  expected_fingerprint text,
+  child_jobs jsonb
+)
+returns setof public.creative_studio_jobs
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  director_proposal public.creative_studio_director_proposals;
+  child jsonb;
+  media jsonb;
+  saved_job public.creative_studio_jobs;
+  saved_job_ids uuid[] := '{}';
+  child_idempotency_key uuid;
+  child_asset_id uuid;
+begin
+  if jsonb_typeof(child_jobs) <> 'array' or jsonb_array_length(child_jobs) = 0 or jsonb_array_length(child_jobs) > 20 then
+    raise exception 'director_child_jobs_invalid';
+  end if;
+
+  select * into director_proposal
+  from public.creative_studio_director_proposals
+  where id = proposal_id
+    and owner_user_id = proposal_owner_user_id
+  for update;
+
+  if not found then
+    raise exception 'director_proposal_not_found';
+  end if;
+  if director_proposal.fingerprint <> expected_fingerprint then
+    raise exception 'director_proposal_changed';
+  end if;
+
+  if director_proposal.status = 'approved' then
+    return query
+    select job.*
+    from public.creative_studio_jobs as job
+    join jsonb_array_elements(child_jobs) as replay(child) on job.idempotency_key = (replay.child ->> 'idempotencyKey')::uuid
+    where job.project_id = director_proposal.project_id
+      and job.owner_user_id = proposal_owner_user_id;
+    return;
+  end if;
+  if director_proposal.status <> 'drafted' then
+    raise exception 'director_proposal_not_approvable';
+  end if;
+
+  for child in select value from jsonb_array_elements(child_jobs)
+  loop
+    child_idempotency_key := (child ->> 'idempotencyKey')::uuid;
+    select * into saved_job
+    from public.creative_studio_jobs
+    where project_id = director_proposal.project_id
+      and owner_user_id = proposal_owner_user_id
+      and idempotency_key = child_idempotency_key
+    for update;
+
+    if found then
+      if saved_job.fingerprint <> (child ->> 'fingerprint') then
+        raise exception 'director_job_idempotency_conflict';
+      end if;
+    else
+      insert into public.creative_studio_jobs (
+        project_id, owner_user_id, idempotency_key, fingerprint, model_id,
+        task, prompt, input_assets, options, status
+      ) values (
+        director_proposal.project_id,
+        proposal_owner_user_id,
+        child_idempotency_key,
+        child ->> 'fingerprint',
+        child ->> 'modelId',
+        child ->> 'task',
+        child ->> 'prompt',
+        child -> 'inputAssets',
+        child -> 'options',
+        'queued'
+      ) returning * into saved_job;
+    end if;
+
+    for media in select value from jsonb_array_elements(child -> 'inputAssets')
+    loop
+      child_asset_id := (media ->> 'assetId')::uuid;
+      if not exists (
+        select 1
+        from public.creative_studio_assets as asset
+        where asset.id = child_asset_id
+          and asset.project_id = director_proposal.project_id
+          and asset.owner_user_id = proposal_owner_user_id
+      ) then
+        raise exception 'director_job_asset_not_owned';
+      end if;
+      insert into public.creative_studio_job_media (job_id, asset_id, owner_user_id, role, ordinal)
+      values (
+        saved_job.id,
+        child_asset_id,
+        proposal_owner_user_id,
+        media ->> 'role',
+        coalesce((media ->> 'ordinal')::integer, 1)
+      )
+      on conflict (job_id, role, ordinal) do nothing;
+    end loop;
+    saved_job_ids := array_append(saved_job_ids, saved_job.id);
+  end loop;
+
+  update public.creative_studio_director_proposals
+  set status = 'approved', approved_at = now(), updated_at = now()
+  where id = director_proposal.id;
+
+  return query
+  select job.*
+  from public.creative_studio_jobs as job
+  where job.id = any(saved_job_ids);
+end;
+$$;
+
 revoke all on function public.claim_creative_studio_director_request() from public, anon, authenticated;
 revoke all on function public.claim_creative_studio_workflow_run() from public, anon, authenticated;
 revoke all on function public.claim_creative_studio_vision_job() from public, anon, authenticated;
+revoke all on function public.approve_creative_studio_director_proposal(uuid, uuid, text, jsonb) from public, anon, authenticated;
 grant execute on function public.claim_creative_studio_director_request() to service_role;
 grant execute on function public.claim_creative_studio_workflow_run() to service_role;
 grant execute on function public.claim_creative_studio_vision_job() to service_role;
+grant execute on function public.approve_creative_studio_director_proposal(uuid, uuid, text, jsonb) to service_role;

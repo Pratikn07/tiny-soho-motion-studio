@@ -23,6 +23,7 @@ describe("hosted Creative Suite repository ownership", () => {
       id: "11111111-1111-4111-8111-111111111111",
       projectId: "22222222-2222-4222-8222-222222222222",
       idempotencyKey: "33333333-3333-4333-8333-333333333333",
+      fingerprint: "a".repeat(64),
       brief: "Create a calm five-second product motion clip.",
     });
 

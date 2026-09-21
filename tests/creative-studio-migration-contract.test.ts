@@ -29,5 +29,7 @@ describe("Creative Studio full-video catalog migration", () => {
     expect(suiteMigration).toMatch(/for update skip locked/i);
     expect(suiteMigration).toMatch(/revoke all on function public\.claim_creative_studio_vision_job\(\) from public, anon, authenticated/i);
     expect(suiteMigration).toMatch(/grant execute on function public\.claim_creative_studio_vision_job\(\) to service_role/i);
+    expect(suiteMigration).toMatch(/create or replace function public\.approve_creative_studio_director_proposal/i);
+    expect(suiteMigration).toMatch(/revoke all on function public\.approve_creative_studio_director_proposal\(uuid, uuid, text, jsonb\) from public, anon, authenticated/i);
   });
 });
