@@ -20,7 +20,7 @@ export type StudioProjectView = {
 
 export type StudioAssetView = {
   id: string;
-  kind: "source-image" | "source-video" | "source-audio" | "generated-video";
+  kind: "source-image" | "source-video" | "source-audio" | "generated-video" | "derived-image" | "derived-video";
   name: string;
   mimeType: string;
 };
@@ -207,12 +207,11 @@ export function MotionStudio({ api }: { api: MotionStudioApi }) {
   const optionalRoles = activeContract.optionalRoles.filter((role) => (activeContract.maxByRole[role] ?? 1) > media.filter((item) => item.role === role).length);
 
   return (
-    <main className="studio-shell">
+    <section className="suite-view" aria-label="Motion Studio">
       <header>
-        <p className="eyebrow">Tiny Soho</p>
-        <h1>Creative Studio</h1>
+        <p className="eyebrow">Generate</p>
+        <h2>Motion</h2>
         <p>Use the Singapore Model Studio video catalogue with private, durable Creative jobs.</p>
-        <nav aria-label="Creative Studio"><a href="#motion">Motion</a> <a href="#assets">Assets</a> <span>Creative jobs are isolated from Instagram automation.</span></nav>
       </header>
 
       {message ? <p role="status">{message}</p> : null}
@@ -258,6 +257,6 @@ export function MotionStudio({ api }: { api: MotionStudioApi }) {
       </section>
 
       {jobs.length ? <section className="panel" aria-label="Jobs"><h2>Jobs</h2><ul>{jobs.map((job) => <li key={job.id}>{job.modelId}: {job.status} {job.outputUrl ? <a href={job.outputUrl}>Open video</a> : null} {job.errorMessage ? `— ${job.errorMessage}` : null}</li>)}</ul></section> : null}
-    </main>
+    </section>
   );
 }

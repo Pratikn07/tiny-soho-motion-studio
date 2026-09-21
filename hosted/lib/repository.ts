@@ -1,4 +1,6 @@
 import { StudioError } from "@/lib/errors";
+import type { StudioDirectorProposal, StudioDirectorRequest, StudioVisionCapability, StudioVisionJob, StudioWorkflow, StudioWorkflowRun } from "@/lib/creative-suite";
+import type { DirectorApprovalJob } from "@/lib/director";
 import type { StudioJobStatus } from "@/lib/jobs";
 import type { OwnedRecord, Owner } from "@/lib/types";
 import type { MediaRole, VideoTask } from "@/lib/video-catalog";
@@ -21,7 +23,7 @@ export type StudioProject = OwnedRecord & {
 
 export type StudioAsset = OwnedRecord & {
   project_id: string;
-  kind: "source-image" | "source-video" | "source-audio" | "generated-video";
+  kind: "source-image" | "source-video" | "source-audio" | "generated-video" | "derived-image" | "derived-video";
   name: string;
   mime_type: string;
   object_path: string;
@@ -67,6 +69,7 @@ type DatabaseResult<T> = {
 
 type StudioDataClient = {
   from: (table: string) => any;
+  rpc?: (fn: string, args: Record<string, unknown>) => any;
 };
 
 const databaseResult = <T>(result: DatabaseResult<T>) => {
@@ -117,6 +120,252 @@ export class StudioRepository {
       throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
     }
     return project;
+  }
+
+  async createDirectorRequest(input: {
+    id: string;
+    projectId: string;
+    idempotencyKey: string;
+    fingerprint: string;
+    brief: string;
+  }): Promise<StudioDirectorRequest> {
+    const result = await this.client
+      .from("creative_studio_director_requests")
+      .insert({
+        id: input.id,
+        project_id: input.projectId,
+        owner_user_id: this.owner.userId,
+        idempotency_key: input.idempotencyKey,
+        fingerprint: input.fingerprint,
+        brief: input.brief,
+        status: "queued",
+      })
+      .select("*")
+      .single() as DatabaseResult<StudioDirectorRequest>;
+    const request = databaseResult(result);
+    if (!request) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return request;
+  }
+
+  async findDirectorRequestByIdempotency(projectId: string, idempotencyKey: string): Promise<StudioDirectorRequest | null> {
+    const result = await this.client
+      .from("creative_studio_director_requests")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("owner_user_id", this.owner.userId)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle() as DatabaseResult<StudioDirectorRequest>;
+    return databaseResult(result);
+  }
+
+  async getDirectorRequest(requestId: string): Promise<StudioDirectorRequest | null> {
+    const result = await this.client
+      .from("creative_studio_director_requests")
+      .select("*")
+      .eq("id", requestId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioDirectorRequest>;
+    return databaseResult(result);
+  }
+
+  async getDirectorProposal(proposalId: string): Promise<StudioDirectorProposal | null> {
+    const result = await this.client
+      .from("creative_studio_director_proposals")
+      .select("*")
+      .eq("id", proposalId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioDirectorProposal>;
+    return databaseResult(result);
+  }
+
+  async getDirectorProposalForRequest(requestId: string): Promise<StudioDirectorProposal | null> {
+    const result = await this.client
+      .from("creative_studio_director_proposals")
+      .select("*")
+      .eq("request_id", requestId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioDirectorProposal>;
+    return databaseResult(result);
+  }
+
+  async approveDirectorProposal(input: {
+    proposalId: string;
+    expectedFingerprint: string;
+    jobs: DirectorApprovalJob[];
+  }): Promise<StudioJob[]> {
+    if (!this.client.rpc) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    const result = await this.client.rpc("approve_creative_studio_director_proposal", {
+      proposal_id: input.proposalId,
+      proposal_owner_user_id: this.owner.userId,
+      expected_fingerprint: input.expectedFingerprint,
+      child_jobs: input.jobs,
+    }) as DatabaseResult<StudioJob[]>;
+    return databaseResult(result) ?? [];
+  }
+
+  async createWorkflowRun(input: {
+    id: string;
+    workflowId: string;
+    projectId: string;
+    idempotencyKey: string;
+    fingerprint: string;
+    graphSnapshot: Record<string, unknown>;
+  }): Promise<StudioWorkflowRun> {
+    const result = await this.client
+      .from("creative_studio_workflow_runs")
+      .insert({
+        id: input.id,
+        workflow_id: input.workflowId,
+        project_id: input.projectId,
+        owner_user_id: this.owner.userId,
+        idempotency_key: input.idempotencyKey,
+        fingerprint: input.fingerprint,
+        graph_snapshot: input.graphSnapshot,
+        node_state: {},
+        status: "queued",
+      })
+      .select("*")
+      .single() as DatabaseResult<StudioWorkflowRun>;
+    const run = databaseResult(result);
+    if (!run) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return run;
+  }
+
+  async findWorkflowRunByIdempotency(projectId: string, idempotencyKey: string): Promise<StudioWorkflowRun | null> {
+    const result = await this.client
+      .from("creative_studio_workflow_runs")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("owner_user_id", this.owner.userId)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle() as DatabaseResult<StudioWorkflowRun>;
+    return databaseResult(result);
+  }
+
+  async getWorkflowRun(runId: string): Promise<StudioWorkflowRun | null> {
+    const result = await this.client
+      .from("creative_studio_workflow_runs")
+      .select("*")
+      .eq("id", runId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioWorkflowRun>;
+    return databaseResult(result);
+  }
+
+  async findWorkflowByFingerprint(fingerprint: string): Promise<StudioWorkflow | null> {
+    const result = await this.client
+      .from("creative_studio_workflows")
+      .select("*")
+      .eq("owner_user_id", this.owner.userId)
+      .eq("fingerprint", fingerprint)
+      .maybeSingle() as DatabaseResult<StudioWorkflow>;
+    return databaseResult(result);
+  }
+
+  async getWorkflow(workflowId: string): Promise<StudioWorkflow | null> {
+    const result = await this.client
+      .from("creative_studio_workflows")
+      .select("*")
+      .eq("id", workflowId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioWorkflow>;
+    return databaseResult(result);
+  }
+
+  async listWorkflows(projectId?: string): Promise<StudioWorkflow[]> {
+    let query = this.client
+      .from("creative_studio_workflows")
+      .select("*")
+      .eq("owner_user_id", this.owner.userId);
+    if (projectId) query = query.eq("project_id", projectId);
+    const result = await query.order("created_at", { ascending: false }) as DatabaseResult<StudioWorkflow[]>;
+    return databaseResult(result) ?? [];
+  }
+
+  async createWorkflow(input: {
+    id: string;
+    projectId: string | null;
+    name: string;
+    graph: Record<string, unknown>;
+    fingerprint: string;
+  }): Promise<StudioWorkflow> {
+    const result = await this.client
+      .from("creative_studio_workflows")
+      .insert({
+        id: input.id,
+        project_id: input.projectId,
+        owner_user_id: this.owner.userId,
+        name: input.name,
+        graph_version: 2,
+        graph: input.graph,
+        fingerprint: input.fingerprint,
+      })
+      .select("*")
+      .single() as DatabaseResult<StudioWorkflow>;
+    const workflow = databaseResult(result);
+    if (!workflow) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return workflow;
+  }
+
+  async listVisionCapabilities(): Promise<StudioVisionCapability[]> {
+    const result = await this.client
+      .from("creative_studio_vision_capabilities")
+      .select("*")
+      .order("capability_id", { ascending: true }) as DatabaseResult<StudioVisionCapability[]>;
+    return databaseResult(result) ?? [];
+  }
+
+  async createVisionJob(input: {
+    id: string;
+    projectId: string;
+    sourceAssetId: string;
+    idempotencyKey: string;
+    fingerprint: string;
+    operation: StudioVisionJob["operation"];
+    options: Record<string, unknown>;
+    inputAssetIds: string[];
+  }): Promise<StudioVisionJob> {
+    const result = await this.client
+      .from("creative_studio_vision_jobs")
+      .insert({
+        id: input.id,
+        project_id: input.projectId,
+        owner_user_id: this.owner.userId,
+        source_asset_id: input.sourceAssetId,
+        idempotency_key: input.idempotencyKey,
+        fingerprint: input.fingerprint,
+        operation: input.operation,
+        options: input.options,
+        input_asset_ids: input.inputAssetIds,
+        output_asset_ids: [],
+        status: "queued",
+      })
+      .select("*")
+      .single() as DatabaseResult<StudioVisionJob>;
+    const job = databaseResult(result);
+    if (!job) {
+      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    }
+    return job;
+  }
+
+  async findVisionJobByIdempotency(projectId: string, idempotencyKey: string): Promise<StudioVisionJob | null> {
+    const result = await this.client
+      .from("creative_studio_vision_jobs")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("owner_user_id", this.owner.userId)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle() as DatabaseResult<StudioVisionJob>;
+    return databaseResult(result);
   }
 
   async updateProjectQuota(input: {
@@ -213,6 +462,16 @@ export class StudioRepository {
       .eq("id", assetId)
       .eq("owner_user_id", this.owner.userId)
       .maybeSingle() as DatabaseResult<StudioAsset>;
+    return databaseResult(result);
+  }
+
+  async getVisionJob(jobId: string): Promise<StudioVisionJob | null> {
+    const result = await this.client
+      .from("creative_studio_vision_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioVisionJob>;
     return databaseResult(result);
   }
 

@@ -24,3 +24,24 @@ The checked-out repository has no local `.env` file. The application remains dis
 ## Baseline
 
 The implementation branch starts from protected `main` at `d823ff161b0ef79bbc132a6bb7c4593b7f36b754`. The local baseline passed 103 Vitest tests, `npm run check`, and `npm run build` before implementation.
+
+## Hosted Creative Suite implementation
+
+The Director, Workflow Studio, and CPU-safe Vision Lab implementation is
+committed locally on `codex/hosted-creative-suite`. It is not yet pushed,
+migrated, or deployed. The branch adds only `creative_studio_*` records and
+the private `creative-studio` bucket contract; it does not modify
+`insta-automation` code, infrastructure, database objects, credentials, or
+runtime configuration.
+
+Local verification for the branch includes the hosted test suite, hosted type
+check and production build, Creative Worker test suite and type check, three
+new isolated Vision-worker tests, and the existing 69 Vision tests in a
+dependency-matched Python 3.11 environment. No Alibaba/Qwen request, Supabase
+production mutation, push, Railway deployment, Vercel deployment, or model
+weight download occurred.
+
+Before release, follow
+[hosted-creative-suite-release.md](./hosted-creative-suite-release.md). In
+particular, a Director draft invokes Qwen after its queue claim and is not a
+non-billable deployment smoke check.

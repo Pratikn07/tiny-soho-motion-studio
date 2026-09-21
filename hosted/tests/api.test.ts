@@ -53,4 +53,22 @@ describe("hosted Studio browser API", () => {
       mimeType: "image/png",
     }]);
   });
+
+  it("sends a fresh bearer token when creating a Director draft", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      request: { id: "request-1", project_id: "project-1", status: "queued" },
+    }), { status: 202 }));
+    const api = createStudioApi({
+      auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: "session-token" } } }) },
+    } as never, fetcher);
+
+    await expect(api.createDirectorDraft({
+      projectId: "11111111-1111-4111-8111-111111111111",
+      idempotencyKey: "22222222-2222-4222-8222-222222222222",
+      brief: "Quiet autumn product motion",
+    })).resolves.toMatchObject({ id: "request-1", status: "queued" });
+    expect(fetcher).toHaveBeenCalledWith("/api/director/drafts", expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer session-token" }),
+    }));
+  });
 });

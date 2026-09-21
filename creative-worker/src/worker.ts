@@ -2,14 +2,17 @@ import { createHash } from "node:crypto";
 
 import { createClient } from "@supabase/supabase-js";
 
+import { runDirectorWorkerTick } from "./director.js";
 import { processClaimedJob, type ClaimedCreativeJob, type ProviderTaskStatus } from "./process-job.js";
 import { providerRequest, type ProviderMedia, type WorkerMediaRole } from "./provider.js";
+import { runWorkflowWorkerTick } from "./workflows.js";
 
-type WorkerConfig = {
+export type WorkerConfig = {
   supabaseUrl: string;
   serviceRoleKey: string;
   apiKey: string;
   workspaceId: string;
+  directorModel?: string;
 };
 
 type WorkerJob = ClaimedCreativeJob & {
@@ -33,7 +36,7 @@ export function workerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig
   const apiKey = env.DASHSCOPE_API_KEY;
   const workspaceId = env.ALIBABA_WORKSPACE_ID;
   return supabaseUrl && serviceRoleKey && apiKey && workspaceId
-    ? { supabaseUrl, serviceRoleKey, apiKey, workspaceId }
+    ? { supabaseUrl, serviceRoleKey, apiKey, workspaceId, directorModel: env.CREATIVE_DIRECTOR_MODEL }
     : null;
 }
 
@@ -83,6 +86,8 @@ export async function runWorkerTick(config: WorkerConfig) {
   const client = createClient(config.supabaseUrl, config.serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  if (await runDirectorWorkerTick(client, config)) return true;
+  if (await runWorkflowWorkerTick(client)) return true;
   const claimed = await client.rpc("claim_creative_studio_job");
   if (claimed.error) throw new Error("creative_job_claim_failed");
   if (!claimed.data) return false;
