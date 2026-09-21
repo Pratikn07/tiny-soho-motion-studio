@@ -77,4 +77,4 @@ values (
   262144000,
   array['image/jpeg', 'image/png', 'image/webp', 'video/mp4']
 )
-on conflict (id) do nothing;
+on conflict (id) do nothing;;

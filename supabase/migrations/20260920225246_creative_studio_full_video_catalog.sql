@@ -166,3 +166,4 @@ $$;
 
 revoke all on function public.claim_creative_studio_job() from public, anon, authenticated;
 grant execute on function public.claim_creative_studio_job() to service_role;
+;
