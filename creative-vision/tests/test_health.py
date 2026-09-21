@@ -23,4 +23,3 @@ class VisionHealthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["service"], "tiny-soho-creative-vision")
         self.assertNotIn("DASHSCOPE_API_KEY", response.text)
-
