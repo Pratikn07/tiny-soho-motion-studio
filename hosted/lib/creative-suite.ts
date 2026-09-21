@@ -36,12 +36,33 @@ export type StudioWorkflowRun = {
   project_id: string;
   owner_user_id: string;
   idempotency_key: string;
+  fingerprint: string;
   graph_snapshot: Record<string, unknown>;
   node_state: Record<string, unknown>;
   status: "queued" | "running" | "completed" | "failed" | "needs_attention" | "canceled";
   error_code: string | null;
   error_message: string | null;
   created_at: string;
+  updated_at: string;
+};
+
+export type StudioWorkflow = {
+  id: string;
+  project_id: string | null;
+  owner_user_id: string;
+  name: string;
+  graph_version: 2;
+  graph: Record<string, unknown>;
+  fingerprint: string;
+  created_at: string;
+};
+
+export type StudioVisionCapability = {
+  capability_id: string;
+  service_version: string;
+  status: "available" | "unavailable";
+  reason: string | null;
+  refreshed_at: string;
   updated_at: string;
 };
 

@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runDirectorWorkerTick } from "./director.js";
 import { processClaimedJob, type ClaimedCreativeJob, type ProviderTaskStatus } from "./process-job.js";
 import { providerRequest, type ProviderMedia, type WorkerMediaRole } from "./provider.js";
+import { runWorkflowWorkerTick } from "./workflows.js";
 
 export type WorkerConfig = {
   supabaseUrl: string;
@@ -86,6 +87,7 @@ export async function runWorkerTick(config: WorkerConfig) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   if (await runDirectorWorkerTick(client, config)) return true;
+  if (await runWorkflowWorkerTick(client)) return true;
   const claimed = await client.rpc("claim_creative_studio_job");
   if (claimed.error) throw new Error("creative_job_claim_failed");
   if (!claimed.data) return false;

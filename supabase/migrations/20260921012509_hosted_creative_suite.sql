@@ -85,6 +85,7 @@ create table public.creative_studio_workflow_runs (
   project_id uuid not null references public.creative_studio_projects(id) on delete cascade,
   owner_user_id uuid not null,
   idempotency_key uuid not null,
+  fingerprint text not null check (fingerprint ~ '^[a-f0-9]{64}$'),
   graph_snapshot jsonb not null check (jsonb_typeof(graph_snapshot) = 'object'),
   node_state jsonb not null default '{}'::jsonb check (jsonb_typeof(node_state) = 'object'),
   status text not null check (status in ('queued', 'running', 'completed', 'failed', 'needs_attention', 'canceled')),
