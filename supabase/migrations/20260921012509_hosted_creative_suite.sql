@@ -113,6 +113,7 @@ create table public.creative_studio_vision_jobs (
   owner_user_id uuid not null,
   source_asset_id uuid not null references public.creative_studio_assets(id) on delete restrict,
   idempotency_key uuid not null,
+  fingerprint text not null check (fingerprint ~ '^[a-f0-9]{64}$'),
   operation text not null check (operation in ('inspect', 'overlay', 'plate', 'compose', 'ocr', 'segment', 'layers')),
   options jsonb not null default '{}'::jsonb check (jsonb_typeof(options) = 'object'),
   input_asset_ids jsonb not null default '[]'::jsonb check (jsonb_typeof(input_asset_ids) = 'array'),

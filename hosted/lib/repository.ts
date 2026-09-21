@@ -308,6 +308,7 @@ export class StudioRepository {
     projectId: string;
     sourceAssetId: string;
     idempotencyKey: string;
+    fingerprint: string;
     operation: StudioVisionJob["operation"];
     options: Record<string, unknown>;
     inputAssetIds: string[];
@@ -320,6 +321,7 @@ export class StudioRepository {
         owner_user_id: this.owner.userId,
         source_asset_id: input.sourceAssetId,
         idempotency_key: input.idempotencyKey,
+        fingerprint: input.fingerprint,
         operation: input.operation,
         options: input.options,
         input_asset_ids: input.inputAssetIds,
@@ -333,6 +335,17 @@ export class StudioRepository {
       throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
     }
     return job;
+  }
+
+  async findVisionJobByIdempotency(projectId: string, idempotencyKey: string): Promise<StudioVisionJob | null> {
+    const result = await this.client
+      .from("creative_studio_vision_jobs")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("owner_user_id", this.owner.userId)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle() as DatabaseResult<StudioVisionJob>;
+    return databaseResult(result);
   }
 
   async updateProjectQuota(input: {

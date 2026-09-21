@@ -84,6 +84,7 @@ export type StudioVisionJob = {
   owner_user_id: string;
   source_asset_id: string;
   idempotency_key: string;
+  fingerprint: string;
   operation: VisionOperation;
   options: Record<string, unknown>;
   input_asset_ids: string[];
