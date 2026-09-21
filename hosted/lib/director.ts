@@ -61,6 +61,17 @@ export type DirectorApprovalJob = {
   options: Record<string, unknown>;
 };
 
+export const publicDirectorRequest = (request: StudioDirectorRequest) => ({
+  id: request.id,
+  projectId: request.project_id,
+  brief: request.brief,
+  status: request.status,
+  errorCode: request.error_code,
+  errorMessage: request.error_message,
+  createdAt: request.created_at,
+  updatedAt: request.updated_at,
+});
+
 const invalid = (code: string, message: string): never => {
   throw new StudioError(400, code, message);
 };

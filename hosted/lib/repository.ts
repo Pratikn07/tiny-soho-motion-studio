@@ -160,11 +160,31 @@ export class StudioRepository {
     return databaseResult(result);
   }
 
+  async getDirectorRequest(requestId: string): Promise<StudioDirectorRequest | null> {
+    const result = await this.client
+      .from("creative_studio_director_requests")
+      .select("*")
+      .eq("id", requestId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioDirectorRequest>;
+    return databaseResult(result);
+  }
+
   async getDirectorProposal(proposalId: string): Promise<StudioDirectorProposal | null> {
     const result = await this.client
       .from("creative_studio_director_proposals")
       .select("*")
       .eq("id", proposalId)
+      .eq("owner_user_id", this.owner.userId)
+      .maybeSingle() as DatabaseResult<StudioDirectorProposal>;
+    return databaseResult(result);
+  }
+
+  async getDirectorProposalForRequest(requestId: string): Promise<StudioDirectorProposal | null> {
+    const result = await this.client
+      .from("creative_studio_director_proposals")
+      .select("*")
+      .eq("request_id", requestId)
       .eq("owner_user_id", this.owner.userId)
       .maybeSingle() as DatabaseResult<StudioDirectorProposal>;
     return databaseResult(result);

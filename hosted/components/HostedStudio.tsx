@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createStudioApi } from "@/lib/api";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import { Login } from "@/components/Login";
-import { MotionStudio } from "@/components/MotionStudio";
+import { StudioShell } from "@/components/StudioShell";
 
 export function HostedStudio() {
   const [client, setClient] = useState<ReturnType<typeof createBrowserSupabaseClient> | null>(null);
@@ -41,5 +41,5 @@ export function HostedStudio() {
       if (error) throw error;
     }} />;
   }
-  return <MotionStudio api={api} />;
+  return <StudioShell api={api} />;
 }
