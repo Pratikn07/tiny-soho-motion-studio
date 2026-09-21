@@ -1,5 +1,5 @@
 import { requireOwner } from "@/lib/auth";
-import { createDirectorDraft, createDirectorDraftSchema } from "@/lib/director";
+import { createDirectorDraft, createDirectorDraftSchema, publicDirectorRequest } from "@/lib/director";
 import { StudioError } from "@/lib/errors";
 import { routeErrorResponse } from "@/lib/http";
 import { StudioRepository } from "@/lib/repository";
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     }
     const repository = new StudioRepository(createServiceSupabaseClient(), owner);
     const directorRequest = await createDirectorDraft(parsed.data, repository);
-    return Response.json({ request: directorRequest }, { status: 202 });
+    return Response.json({ request: publicDirectorRequest(directorRequest) }, { status: 202 });
   } catch (error) {
     return routeErrorResponse(error);
   }
