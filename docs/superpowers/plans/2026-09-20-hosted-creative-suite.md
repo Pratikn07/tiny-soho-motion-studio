@@ -26,7 +26,7 @@
 
 | Path | Responsibility |
 | --- | --- |
-| supabase/migrations/20260920170000_hosted_creative_suite.sql | Suite tables, indexes, constraints, RLS, and claim RPCs. |
+| Supabase CLI-generated hosted_creative_suite migration | Suite tables, indexes, constraints, RLS, and claim RPCs. |
 | hosted/lib/creative-suite.ts | Zod schemas and serializable Director, Workflow, and Vision types. |
 | hosted/lib/repository.ts | Narrow owner-filtered persistence methods for suite records. |
 | hosted/app/api/director, hosted/app/api/workflows, hosted/app/api/vision | Authenticated Vercel request/read routes. |
@@ -45,7 +45,7 @@
 - Create: hosted/tests/creative-suite-repository.test.ts
 
 **Interfaces:**
-- Produces DirectorRequest, DirectorProposal, StudioWorkflow, WorkflowRun, and VisionJob types with UUID id, owner_user_id, project_id, status, safe error fields, and timestamps.
+- Produces DirectorRequest, DirectorProposal, StudioWorkflow, WorkflowRun, VisionJob, and VisionCapability types with UUID id, owner_user_id where applicable, status, safe error fields, and timestamps.
 - Produces StudioRepository.createDirectorRequest, getDirectorProposal, createWorkflow, createWorkflowRun, createVisionJob, and owner-filtered list/read methods.
 - Later routes consume these types and never query an unfiltered table.
 
@@ -56,6 +56,7 @@ it("defines suite records and keeps claim functions service-role only", () => {
   expect(migration).toMatch(/create table .*creative_studio_director_requests/is);
   expect(migration).toMatch(/create table .*creative_studio_workflow_runs/is);
   expect(migration).toMatch(/create table .*creative_studio_vision_jobs/is);
+  expect(migration).toMatch(/create table .*creative_studio_vision_capabilities/is);
   expect(migration).toMatch(/revoke all on function public\.claim_creative_studio_vision_job\(\) from public, anon, authenticated/is);
   expect(migration).toMatch(/grant execute on function public\.claim_creative_studio_vision_job\(\) to service_role/is);
 });
@@ -73,7 +74,13 @@ Run: npm --prefix hosted test -- creative-suite-repository.test.ts
 
 Expected: failures because the migration, types, and repository methods do not exist.
 
-- [ ] **Step 3: Add the migration and typed persistence boundary**
+- [ ] **Step 3: Generate and implement the migration and typed persistence boundary**
+
+Run this first from the repository root so the imperative migration filename is assigned by the installed CLI:
+
+~~~bash
+supabase migration new hosted_creative_suite
+~~~
 
 ~~~ts
 export type WorkflowRunStatus =
@@ -92,7 +99,7 @@ export const createVisionJobSchema = z.object({
 });
 ~~~
 
-Create Director request/proposal, workflow/workflow-run, and Vision-job tables; validate status/operation values; add owner/project/status indexes; enable RLS; and add lease-based service-role claim RPCs. Expand creative_studio_assets only with derived-image and derived-video plus corresponding image/MP4 MIME rules. Repository mutations insert owner_user_id from the authenticated owner, and all reads chain .eq("owner_user_id", this.owner.userId).
+Create Director request/proposal, workflow/workflow-run, Vision-job, and service-owned Vision-capability tables; validate status/operation values; add owner/project/status indexes; enable RLS; and add lease-based service-role claim RPCs. The capability table contains capability_id, service_version, status, reason, and updated_at, and is written only by the Vision service role. Expand creative_studio_assets only with derived-image and derived-video plus corresponding image/MP4 MIME rules. Repository mutations insert owner_user_id from the authenticated owner, and all reads of owner records chain .eq("owner_user_id", this.owner.userId).
 
 - [ ] **Step 4: Run focused verification**
 
@@ -105,7 +112,7 @@ Expected: all pass; migration tests prove no grants to browser roles and reposit
 - [ ] **Step 5: Commit the data boundary**
 
 ~~~bash
-git add supabase/migrations/20260920170000_hosted_creative_suite.sql hosted/lib/creative-suite.ts hosted/lib/repository.ts tests/creative-studio-migration-contract.test.ts hosted/tests/creative-suite-repository.test.ts
+git add supabase/migrations/*_hosted_creative_suite.sql hosted/lib/creative-suite.ts hosted/lib/repository.ts tests/creative-studio-migration-contract.test.ts hosted/tests/creative-suite-repository.test.ts
 git commit -m "feat(creative): add durable suite records"
 ~~~
 
@@ -296,6 +303,7 @@ git commit -m "feat(creative): add durable workflow runs"
 - process_vision_job(job, storage, processor) -> VisionResult supports inspect, overlay, plate, and compose; optional operations return needs_attention with a capability reason.
 - VisionResult contains asset IDs, dimensions, tool version, and safe status only; it contains no filesystem path, signed URL, or source bytes.
 - GET /health returns service name, version, and configured state; it accepts no media request.
+- creative-vision upserts VisionCapability rows at boot and after an optional runtime availability change.
 
 - [ ] **Step 1: Write failing Python and hosted Vision-route tests**
 
@@ -595,4 +603,3 @@ git commit -m "docs(creative): add suite release runbook"
 ## Execution handoff
 
 Execute Tasks 1 through 7 in order. After each task, run its focused tests, inspect the staged diff, and commit before starting the next task. Do not apply the Supabase migration, create the Railway service, configure production variables, push, or deploy until all local verification succeeds and the owner authorizes the production release.
-

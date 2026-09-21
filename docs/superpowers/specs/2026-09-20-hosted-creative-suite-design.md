@@ -96,6 +96,8 @@ If later enabled, GPU inference is a second Vision worker profile/service with t
 
 `creative_studio_vision_jobs` contains owner, project, source asset, operation (`inspect`, `overlay`, `plate`, `compose`, `ocr`, `segment`, `layers`), normalized options JSON, input artifact IDs, status, output asset IDs, safe error fields, lease metadata, and timestamps. Its claim RPC follows the existing `FOR UPDATE SKIP LOCKED`, fixed-search-path, service-role-only pattern.
 
+`creative_studio_vision_capabilities` is a service-owned status table keyed by capability ID. It records the Vision service version, status (`available` or `unavailable`), a safe reason, and a refresh timestamp. `creative-vision` upserts it at startup and whenever an optional runtime state changes. Vercel reads it only after owner authentication, so the browser does not need a direct Railway connection.
+
 `creative_studio_assets` expands its validated kind/mime contract only for `derived-image` and `derived-video`. Their `provenance` records the Vision job, operation, source asset IDs, dimensions, and tool version; no signed URL, raw source bytes, credentials, or provider response is stored in the database. Existing source and generated-video rows remain valid without rewrite.
 
 ## Shared security and recovery rules
