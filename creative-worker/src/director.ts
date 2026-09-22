@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { hasClaimedId } from "./claim.js";
+
 export const DIRECTOR_ALLOWED_MODEL_IDS = new Set([
   "wan2.7-t2v-2026-04-25", "wan2.7-t2v-2026-06-12", "wan2.7-t2v",
   "wan2.6-t2v", "wan2.5-t2v-preview", "wan2.2-t2v-plus", "wan2.1-t2v-turbo", "wan2.1-t2v-plus",
@@ -274,7 +276,7 @@ type DirectorClient = {
 export async function runDirectorWorkerTick(client: DirectorClient, config: WorkerConfig) {
   const claimed = await client.rpc("claim_creative_studio_director_request");
   if (claimed.error) throw new Error("director_request_claim_failed");
-  if (!claimed.data) return false;
+  if (!hasClaimedId(claimed.data)) return false;
   const request = claimed.data as ClaimedDirectorRequest;
   await processDirectorRequest(request, {
     listProjectAssets: async ({ ownerUserId, projectId }) => {

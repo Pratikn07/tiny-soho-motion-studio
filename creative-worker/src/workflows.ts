@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { hasClaimedId } from "./claim.js";
+
 type WorkflowNodeType =
   | "asset" | "prompt-template" | "noop" | "generate-video"
   | "inspect" | "overlay" | "plate" | "compose" | "ocr" | "segment" | "layers";
@@ -247,7 +249,7 @@ const workflowJob = (row: any): JobRecord => ({
 export async function runWorkflowWorkerTick(client: WorkflowClient) {
   const claimed = await client.rpc("claim_creative_studio_workflow_run");
   if (claimed.error) throw new Error("workflow_run_claim_failed");
-  if (!claimed.data) return false;
+  if (!hasClaimedId(claimed.data)) return false;
   const run = claimed.data as WorkflowRun & { worker_lease_id: string | null };
   const capabilities = await client
     .from("creative_studio_vision_capabilities")
