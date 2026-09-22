@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { advanceWorkflowRun, type WorkflowGraph } from "../src/workflows.js";
+import { advanceWorkflowRun, runWorkflowWorkerTick, type WorkflowGraph } from "../src/workflows.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const runId = "22222222-2222-4222-8222-222222222222";
@@ -17,6 +17,17 @@ const graph: WorkflowGraph = {
 };
 
 describe("Creative workflow worker", () => {
+  it("ignores Supabase's all-null response when no workflow run is queued", async () => {
+    const from = vi.fn();
+
+    await expect(runWorkflowWorkerTick({
+      rpc: vi.fn().mockResolvedValue({ data: { id: null }, error: null }),
+      from,
+    })).resolves.toBe(false);
+
+    expect(from).not.toHaveBeenCalled();
+  });
+
   it("waits for a parent video job before creating its child", async () => {
     const createVideoJob = vi.fn();
     const result = await advanceWorkflowRun({

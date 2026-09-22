@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { createClient } from "@supabase/supabase-js";
 
+import { hasClaimedId } from "./claim.js";
 import { runDirectorWorkerTick } from "./director.js";
 import { processClaimedJob, type ClaimedCreativeJob, type ProviderTaskStatus } from "./process-job.js";
 import { providerRequest, type ProviderMedia, type WorkerMediaRole } from "./provider.js";
@@ -90,7 +91,7 @@ export async function runWorkerTick(config: WorkerConfig) {
   if (await runWorkflowWorkerTick(client)) return true;
   const claimed = await client.rpc("claim_creative_studio_job");
   if (claimed.error) throw new Error("creative_job_claim_failed");
-  if (!claimed.data) return false;
+  if (!hasClaimedId(claimed.data)) return false;
   const job = claimed.data as unknown as WorkerJob;
   const mediaRows = await client
     .from("creative_studio_job_media")

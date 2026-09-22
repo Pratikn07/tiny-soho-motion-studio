@@ -65,6 +65,21 @@ const assetKindForRole: Record<MediaRole, StudioAssetView["kind"]> = {
 
 const labelForRole = (role: MediaRole) => role.replaceAll("_", " ");
 
+export function jobStatusDetail(status: string) {
+  const detail: Record<string, string> = {
+    queued: "Waiting for the Creative Worker to pick up your request.",
+    submitting: "Preparing your request for Alibaba Model Studio.",
+    submitted: "Submitted to Alibaba; waiting for rendering to begin.",
+    running: "Alibaba is rendering your video.",
+    downloading: "Saving the completed video to your project.",
+    completed: "Your video is ready.",
+    failed: "Alibaba could not complete this generation.",
+    needs_attention: "This generation needs review before it can continue.",
+    canceled: "This generation was canceled.",
+  };
+  return detail[status] ?? "Processing status is updating.";
+}
+
 export function MotionStudio({ api }: { api: MotionStudioApi }) {
   const [projects, setProjects] = useState<StudioProjectView[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -197,7 +212,7 @@ export function MotionStudio({ api }: { api: MotionStudioApi }) {
         options,
       });
       setJobs((items) => [job, ...items]);
-      setMessage("Generation is queued for the isolated Tiny Soho Creative Worker.");
+      setMessage(jobStatusDetail(job.status));
     } catch {
       setMessage("Generation could not be queued.");
     }
@@ -256,7 +271,7 @@ export function MotionStudio({ api }: { api: MotionStudioApi }) {
         <button type="button" disabled={!canGenerate} onClick={() => void generate()}>Generate</button>
       </section>
 
-      {jobs.length ? <section className="panel" aria-label="Jobs"><h2>Jobs</h2><ul>{jobs.map((job) => <li key={job.id}>{job.modelId}: {job.status} {job.outputUrl ? <a href={job.outputUrl}>Open video</a> : null} {job.errorMessage ? `— ${job.errorMessage}` : null}</li>)}</ul></section> : null}
+      {jobs.length ? <section className="panel" aria-label="Jobs"><h2>Jobs</h2><ul>{jobs.map((job) => <li key={job.id}><strong>{job.modelId}: {job.status}</strong> — {jobStatusDetail(job.status)} {job.outputUrl ? <a href={job.outputUrl}>Open video</a> : null} {job.errorMessage ? `— ${job.errorMessage}` : null}</li>)}</ul></section> : null}
     </section>
   );
 }

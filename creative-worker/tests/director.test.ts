@@ -1,12 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { processDirectorRequest } from "../src/director.js";
+import { processDirectorRequest, runDirectorWorkerTick } from "../src/director.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const ownerUserId = "22222222-2222-4222-8222-222222222222";
 const assetId = "33333333-3333-4333-8333-333333333333";
 
 describe("Creative Director worker", () => {
+  it("ignores Supabase's all-null response when no Director request is queued", async () => {
+    const from = vi.fn();
+
+    await expect(runDirectorWorkerTick({
+      rpc: vi.fn().mockResolvedValue({ data: { id: null }, error: null }),
+      from,
+    }, {
+      apiKey: "test-key",
+      workspaceId: "workspace",
+    })).resolves.toBe(false);
+
+    expect(from).not.toHaveBeenCalled();
+  });
+
   it("submits Qwen only after a queued Director request has been claimed and never queues video", async () => {
     const submitQwen = vi.fn().mockResolvedValue({
       title: "A calm product moment",
