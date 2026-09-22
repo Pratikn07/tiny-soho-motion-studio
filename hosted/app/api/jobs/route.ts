@@ -7,6 +7,7 @@ import { routeErrorResponse } from "@/lib/http";
 import { createOrGetJob } from "@/lib/jobs";
 import { StudioRepository, type StudioAsset, type StudioJob } from "@/lib/repository";
 import { createServiceSupabaseClient } from "@/lib/supabase-server";
+import { signAssetDownload } from "@/lib/storage";
 import { preflightVideoGeneration, type MediaRole } from "@/lib/video-catalog";
 
 const mediaRoleSchema = z.enum([
@@ -27,7 +28,7 @@ const requestSchema = z.object({
   options: z.record(z.unknown()),
 });
 
-const publicJob = (job: StudioJob) => ({
+const publicJob = (job: StudioJob, outputUrl?: string) => ({
   id: job.id,
   projectId: job.project_id,
   modelId: job.model_id,
@@ -38,6 +39,7 @@ const publicJob = (job: StudioJob) => ({
   outputAssetId: job.output_asset_id,
   errorCode: job.error_code,
   errorMessage: job.error_message,
+  ...(outputUrl ? { outputUrl } : {}),
   createdAt: job.created_at,
   updatedAt: job.updated_at,
 });
@@ -53,6 +55,26 @@ const expectedAssetKind: Record<MediaRole, StudioAsset["kind"]> = {
   driving_audio: "source-audio",
   first_clip: "source-video",
 };
+
+export async function GET(request: Request) {
+  try {
+    const owner = await requireOwner(request);
+    const projectId = z.string().uuid().safeParse(new URL(request.url).searchParams.get("projectId"));
+    if (!projectId.success) throw new StudioError(400, "invalid_project_id", "Project ID is invalid.");
+
+    const client = createServiceSupabaseClient();
+    const repository = new StudioRepository(client, owner);
+    const jobs = await repository.listJobs(projectId.data);
+    const views = await Promise.all(jobs.map(async (job) => {
+      const outputAsset = job.output_asset_id ? await repository.getAsset(job.output_asset_id) : null;
+      const outputUrl = outputAsset ? await signAssetDownload(client, outputAsset.object_path) : undefined;
+      return publicJob(job, outputUrl);
+    }));
+    return Response.json({ jobs: views });
+  } catch (error) {
+    return routeErrorResponse(error);
+  }
+}
 
 export async function POST(request: Request) {
   try {

@@ -71,4 +71,22 @@ describe("hosted Studio browser API", () => {
       headers: expect.objectContaining({ Authorization: "Bearer session-token" }),
     }));
   });
+
+  it("loads persisted generation jobs for the selected project", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      jobs: [{ id: "job-1", modelId: "wan2.7-i2v", status: "running" }],
+    }), { status: 200 }));
+    const api = createStudioApi({
+      auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: "session-token" } } }) },
+    } as never, fetcher);
+
+    await expect(api.listJobs("project-1")).resolves.toEqual([{
+      id: "job-1",
+      modelId: "wan2.7-i2v",
+      status: "running",
+    }]);
+    expect(fetcher).toHaveBeenCalledWith("/api/jobs?projectId=project-1", expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer session-token" }),
+    }));
+  });
 });
