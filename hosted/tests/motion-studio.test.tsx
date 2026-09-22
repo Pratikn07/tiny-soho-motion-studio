@@ -24,4 +24,26 @@ describe("hosted Motion Studio", () => {
     expect(screen.getByRole("button", { name: /acknowledge model billing/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /generate/i })).toBeDisabled();
   });
+
+  it("restores persisted jobs after a refresh", async () => {
+    const listJobs = vi.fn().mockResolvedValue([{
+      id: "job-1",
+      modelId: "wan2.7-i2v",
+      status: "running",
+    }]);
+    render(<MotionStudio api={{
+      listProjects: vi.fn().mockResolvedValue([{
+        id: "project-1",
+        name: "Summer launch",
+        canvas: "9:16",
+        freeQuotaModels: [],
+        freeQuotaConfirmedAt: {},
+      }]),
+      listJobs,
+    } as never} />);
+
+    await waitFor(() => expect(listJobs).toHaveBeenCalledWith("project-1"));
+    expect(await screen.findByRole("heading", { name: "Jobs" })).toBeInTheDocument();
+    expect(await screen.findByRole("listitem")).toHaveTextContent("Alibaba is rendering your video.");
+  });
 });

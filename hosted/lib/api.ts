@@ -196,6 +196,10 @@ export function createStudioApi(client: SessionClient, fetcher: Fetcher = fetch)
       const body = await request<{ job: StudioJobView }>("/api/jobs", { method: "POST", body: JSON.stringify(input) });
       return body.job;
     },
+    async listJobs(projectId: string): Promise<StudioJobView[]> {
+      const body = await request<{ jobs: StudioJobView[] }>(`/api/jobs?projectId=${encodeURIComponent(projectId)}`);
+      return body.jobs;
+    },
     async getJob(jobId: string): Promise<StudioJobView> {
       const body = await request<{ job: StudioJobView }>(`/api/jobs/${jobId}`);
       return body.job;

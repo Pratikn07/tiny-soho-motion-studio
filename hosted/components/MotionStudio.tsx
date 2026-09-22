@@ -48,6 +48,7 @@ export type MotionStudioApi = {
     media: Array<{ assetId: string; role: MediaRole; ordinal?: number }>;
     options: Record<string, unknown>;
   }) => Promise<StudioJobView>;
+  listJobs?: (projectId: string) => Promise<StudioJobView[]>;
   getJob?: (jobId: string) => Promise<StudioJobView>;
 };
 
@@ -126,6 +127,15 @@ export function MotionStudio({ api }: { api: MotionStudioApi }) {
       return;
     }
     void api.listAssets(selectedProjectId).then(setAssets).catch(() => setMessage("Assets could not be loaded."));
+  }, [api, selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId || !api.listJobs) {
+      setJobs([]);
+      return;
+    }
+    setJobs([]);
+    void api.listJobs(selectedProjectId).then(setJobs).catch(() => setMessage("Jobs could not be loaded."));
   }, [api, selectedProjectId]);
 
   useEffect(() => {
