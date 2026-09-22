@@ -31,6 +31,15 @@ type AssetRow = { id: string; object_path: string; mime_type: string; name: stri
 
 const videoMaxBytes = 250 * 1024 * 1024;
 
+type JobUpdateStatus = "submitted" | "running" | "downloading" | "completed" | "failed" | "canceled" | "needs_attention";
+
+export function jobLeasePatch(status: JobUpdateStatus) {
+  return status === "downloading" ? {} : {
+    worker_lease_id: null,
+    worker_lease_expires_at: null,
+  };
+}
+
 export function workerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig | null {
   const supabaseUrl = env.SUPABASE_URL;
   const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -119,7 +128,7 @@ export async function runWorkerTick(config: WorkerConfig) {
   }
 
   const update = async (
-    status: "submitted" | "running" | "downloading" | "completed" | "failed" | "canceled" | "needs_attention",
+    status: JobUpdateStatus,
     providerTaskId?: string,
     outputAssetId?: string,
   ) => {
@@ -131,8 +140,7 @@ export async function runWorkerTick(config: WorkerConfig) {
         ...(providerTaskId ? { provider_task_id: providerTaskId } : {}),
         ...(outputAssetId ? { output_asset_id: outputAssetId } : {}),
         next_poll_at: new Date(Date.now() + (terminal ? 24 * 60 * 60 * 1000 : 15_000)).toISOString(),
-        worker_lease_id: null,
-        worker_lease_expires_at: null,
+        ...jobLeasePatch(status),
         updated_at: new Date().toISOString(),
       })
       .eq("id", job.id)
