@@ -49,6 +49,11 @@ jobs:
           print("Base sidecar has no optional inference runtimes installed.")
           PY
       - run: python -m unittest discover -s services/vision/tests -p "test_*.py"
+      - name: Verify hosted Carousel composition and worker recovery
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          python -m pip install pytest==8.4.2
+          python -m pytest creative-vision/tests -q
       - name: Check the submitted diff for whitespace errors
         env:
           EVENT_NAME: ${{ github.event_name }}

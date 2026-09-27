@@ -1,11 +1,20 @@
 import { StudioError } from "@/lib/errors";
-import type { StudioDirectorProposal, StudioDirectorRequest, StudioVisionCapability, StudioVisionJob, StudioWorkflow, StudioWorkflowRun } from "@/lib/creative-suite";
+import type {
+  StudioDirectorProposal,
+  StudioDirectorRequest,
+  StudioVisionCapability,
+  StudioVisionJob,
+  StudioWorkflow,
+  StudioWorkflowRun,
+} from "@/lib/creative-suite";
 import type { DirectorApprovalJob } from "@/lib/director";
 import type { StudioJobStatus } from "@/lib/jobs";
 import type { OwnedRecord, Owner } from "@/lib/types";
 import type { MediaRole, VideoTask } from "@/lib/video-catalog";
 
-export const projectFilter = (ownerUserId: string) => ({ owner_user_id: ownerUserId });
+export const projectFilter = (ownerUserId: string) => ({
+  owner_user_id: ownerUserId,
+});
 
 export const visibleAsset = <T extends OwnedRecord>(
   asset: T | null,
@@ -14,6 +23,8 @@ export const visibleAsset = <T extends OwnedRecord>(
 
 export type StudioProject = OwnedRecord & {
   name: string;
+  carousel_document?: import("./carousel").CarouselDocument | null;
+  carousel_revision?: number;
   canvas: string;
   free_quota_models: string[];
   free_quota_confirmed_at: Record<string, string>;
@@ -23,7 +34,13 @@ export type StudioProject = OwnedRecord & {
 
 export type StudioAsset = OwnedRecord & {
   project_id: string;
-  kind: "source-image" | "source-video" | "source-audio" | "generated-video" | "derived-image" | "derived-video";
+  kind:
+    | "source-image"
+    | "source-video"
+    | "source-audio"
+    | "generated-video"
+    | "derived-image"
+    | "derived-video";
   name: string;
   mime_type: string;
   object_path: string;
@@ -74,7 +91,11 @@ type StudioDataClient = {
 
 const databaseResult = <T>(result: DatabaseResult<T>) => {
   if (result.error) {
-    throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    throw new StudioError(
+      500,
+      "studio_database_error",
+      "Studio data is temporarily unavailable.",
+    );
   }
   return result.data;
 };
@@ -86,27 +107,32 @@ export class StudioRepository {
   ) {}
 
   async getProject(projectId: string): Promise<StudioProject | null> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_projects")
       .select("*")
       .eq("id", projectId)
       .eq("owner_user_id", this.owner.userId)
-      .maybeSingle() as DatabaseResult<StudioProject>;
+      .maybeSingle()) as DatabaseResult<StudioProject>;
 
     return databaseResult(result);
   }
 
   async listProjects(): Promise<StudioProject[]> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_projects")
       .select("*")
       .eq("owner_user_id", this.owner.userId)
-      .order("updated_at", { ascending: false }) as DatabaseResult<StudioProject[]>;
+      .order("updated_at", { ascending: false })) as DatabaseResult<
+      StudioProject[]
+    >;
     return databaseResult(result) ?? [];
   }
 
-  async createProject(input: { name: string; canvas: string }): Promise<StudioProject> {
-    const result = await this.client
+  async createProject(input: {
+    name: string;
+    canvas: string;
+  }): Promise<StudioProject> {
+    const result = (await this.client
       .from("creative_studio_projects")
       .insert({
         owner_user_id: this.owner.userId,
@@ -114,11 +140,43 @@ export class StudioRepository {
         canvas: input.canvas,
       })
       .select("*")
-      .single() as DatabaseResult<StudioProject>;
+      .single()) as DatabaseResult<StudioProject>;
     const project = databaseResult(result);
     if (!project) {
-      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+      throw new StudioError(
+        500,
+        "studio_database_error",
+        "Studio data is temporarily unavailable.",
+      );
     }
+    return project;
+  }
+
+  async saveCarousel(
+    projectId: string,
+    revision: number,
+    document: import("./carousel").CarouselDocument,
+  ): Promise<StudioProject> {
+    const result = (await this.client
+      .from("creative_studio_projects")
+      .update({
+        name: document.name,
+        carousel_document: document,
+        carousel_revision: revision + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", projectId)
+      .eq("owner_user_id", this.owner.userId)
+      .eq("carousel_revision", revision)
+      .select("*")
+      .maybeSingle()) as DatabaseResult<StudioProject>;
+    const project = databaseResult(result);
+    if (!project)
+      throw new StudioError(
+        409,
+        "carousel_revision_conflict",
+        "This project changed in another tab. Reopen it before saving; download your story plan to keep local edits.",
+      );
     return project;
   }
 
@@ -129,7 +187,7 @@ export class StudioRepository {
     fingerprint: string;
     brief: string;
   }): Promise<StudioDirectorRequest> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_director_requests")
       .insert({
         id: input.id,
@@ -141,52 +199,65 @@ export class StudioRepository {
         status: "queued",
       })
       .select("*")
-      .single() as DatabaseResult<StudioDirectorRequest>;
+      .single()) as DatabaseResult<StudioDirectorRequest>;
     const request = databaseResult(result);
     if (!request) {
-      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+      throw new StudioError(
+        500,
+        "studio_database_error",
+        "Studio data is temporarily unavailable.",
+      );
     }
     return request;
   }
 
-  async findDirectorRequestByIdempotency(projectId: string, idempotencyKey: string): Promise<StudioDirectorRequest | null> {
-    const result = await this.client
+  async findDirectorRequestByIdempotency(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<StudioDirectorRequest | null> {
+    const result = (await this.client
       .from("creative_studio_director_requests")
       .select("*")
       .eq("project_id", projectId)
       .eq("owner_user_id", this.owner.userId)
       .eq("idempotency_key", idempotencyKey)
-      .maybeSingle() as DatabaseResult<StudioDirectorRequest>;
+      .maybeSingle()) as DatabaseResult<StudioDirectorRequest>;
     return databaseResult(result);
   }
 
-  async getDirectorRequest(requestId: string): Promise<StudioDirectorRequest | null> {
-    const result = await this.client
+  async getDirectorRequest(
+    requestId: string,
+  ): Promise<StudioDirectorRequest | null> {
+    const result = (await this.client
       .from("creative_studio_director_requests")
       .select("*")
       .eq("id", requestId)
       .eq("owner_user_id", this.owner.userId)
-      .maybeSingle() as DatabaseResult<StudioDirectorRequest>;
+      .maybeSingle()) as DatabaseResult<StudioDirectorRequest>;
     return databaseResult(result);
   }
 
-  async getDirectorProposal(proposalId: string): Promise<StudioDirectorProposal | null> {
-    const result = await this.client
+  async getDirectorProposal(
+    proposalId: string,
+  ): Promise<StudioDirectorProposal | null> {
+    const result = (await this.client
       .from("creative_studio_director_proposals")
       .select("*")
       .eq("id", proposalId)
       .eq("owner_user_id", this.owner.userId)
-      .maybeSingle() as DatabaseResult<StudioDirectorProposal>;
+      .maybeSingle()) as DatabaseResult<StudioDirectorProposal>;
     return databaseResult(result);
   }
 
-  async getDirectorProposalForRequest(requestId: string): Promise<StudioDirectorProposal | null> {
-    const result = await this.client
+  async getDirectorProposalForRequest(
+    requestId: string,
+  ): Promise<StudioDirectorProposal | null> {
+    const result = (await this.client
       .from("creative_studio_director_proposals")
       .select("*")
       .eq("request_id", requestId)
       .eq("owner_user_id", this.owner.userId)
-      .maybeSingle() as DatabaseResult<StudioDirectorProposal>;
+      .maybeSingle()) as DatabaseResult<StudioDirectorProposal>;
     return databaseResult(result);
   }
 
@@ -196,14 +267,21 @@ export class StudioRepository {
     jobs: DirectorApprovalJob[];
   }): Promise<StudioJob[]> {
     if (!this.client.rpc) {
-      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+      throw new StudioError(
+        500,
+        "studio_database_error",
+        "Studio data is temporarily unavailable.",
+      );
     }
-    const result = await this.client.rpc("approve_creative_studio_director_proposal", {
-      proposal_id: input.proposalId,
-      proposal_owner_user_id: this.owner.userId,
-      expected_fingerprint: input.expectedFingerprint,
-      child_jobs: input.jobs,
-    }) as DatabaseResult<StudioJob[]>;
+    const result = (await this.client.rpc(
+      "approve_creative_studio_director_proposal",
+      {
+        proposal_id: input.proposalId,
+        proposal_owner_user_id: this.owner.userId,
+        expected_fingerprint: input.expectedFingerprint,
+        child_jobs: input.jobs,
+      },
+    )) as DatabaseResult<StudioJob[]>;
     return databaseResult(result) ?? [];
   }
 
@@ -215,7 +293,7 @@ export class StudioRepository {
     fingerprint: string;
     graphSnapshot: Record<string, unknown>;
   }): Promise<StudioWorkflowRun> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_workflow_runs")
       .insert({
         id: input.id,
@@ -229,52 +307,61 @@ export class StudioRepository {
         status: "queued",
       })
       .select("*")
-      .single() as DatabaseResult<StudioWorkflowRun>;
+      .single()) as DatabaseResult<StudioWorkflowRun>;
     const run = databaseResult(result);
     if (!run) {
-      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+      throw new StudioError(
+        500,
+        "studio_database_error",
+        "Studio data is temporarily unavailable.",
+      );
     }
     return run;
   }
 
-  async findWorkflowRunByIdempotency(projectId: string, idempotencyKey: string): Promise<StudioWorkflowRun | null> {
-    const result = await this.client
+  async findWorkflowRunByIdempotency(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<StudioWorkflowRun | null> {
+    const result = (await this.client
       .from("creative_studio_workflow_runs")
       .select("*")
       .eq("project_id", projectId)
       .eq("owner_user_id", this.owner.userId)
       .eq("idempotency_key", idempotencyKey)
-      .maybeSingle() as DatabaseResult<StudioWorkflowRun>;
+      .maybeSingle()) as DatabaseResult<StudioWorkflowRun>;
     return databaseResult(result);
   }
 
   async getWorkflowRun(runId: string): Promise<StudioWorkflowRun | null> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_workflow_runs")
       .select("*")
       .eq("id", runId)
       .eq("owner_user_id", this.owner.userId)
-      .maybeSingle() as DatabaseResult<StudioWorkflowRun>;
+      .maybeSingle()) as DatabaseResult<StudioWorkflowRun>;
     return databaseResult(result);
   }
 
-  async findWorkflowByFingerprint(fingerprint: string): Promise<StudioWorkflow | null> {
-    const result = await this.client
+  async findWorkflowByFingerprint(
+    fingerprint: string,
+  ): Promise<StudioWorkflow | null> {
+    const result = (await this.client
       .from("creative_studio_workflows")
       .select("*")
       .eq("owner_user_id", this.owner.userId)
       .eq("fingerprint", fingerprint)
-      .maybeSingle() as DatabaseResult<StudioWorkflow>;
+      .maybeSingle()) as DatabaseResult<StudioWorkflow>;
     return databaseResult(result);
   }
 
   async getWorkflow(workflowId: string): Promise<StudioWorkflow | null> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_workflows")
       .select("*")
       .eq("id", workflowId)
       .eq("owner_user_id", this.owner.userId)
-      .maybeSingle() as DatabaseResult<StudioWorkflow>;
+      .maybeSingle()) as DatabaseResult<StudioWorkflow>;
     return databaseResult(result);
   }
 
@@ -284,7 +371,9 @@ export class StudioRepository {
       .select("*")
       .eq("owner_user_id", this.owner.userId);
     if (projectId) query = query.eq("project_id", projectId);
-    const result = await query.order("created_at", { ascending: false }) as DatabaseResult<StudioWorkflow[]>;
+    const result = (await query.order("created_at", {
+      ascending: false,
+    })) as DatabaseResult<StudioWorkflow[]>;
     return databaseResult(result) ?? [];
   }
 
@@ -295,7 +384,7 @@ export class StudioRepository {
     graph: Record<string, unknown>;
     fingerprint: string;
   }): Promise<StudioWorkflow> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_workflows")
       .insert({
         id: input.id,
@@ -307,19 +396,25 @@ export class StudioRepository {
         fingerprint: input.fingerprint,
       })
       .select("*")
-      .single() as DatabaseResult<StudioWorkflow>;
+      .single()) as DatabaseResult<StudioWorkflow>;
     const workflow = databaseResult(result);
     if (!workflow) {
-      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+      throw new StudioError(
+        500,
+        "studio_database_error",
+        "Studio data is temporarily unavailable.",
+      );
     }
     return workflow;
   }
 
   async listVisionCapabilities(): Promise<StudioVisionCapability[]> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_vision_capabilities")
       .select("*")
-      .order("capability_id", { ascending: true }) as DatabaseResult<StudioVisionCapability[]>;
+      .order("capability_id", { ascending: true })) as DatabaseResult<
+      StudioVisionCapability[]
+    >;
     return databaseResult(result) ?? [];
   }
 
@@ -333,7 +428,7 @@ export class StudioRepository {
     options: Record<string, unknown>;
     inputAssetIds: string[];
   }): Promise<StudioVisionJob> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_vision_jobs")
       .insert({
         id: input.id,
@@ -349,22 +444,29 @@ export class StudioRepository {
         status: "queued",
       })
       .select("*")
-      .single() as DatabaseResult<StudioVisionJob>;
+      .single()) as DatabaseResult<StudioVisionJob>;
     const job = databaseResult(result);
     if (!job) {
-      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+      throw new StudioError(
+        500,
+        "studio_database_error",
+        "Studio data is temporarily unavailable.",
+      );
     }
     return job;
   }
 
-  async findVisionJobByIdempotency(projectId: string, idempotencyKey: string): Promise<StudioVisionJob | null> {
-    const result = await this.client
+  async findVisionJobByIdempotency(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<StudioVisionJob | null> {
+    const result = (await this.client
       .from("creative_studio_vision_jobs")
       .select("*")
       .eq("project_id", projectId)
       .eq("owner_user_id", this.owner.userId)
       .eq("idempotency_key", idempotencyKey)
-      .maybeSingle() as DatabaseResult<StudioVisionJob>;
+      .maybeSingle()) as DatabaseResult<StudioVisionJob>;
     return databaseResult(result);
   }
 
@@ -373,7 +475,7 @@ export class StudioRepository {
     freeQuotaModels: string[];
     freeQuotaConfirmedAt: Record<string, string>;
   }): Promise<StudioProject | null> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_projects")
       .update({
         free_quota_models: input.freeQuotaModels,
@@ -383,7 +485,7 @@ export class StudioRepository {
       .eq("id", input.projectId)
       .eq("owner_user_id", this.owner.userId)
       .select("*")
-      .maybeSingle() as DatabaseResult<StudioProject>;
+      .maybeSingle()) as DatabaseResult<StudioProject>;
     return databaseResult(result);
   }
 
@@ -401,7 +503,7 @@ export class StudioRepository {
     sha256: string;
     provenance?: Record<string, unknown>;
   }): Promise<StudioAsset> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_assets")
       .insert({
         id: input.id,
@@ -419,80 +521,101 @@ export class StudioRepository {
         provenance: input.provenance ?? {},
       })
       .select("*")
-      .single() as DatabaseResult<StudioAsset>;
+      .single()) as DatabaseResult<StudioAsset>;
     const asset = databaseResult(result);
     if (!asset) {
-      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+      throw new StudioError(
+        500,
+        "studio_database_error",
+        "Studio data is temporarily unavailable.",
+      );
     }
     return asset;
   }
 
   async listModelAcknowledgements(): Promise<StudioModelAcknowledgement[]> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_model_acknowledgements")
       .select("*")
       .eq("owner_user_id", this.owner.userId)
-      .order("billing_acknowledged_at", { ascending: false }) as DatabaseResult<StudioModelAcknowledgement[]>;
+      .order("billing_acknowledged_at", {
+        ascending: false,
+      })) as DatabaseResult<StudioModelAcknowledgement[]>;
     return databaseResult(result) ?? [];
   }
 
-  async acknowledgeModel(input: { modelId: string; contractVersion: string }): Promise<StudioModelAcknowledgement> {
-    const result = await this.client
+  async acknowledgeModel(input: {
+    modelId: string;
+    contractVersion: string;
+  }): Promise<StudioModelAcknowledgement> {
+    const result = (await this.client
       .from("creative_studio_model_acknowledgements")
-      .upsert({
-        owner_user_id: this.owner.userId,
-        model_id: input.modelId,
-        contract_version: input.contractVersion,
-        acknowledgement_text_version: "alibaba-billing-v1",
-        billing_acknowledged_at: new Date().toISOString(),
-      }, { onConflict: "owner_user_id,model_id,contract_version" })
+      .upsert(
+        {
+          owner_user_id: this.owner.userId,
+          model_id: input.modelId,
+          contract_version: input.contractVersion,
+          acknowledgement_text_version: "alibaba-billing-v1",
+          billing_acknowledged_at: new Date().toISOString(),
+        },
+        { onConflict: "owner_user_id,model_id,contract_version" },
+      )
       .select("*")
-      .single() as DatabaseResult<StudioModelAcknowledgement>;
+      .single()) as DatabaseResult<StudioModelAcknowledgement>;
     const acknowledgement = databaseResult(result);
     if (!acknowledgement) {
-      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+      throw new StudioError(
+        500,
+        "studio_database_error",
+        "Studio data is temporarily unavailable.",
+      );
     }
     return acknowledgement;
   }
 
   async getAsset(assetId: string): Promise<StudioAsset | null> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_assets")
       .select("*")
       .eq("id", assetId)
       .eq("owner_user_id", this.owner.userId)
-      .maybeSingle() as DatabaseResult<StudioAsset>;
+      .maybeSingle()) as DatabaseResult<StudioAsset>;
     return databaseResult(result);
   }
 
   async getVisionJob(jobId: string): Promise<StudioVisionJob | null> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_vision_jobs")
       .select("*")
       .eq("id", jobId)
       .eq("owner_user_id", this.owner.userId)
-      .maybeSingle() as DatabaseResult<StudioVisionJob>;
+      .maybeSingle()) as DatabaseResult<StudioVisionJob>;
     return databaseResult(result);
   }
 
   async listAssets(projectId: string): Promise<StudioAsset[]> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_assets")
       .select("*")
       .eq("project_id", projectId)
       .eq("owner_user_id", this.owner.userId)
-      .order("created_at", { ascending: false }) as DatabaseResult<StudioAsset[]>;
+      .order("created_at", { ascending: false })) as DatabaseResult<
+      StudioAsset[]
+    >;
     return databaseResult(result) ?? [];
   }
 
-  async findJobByIdempotency(projectId: string, idempotencyKey: string): Promise<StudioJob | null> {
-    const result = await this.client
+  async findJobByIdempotency(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<StudioJob | null> {
+    const result = (await this.client
       .from("creative_studio_jobs")
       .select("*")
       .eq("project_id", projectId)
       .eq("owner_user_id", this.owner.userId)
       .eq("idempotency_key", idempotencyKey)
-      .maybeSingle() as DatabaseResult<StudioJob>;
+      .maybeSingle()) as DatabaseResult<StudioJob>;
     return databaseResult(result);
   }
 
@@ -508,7 +631,7 @@ export class StudioRepository {
     inputAssets: StudioJob["input_assets"];
     options: StudioJob["options"];
   }): Promise<StudioJob> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_jobs")
       .insert({
         id: input.id,
@@ -524,18 +647,32 @@ export class StudioRepository {
         status: input.initialStatus ?? "queued",
       })
       .select("*")
-      .single() as DatabaseResult<StudioJob>;
+      .single()) as DatabaseResult<StudioJob>;
     const job = databaseResult(result);
     if (!job) {
-      throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+      throw new StudioError(
+        500,
+        "studio_database_error",
+        "Studio data is temporarily unavailable.",
+      );
     }
     return job;
   }
 
-  async createJobMedia(input: { jobId: string; assetId: string; role: MediaRole; ordinal: number }) {
+  async createJobMedia(input: {
+    jobId: string;
+    assetId: string;
+    role: MediaRole;
+    ordinal: number;
+  }) {
     const asset = await this.getAsset(input.assetId);
-    if (!asset) throw new StudioError(400, "invalid_generation_asset", "Generation media must be owned by this Studio account.");
-    const result = await this.client
+    if (!asset)
+      throw new StudioError(
+        400,
+        "invalid_generation_asset",
+        "Generation media must be owned by this Studio account.",
+      );
+    const result = (await this.client
       .from("creative_studio_job_media")
       .insert({
         job_id: input.jobId,
@@ -545,29 +682,36 @@ export class StudioRepository {
         ordinal: input.ordinal,
       })
       .select("*")
-      .single() as DatabaseResult<{ id: string }>;
+      .single()) as DatabaseResult<{ id: string }>;
     const media = databaseResult(result);
-    if (!media) throw new StudioError(500, "studio_database_error", "Studio data is temporarily unavailable.");
+    if (!media)
+      throw new StudioError(
+        500,
+        "studio_database_error",
+        "Studio data is temporarily unavailable.",
+      );
     return media;
   }
 
   async getJob(jobId: string): Promise<StudioJob | null> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_jobs")
       .select("*")
       .eq("id", jobId)
       .eq("owner_user_id", this.owner.userId)
-      .maybeSingle() as DatabaseResult<StudioJob>;
+      .maybeSingle()) as DatabaseResult<StudioJob>;
     return databaseResult(result);
   }
 
   async listJobs(projectId: string): Promise<StudioJob[]> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_jobs")
       .select("*")
       .eq("project_id", projectId)
       .eq("owner_user_id", this.owner.userId)
-      .order("created_at", { ascending: false }) as DatabaseResult<StudioJob[]>;
+      .order("created_at", { ascending: false })) as DatabaseResult<
+      StudioJob[]
+    >;
     return databaseResult(result) ?? [];
   }
 
@@ -582,21 +726,29 @@ export class StudioRepository {
       errorMessage: string | null;
     }>,
   ): Promise<StudioJob | null> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_jobs")
       .update({
         ...(patch.status ? { status: patch.status } : {}),
-        ...(patch.providerTaskId !== undefined ? { provider_task_id: patch.providerTaskId } : {}),
-        ...(patch.outputAssetId !== undefined ? { output_asset_id: patch.outputAssetId } : {}),
-        ...(patch.errorCode !== undefined ? { error_code: patch.errorCode } : {}),
-        ...(patch.errorMessage !== undefined ? { error_message: patch.errorMessage } : {}),
+        ...(patch.providerTaskId !== undefined
+          ? { provider_task_id: patch.providerTaskId }
+          : {}),
+        ...(patch.outputAssetId !== undefined
+          ? { output_asset_id: patch.outputAssetId }
+          : {}),
+        ...(patch.errorCode !== undefined
+          ? { error_code: patch.errorCode }
+          : {}),
+        ...(patch.errorMessage !== undefined
+          ? { error_message: patch.errorMessage }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", jobId)
       .eq("owner_user_id", this.owner.userId)
       .eq("status", expectedStatus)
       .select("*")
-      .maybeSingle() as DatabaseResult<StudioJob>;
+      .maybeSingle()) as DatabaseResult<StudioJob>;
     return databaseResult(result);
   }
 
@@ -610,20 +762,28 @@ export class StudioRepository {
       errorMessage: string | null;
     }>,
   ): Promise<StudioJob | null> {
-    const result = await this.client
+    const result = (await this.client
       .from("creative_studio_jobs")
       .update({
         ...(patch.status ? { status: patch.status } : {}),
-        ...(patch.providerTaskId !== undefined ? { provider_task_id: patch.providerTaskId } : {}),
-        ...(patch.outputAssetId !== undefined ? { output_asset_id: patch.outputAssetId } : {}),
-        ...(patch.errorCode !== undefined ? { error_code: patch.errorCode } : {}),
-        ...(patch.errorMessage !== undefined ? { error_message: patch.errorMessage } : {}),
+        ...(patch.providerTaskId !== undefined
+          ? { provider_task_id: patch.providerTaskId }
+          : {}),
+        ...(patch.outputAssetId !== undefined
+          ? { output_asset_id: patch.outputAssetId }
+          : {}),
+        ...(patch.errorCode !== undefined
+          ? { error_code: patch.errorCode }
+          : {}),
+        ...(patch.errorMessage !== undefined
+          ? { error_message: patch.errorMessage }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", jobId)
       .eq("owner_user_id", this.owner.userId)
       .select("*")
-      .maybeSingle() as DatabaseResult<StudioJob>;
+      .maybeSingle()) as DatabaseResult<StudioJob>;
     return databaseResult(result);
   }
 }

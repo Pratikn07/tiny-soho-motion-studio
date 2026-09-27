@@ -13,13 +13,76 @@ import type { createStudioApi } from "@/lib/api";
 type StudioApi = ReturnType<typeof createStudioApi>;
 type View = "motion" | "director" | "workflows" | "vision";
 
-export function StudioShell({ api, onSignOut }: { api: StudioApi; onSignOut?: () => void }) {
+export function StudioShell({
+  api,
+  onSignOut,
+}: {
+  api: StudioApi;
+  onSignOut?: () => void;
+}) {
   const [showTools, setShowTools] = useState(false);
   const [view, setView] = useState<View>("motion");
-  return <>
-    <div hidden={showTools}>
-      <CarouselStudio active={!showTools} onOpenTools={() => setShowTools(true)} onSignOut={onSignOut} />
-    </div>
-    {showTools && <div className="legacy-studio"><main className="studio-shell"><header><button type="button" onClick={() => setShowTools(false)}>Back to Carousel Studio</button><p className="eyebrow">Tiny Soho</p><h1>Creative Studio</h1><p>Owner-only creative production. Motion, Director, Workflows, and Vision remain isolated from Instagram automation.</p><nav className="studio-nav" aria-label="Creative Studio views"><button type="button" className={view === "motion" ? "active" : ""} onClick={() => setView("motion")}>Motion &amp; Assets</button><button type="button" className={view === "director" ? "active" : ""} onClick={() => setView("director")}>Creative Director</button><button type="button" className={view === "workflows" ? "active" : ""} onClick={() => setView("workflows")}>Workflows</button><button type="button" className={view === "vision" ? "active" : ""} onClick={() => setView("vision")}>Vision Lab</button></nav></header>{view === "motion" ? <MotionStudio api={api} /> : null}{view === "director" ? <DirectorStudio api={api} /> : null}{view === "workflows" ? <WorkflowStudio api={api} /> : null}{view === "vision" ? <VisionStudio api={api} /> : null}</main></div>}
-  </>;
+  return (
+    <>
+      <div hidden={showTools}>
+        <CarouselStudio
+          api={api}
+          active={!showTools}
+          onOpenTools={() => setShowTools(true)}
+          onSignOut={onSignOut}
+        />
+      </div>
+      {showTools && (
+        <div className="legacy-studio">
+          <main className="studio-shell">
+            <header>
+              <button type="button" onClick={() => setShowTools(false)}>
+                Back to Carousel Studio
+              </button>
+              <p className="eyebrow">Tiny Soho</p>
+              <h1>Creative Studio</h1>
+              <p>
+                Owner-only creative production. Motion, Director, Workflows, and
+                Vision remain isolated from Instagram automation.
+              </p>
+              <nav className="studio-nav" aria-label="Creative Studio views">
+                <button
+                  type="button"
+                  className={view === "motion" ? "active" : ""}
+                  onClick={() => setView("motion")}
+                >
+                  Motion &amp; Assets
+                </button>
+                <button
+                  type="button"
+                  className={view === "director" ? "active" : ""}
+                  onClick={() => setView("director")}
+                >
+                  Creative Director
+                </button>
+                <button
+                  type="button"
+                  className={view === "workflows" ? "active" : ""}
+                  onClick={() => setView("workflows")}
+                >
+                  Workflows
+                </button>
+                <button
+                  type="button"
+                  className={view === "vision" ? "active" : ""}
+                  onClick={() => setView("vision")}
+                >
+                  Vision Lab
+                </button>
+              </nav>
+            </header>
+            {view === "motion" ? <MotionStudio api={api} /> : null}
+            {view === "director" ? <DirectorStudio api={api} /> : null}
+            {view === "workflows" ? <WorkflowStudio api={api} /> : null}
+            {view === "vision" ? <VisionStudio api={api} /> : null}
+          </main>
+        </div>
+      )}
+    </>
+  );
 }

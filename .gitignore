@@ -50,3 +50,6 @@ services/vision/artifact-cache/
 services/vision/.huggingface/
 services/vision/.paddleocr/
 .vision-venv/
+
+# Supabase CLI local metadata
+supabase/.temp/

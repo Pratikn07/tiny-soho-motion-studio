@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -29,7 +29,10 @@ class SupabaseVisionRepository:
         }
 
     def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        response = self.client.request(method, f"{self.config.supabase_url}{path}", headers=self.headers | kwargs.pop("headers", {}), **kwargs)
+        try:
+            response = self.client.request(method, f"{self.config.supabase_url}{path}", headers=self.headers | kwargs.pop("headers", {}), **kwargs)
+        except httpx.RequestError as error:
+            raise VisionRepositoryError("Supabase Vision connection is temporarily unavailable.") from None
         if response.is_error:
             raise VisionRepositoryError("Supabase Vision storage is temporarily unavailable.")
         return response
@@ -50,6 +53,19 @@ class SupabaseVisionRepository:
             input_asset_ids=row.get("input_asset_ids", []),
             worker_lease_id=row.get("worker_lease_id"),
         )
+
+    def extend_job_lease(self, job: VisionJob) -> None:
+        if not job.worker_lease_id:
+            raise VisionRepositoryError("Vision job has no active lease.")
+        # Download, CPU composition and upload can exceed the initial two-minute claim.
+        response = self._request(
+            "PATCH", "/rest/v1/creative_studio_vision_jobs",
+            params={"id": f"eq.{job.id}", "owner_user_id": f"eq.{job.owner_user_id}", "worker_lease_id": f"eq.{job.worker_lease_id}", "status": "eq.running", "worker_lease_expires_at": f"gt.{datetime.now(UTC).isoformat()}"},
+            headers={"Prefer": "return=representation"},
+            json={"worker_lease_expires_at": (datetime.now(UTC) + timedelta(minutes=10)).isoformat()},
+        )
+        if not response.json():
+            raise VisionRepositoryError("Vision job lease changed before processing.")
 
     def storage_for(self, job: VisionJob) -> "JobStorage":
         return JobStorage(self, job)
@@ -82,12 +98,16 @@ class SupabaseVisionRepository:
         if not isinstance(signed_url, str):
             raise VisionRepositoryError("Vision input URL could not be signed.")
         url = signed_url if signed_url.startswith("http") else f"{self.config.supabase_url}/storage/v1{signed_url}"
-        response = self.client.get(url, timeout=httpx.Timeout(60.0))
+        try:
+            response = self.client.get(url, timeout=httpx.Timeout(60.0))
+        except httpx.RequestError as error:
+            raise VisionRepositoryError("Vision input download was interrupted.") from None
         if response.is_error or not response.content:
             raise VisionRepositoryError("Vision input could not be downloaded.")
         return response.content, asset["mime_type"], url
 
     def upload_derived(self, job: VisionJob, object_path: str, data: bytes, mime_type: str, kind: str) -> str:
+        self.extend_job_lease(job)
         uploaded = self._request(
             "POST",
             f"/storage/v1/object/creative-studio/{quote(object_path, safe='/')}",
@@ -102,6 +122,7 @@ class SupabaseVisionRepository:
             with Image.open(BytesIO(data)) as image:
                 width, height = image.size
         asset_uuid = str(uuid.uuid4())
+        self.extend_job_lease(job)
         created = self._request(
             "POST",
             "/rest/v1/creative_studio_assets",
@@ -127,11 +148,12 @@ class SupabaseVisionRepository:
         return created[0]["id"]
 
     def complete_job(self, job: VisionJob, *, status: str, asset_ids: list[str], error_code: str | None, error_message: str | None) -> None:
-        self._request(
+        self.extend_job_lease(job)
+        response = self._request(
             "PATCH",
             "/rest/v1/creative_studio_vision_jobs",
-            params={"id": f"eq.{job.id}", "owner_user_id": f"eq.{job.owner_user_id}", "worker_lease_id": f"eq.{job.worker_lease_id}"},
-            headers={"Content-Type": "application/json"},
+            params={"id": f"eq.{job.id}", "owner_user_id": f"eq.{job.owner_user_id}", "worker_lease_id": f"eq.{job.worker_lease_id}", "status": "eq.running", "worker_lease_expires_at": f"gt.{datetime.now(UTC).isoformat()}"},
+            headers={"Content-Type": "application/json", "Prefer": "return=representation"},
             json={
                 "status": status,
                 "output_asset_ids": asset_ids,
@@ -143,11 +165,14 @@ class SupabaseVisionRepository:
             },
         )
 
+        if not response.json():
+            raise VisionRepositoryError("Vision lease changed before completion.")
+
     def upsert_capabilities(self) -> None:
         now = datetime.now(UTC).isoformat()
         rows = [
             {"capability_id": operation, "service_version": self.config.service_version, "status": "available", "reason": None, "refreshed_at": now, "updated_at": now}
-            for operation in ("inspect", "overlay", "plate", "compose")
+            for operation in ("inspect", "overlay", "plate", "compose", "carousel_compose")
         ] + [
             {"capability_id": operation, "service_version": self.config.service_version, "status": "unavailable", "reason": "Not configured in the CPU-safe hosted Vision service.", "refreshed_at": now, "updated_at": now}
             for operation in ("ocr", "segment", "layers")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -14,7 +15,8 @@ from .repository import SupabaseVisionRepository, VisionRepositoryError
 
 
 SERVICE_NAME = "tiny-soho-creative-vision"
-SERVICE_VERSION = "0.1.0"
+SERVICE_VERSION = "0.2.0"
+LEASE_RENEW_SECONDS = 30.0
 logger = logging.getLogger(__name__)
 
 
@@ -26,26 +28,38 @@ def claim_and_process_once(repository: SupabaseVisionRepository, processor: Visi
     job = repository.claim_vision_job()
     if not job:
         return False
+    repository.extend_job_lease(job)
+    stop = threading.Event()
+    def renew() -> None:
+        while not stop.wait(LEASE_RENEW_SECONDS):
+            try:
+                repository.extend_job_lease(job)
+                repository.upsert_capabilities()
+            except VisionRepositoryError:
+                # Output writes independently recheck ownership. A network failure
+                # may recover while this worker still owns the unexpired lease.
+                logger.warning("Vision lease renewal interrupted")
+    renewal = threading.Thread(target=renew, daemon=True, name="vision-job-lease")
+    renewal.start()
     try:
-        result = process_vision_job(job, repository.storage_for(job), processor)
-    except (VisionRepositoryError, ValueError, OSError):
-        logger.exception("Vision job could not be processed")
+        try:
+            result = process_vision_job(job, repository.storage_for(job), processor)
+        except (VisionRepositoryError, ValueError, OSError):
+            logger.warning("Vision job could not be processed")
+            repository.complete_job(
+                job, status="needs_attention", asset_ids=[],
+                error_code="vision_processing_failed",
+                error_message="Vision processing needs review before it can continue.",
+            )
+            return True
         repository.complete_job(
-            job,
-            status="needs_attention",
-            asset_ids=[],
-            error_code="vision_processing_failed",
-            error_message="Vision processing needs review before it can continue.",
+            job, status=result.status, asset_ids=result.asset_ids,
+            error_code=result.error_code, error_message=result.error_message,
         )
         return True
-    repository.complete_job(
-        job,
-        status=result.status,
-        asset_ids=result.asset_ids,
-        error_code=result.error_code,
-        error_message=result.error_message,
-    )
-    return True
+    finally:
+        stop.set()
+        renewal.join()
 
 
 def worker_loop(stop: threading.Event) -> None:
@@ -53,16 +67,17 @@ def worker_loop(stop: threading.Event) -> None:
         config = HostedVisionConfig.from_env()
         repository = SupabaseVisionRepository(config)
         processor = VisionProcessor(ffmpeg_path="ffmpeg", ffprobe_path="ffprobe")
-        repository.upsert_capabilities()
     except (ValueError, VisionRepositoryError):
         logger.exception("Vision worker is not configured")
         return
+    heartbeat_at = 0.0
     while not stop.is_set():
         handled = False
         try:
-            handled = claim_and_process_once(repository, processor)
-            if not handled:
+            if time.monotonic() - heartbeat_at >= 30:
                 repository.upsert_capabilities()
+                heartbeat_at = time.monotonic()
+            handled = claim_and_process_once(repository, processor)
         except (ValueError, VisionRepositoryError):
             logger.exception("Vision worker tick failed")
         stop.wait(0.1 if handled else config.poll_seconds)

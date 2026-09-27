@@ -2030,6 +2030,103 @@
   color: inherit;
   font-size: inherit;
 }
-.toolsLink { display: inline-flex; align-items: center; gap: 5px; }
+.toolsLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 .accountButton:hover,
-.toolsLink:hover { text-decoration: underline; text-underline-offset: 4px; }
+.toolsLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.projectActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.projectActions select {
+  max-width: 220px;
+  background: var(--paper, #fffdf8);
+  color: inherit;
+  border: 1px solid #ddd8cf;
+  border-radius: 5px;
+  padding: 10px;
+  font: inherit;
+}
+.workspaceStatus {
+  padding: 8px 28px;
+  font-size: 12px;
+  border-bottom: 1px solid #e5e0d8;
+  background: #faf8f4;
+}
+.workspaceStatus[role="alert"] {
+  color: #8f372b;
+}
+.workflowControls {
+  padding: 20px 24px;
+  border-bottom: 1px solid #ddd8cf;
+  display: grid;
+  gap: 14px;
+}
+.workflowControls p {
+  font-size: 12px;
+  line-height: 1.55;
+  color: #6c675f;
+  margin: 0;
+}
+.workflowControls fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.workflowControls legend {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.workflowControls details {
+  border: 1px solid #ded9d0;
+  border-radius: 5px;
+  padding: 9px;
+  font-size: 12px;
+}
+.workflowControls details label {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0;
+}
+.workflowControls details input {
+  width: 75px;
+  border: 1px solid #ddd8cf;
+  padding: 4px;
+}
+.workflowControls details button {
+  border: 0;
+  background: none;
+  color: #8f372b;
+  padding: 5px 0;
+  cursor: pointer;
+}
+.reviewCheck {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.reviewCheck input {
+  margin-top: 3px;
+  accent-color: #26241f;
+}
+@media (max-width: 1000px) {
+  .projectActions select {
+    max-width: 150px;
+  }
+  .projectActions {
+    flex-wrap: wrap;
+  }
+}

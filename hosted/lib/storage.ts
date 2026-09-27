@@ -4,14 +4,23 @@ import type { Metadata } from "sharp";
 
 import { StudioError } from "@/lib/errors";
 
-const MAX_SOURCE_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_SOURCE_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_SOURCE_IMAGE_PIXELS = 40_000_000;
 const MAX_GENERATED_VIDEO_BYTES = 250 * 1024 * 1024;
 const MAX_SOURCE_VIDEO_BYTES = 200 * 1024 * 1024;
 const MAX_SOURCE_AUDIO_BYTES = 25 * 1024 * 1024;
 const sourceImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const sourceVideoMimeTypes = new Set(["video/mp4", "video/quicktime", "video/webm"]);
-const sourceAudioMimeTypes = new Set(["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4"]);
+const sourceVideoMimeTypes = new Set([
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+]);
+const sourceAudioMimeTypes = new Set([
+  "audio/mpeg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/mp4",
+]);
 
 const mimeTypeForFormat: Record<string, string> = {
   jpeg: "image/jpeg",
@@ -25,12 +34,13 @@ export function sourceObjectPath(
   assetId: string,
   originalFilename: string,
 ) {
-  const safeFilename = originalFilename
-    .normalize("NFKD")
-    .replace(/[^A-Za-z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^[.-]+|[.-]+$/g, "")
-    .slice(0, 160) || "source-image";
+  const safeFilename =
+    originalFilename
+      .normalize("NFKD")
+      .replace(/[^A-Za-z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^[.-]+|[.-]+$/g, "")
+      .slice(0, 160) || "source-image";
 
   return `owners/${ownerUserId}/projects/${projectId}/sources/${assetId}-${safeFilename}`;
 }
@@ -43,14 +53,23 @@ export type ValidatedSourceImage = {
   sha256: string;
 };
 
-export type ValidatedSourceMedia = ValidatedSourceImage | {
-  bytes: Buffer;
-  mimeType: "video/mp4" | "video/quicktime" | "video/webm" | "audio/mpeg" | "audio/wav" | "audio/x-wav" | "audio/mp4";
-  kind: "source-video" | "source-audio";
-  width: null;
-  height: null;
-  sha256: string;
-};
+export type ValidatedSourceMedia =
+  | ValidatedSourceImage
+  | {
+      bytes: Buffer;
+      mimeType:
+        | "video/mp4"
+        | "video/quicktime"
+        | "video/webm"
+        | "audio/mpeg"
+        | "audio/wav"
+        | "audio/x-wav"
+        | "audio/mp4";
+      kind: "source-video" | "source-audio";
+      width: null;
+      height: null;
+      sha256: string;
+    };
 
 type StorageUploadClient = {
   storage: {
@@ -70,18 +89,31 @@ type StorageSigningClient = {
       createSignedUrl: (
         path: string,
         expiresIn: number,
-      ) => Promise<{ data: { signedUrl: string } | null; error: { message: string } | null }>;
+      ) => Promise<{
+        data: { signedUrl: string } | null;
+        error: { message: string } | null;
+      }>;
     };
   };
 };
 
-export async function validateSourceImage(file: File): Promise<ValidatedSourceImage> {
+export async function validateSourceImage(
+  file: File,
+): Promise<ValidatedSourceImage> {
   if (!sourceImageMimeTypes.has(file.type)) {
-    throw new StudioError(400, "unsupported_source_image", "Upload a PNG, JPEG, or WebP source image.");
+    throw new StudioError(
+      400,
+      "unsupported_source_image",
+      "Upload a PNG, JPEG, or WebP source image.",
+    );
   }
 
   if (!file.size || file.size > MAX_SOURCE_IMAGE_BYTES) {
-    throw new StudioError(400, "source_image_too_large", "Source images must be 20 MiB or smaller.");
+    throw new StudioError(
+      400,
+      "source_image_too_large",
+      "Source images must be 25 MiB or smaller.",
+    );
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
@@ -92,30 +124,61 @@ export async function validateSourceImage(file: File): Promise<ValidatedSourceIm
       limitInputPixels: MAX_SOURCE_IMAGE_PIXELS,
     }).metadata();
   } catch {
-    throw new StudioError(400, "unreadable_source_image", "Upload a readable image file.");
+    throw new StudioError(
+      400,
+      "unreadable_source_image",
+      "Upload a readable image file.",
+    );
   }
 
-  const mimeType = metadata.format ? mimeTypeForFormat[metadata.format] : undefined;
-  if (!mimeType || mimeType !== file.type || !metadata.width || !metadata.height) {
-    throw new StudioError(400, "unreadable_source_image", "Upload a readable image file.");
+  const mimeType = metadata.format
+    ? mimeTypeForFormat[metadata.format]
+    : undefined;
+  if (
+    !mimeType ||
+    mimeType !== file.type ||
+    !metadata.width ||
+    !metadata.height
+  ) {
+    throw new StudioError(
+      400,
+      "unreadable_source_image",
+      "Upload a readable image file.",
+    );
   }
 
   if (metadata.width * metadata.height > MAX_SOURCE_IMAGE_PIXELS) {
-    throw new StudioError(400, "source_image_too_large", "Source image dimensions are too large.");
+    throw new StudioError(
+      400,
+      "source_image_too_large",
+      "Source image dimensions are too large.",
+    );
   }
 
   return {
     bytes,
     mimeType: mimeType as ValidatedSourceImage["mimeType"],
-    width: metadata.width,
-    height: metadata.height,
+    width:
+      metadata.orientation && metadata.orientation >= 5
+        ? metadata.height
+        : metadata.width,
+    height:
+      metadata.orientation && metadata.orientation >= 5
+        ? metadata.width
+        : metadata.height,
     sha256: createHash("sha256").update(bytes).digest("hex"),
   };
 }
 
-export async function validateSourceMedia(file: File): Promise<ValidatedSourceMedia & { kind: "source-image" | "source-video" | "source-audio" }> {
+export async function validateSourceMedia(
+  file: File,
+): Promise<
+  ValidatedSourceMedia & {
+    kind: "source-image" | "source-video" | "source-audio";
+  }
+> {
   if (sourceImageMimeTypes.has(file.type)) {
-    return { ...await validateSourceImage(file), kind: "source-image" };
+    return { ...(await validateSourceImage(file)), kind: "source-image" };
   }
   const maxBytes = sourceVideoMimeTypes.has(file.type)
     ? MAX_SOURCE_VIDEO_BYTES
@@ -123,15 +186,26 @@ export async function validateSourceMedia(file: File): Promise<ValidatedSourceMe
       ? MAX_SOURCE_AUDIO_BYTES
       : 0;
   if (!maxBytes) {
-    throw new StudioError(400, "unsupported_source_media", "Upload a PNG, JPEG, WebP, MP4, MOV, WebM, MP3, WAV, or M4A source file.");
+    throw new StudioError(
+      400,
+      "unsupported_source_media",
+      "Upload a PNG, JPEG, WebP, MP4, MOV, WebM, MP3, WAV, or M4A source file.",
+    );
   }
   if (!file.size || file.size > maxBytes) {
-    throw new StudioError(400, "source_media_too_large", "This source media file is too large.");
+    throw new StudioError(
+      400,
+      "source_media_too_large",
+      "This source media file is too large.",
+    );
   }
   const bytes = Buffer.from(await file.arrayBuffer());
   return {
     bytes,
-    mimeType: file.type as Exclude<ValidatedSourceMedia["mimeType"], ValidatedSourceImage["mimeType"]>,
+    mimeType: file.type as Exclude<
+      ValidatedSourceMedia["mimeType"],
+      ValidatedSourceImage["mimeType"]
+    >,
     kind: sourceVideoMimeTypes.has(file.type) ? "source-video" : "source-audio",
     width: null,
     height: null,
@@ -155,10 +229,17 @@ export async function uploadSourceImage(input: {
   );
   const { error } = await input.client.storage
     .from("creative-studio")
-    .upload(objectPath, image.bytes, { contentType: image.mimeType, upsert: false });
+    .upload(objectPath, image.bytes, {
+      contentType: image.mimeType,
+      upsert: false,
+    });
 
   if (error) {
-    throw new StudioError(502, "studio_storage_upload_failed", "Source image upload failed.");
+    throw new StudioError(
+      502,
+      "studio_storage_upload_failed",
+      "Source image upload failed.",
+    );
   }
 
   return { ...image, objectPath };
@@ -180,19 +261,33 @@ export async function uploadSourceMedia(input: {
   );
   const { error } = await input.client.storage
     .from("creative-studio")
-    .upload(objectPath, media.bytes, { contentType: media.mimeType, upsert: false });
+    .upload(objectPath, media.bytes, {
+      contentType: media.mimeType,
+      upsert: false,
+    });
   if (error) {
-    throw new StudioError(502, "studio_storage_upload_failed", "Source media upload failed.");
+    throw new StudioError(
+      502,
+      "studio_storage_upload_failed",
+      "Source media upload failed.",
+    );
   }
   return { ...media, objectPath };
 }
 
-export async function signAssetDownload(client: StorageSigningClient, objectPath: string) {
+export async function signAssetDownload(
+  client: StorageSigningClient,
+  objectPath: string,
+) {
   const { data, error } = await client.storage
     .from("creative-studio")
     .createSignedUrl(objectPath, 300);
   if (error || !data?.signedUrl) {
-    throw new StudioError(502, "studio_storage_sign_failed", "Asset download is temporarily unavailable.");
+    throw new StudioError(
+      502,
+      "studio_storage_sign_failed",
+      "Asset download is temporarily unavailable.",
+    );
   }
   return data.signedUrl;
 }
@@ -209,21 +304,43 @@ export async function ingestGeneratedVideo(input: {
   try {
     providerUrl = new URL(input.providerUrl);
   } catch {
-    throw new StudioError(502, "provider_result_invalid", "Provider result URL is invalid.");
+    throw new StudioError(
+      502,
+      "provider_result_invalid",
+      "Provider result URL is invalid.",
+    );
   }
   if (providerUrl.protocol !== "https:") {
-    throw new StudioError(502, "provider_result_invalid", "Provider result URL is invalid.");
+    throw new StudioError(
+      502,
+      "provider_result_invalid",
+      "Provider result URL is invalid.",
+    );
   }
 
-  const response = await (input.fetcher ?? fetch)(providerUrl, { signal: AbortSignal.timeout(60_000) });
+  const response = await (input.fetcher ?? fetch)(providerUrl, {
+    signal: AbortSignal.timeout(60_000),
+  });
   const contentType = response.headers.get("content-type")?.split(";", 1)[0];
   const contentLength = Number(response.headers.get("content-length") ?? 0);
-  if (!response.ok || contentType !== "video/mp4" || contentLength > MAX_GENERATED_VIDEO_BYTES) {
-    throw new StudioError(502, "provider_result_invalid", "Provider result could not be imported.");
+  if (
+    !response.ok ||
+    contentType !== "video/mp4" ||
+    contentLength > MAX_GENERATED_VIDEO_BYTES
+  ) {
+    throw new StudioError(
+      502,
+      "provider_result_invalid",
+      "Provider result could not be imported.",
+    );
   }
   const bytes = Buffer.from(await response.arrayBuffer());
   if (!bytes.byteLength || bytes.byteLength > MAX_GENERATED_VIDEO_BYTES) {
-    throw new StudioError(502, "provider_result_invalid", "Provider result could not be imported.");
+    throw new StudioError(
+      502,
+      "provider_result_invalid",
+      "Provider result could not be imported.",
+    );
   }
 
   const objectPath = `owners/${input.ownerUserId}/projects/${input.projectId}/generated/${input.assetId}.mp4`;
@@ -231,7 +348,11 @@ export async function ingestGeneratedVideo(input: {
     .from("creative-studio")
     .upload(objectPath, bytes, { contentType: "video/mp4", upsert: false });
   if (error) {
-    throw new StudioError(502, "studio_storage_upload_failed", "Generated video upload failed.");
+    throw new StudioError(
+      502,
+      "studio_storage_upload_failed",
+      "Generated video upload failed.",
+    );
   }
 
   return {

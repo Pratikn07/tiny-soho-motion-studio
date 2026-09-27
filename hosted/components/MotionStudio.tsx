@@ -30,6 +30,7 @@ export type StudioJobView = {
   status: string;
   modelId: string;
   outputUrl?: string;
+  outputAssetId?: string | null;
   errorMessage?: string | null;
 };
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Protocol
 
 from PIL import Image
+from .carousel import compose_carousel
 
 from services.vision.composition import build_overlay_command, validate_overlay_dimensions, video_dimensions
 from services.vision.image_input import decode_image
@@ -153,6 +154,16 @@ def process_vision_job(job: VisionJob, storage: VisionStorage, processor: Vision
     if source_mime != "video/mp4" or not job.input_asset_ids:
         return VisionResult("needs_attention", [], [], None, None, "vision_compose_inputs_invalid", "Compose requires an MP4 source video and an overlay image.")
     overlay, overlay_mime, _ = storage.download_owned_input(job.owner_user_id, job.project_id, job.input_asset_ids[0])
+    if "carousel" in job.options:
+        if not overlay_mime.startswith("image/") or not isinstance(job.options["carousel"], dict):
+            return VisionResult("needs_attention", [], [], None, None, "carousel_inputs_invalid", "Carousel composition requires the original image and reviewed plan.")
+        try:
+            composed, width, height = compose_carousel(source, overlay, job.options["carousel"], processor.ffmpeg_path, processor.ffprobe_path)
+        except (ValueError, OSError, subprocess.SubprocessError, RuntimeError):
+            return VisionResult("needs_attention", [], [], None, None, "carousel_compose_failed", "Composition could not safely preserve this artwork. Review dimensions and movement clearance before retrying.")
+        object_path = f"owners/{job.owner_user_id}/projects/{job.project_id}/vision/{job.id}/carousel.mp4"
+        asset_id = storage.upload_derived(object_path, composed, "video/mp4", "derived-video")
+        return VisionResult("completed", [asset_id], [object_path], width, height)
     if overlay_mime != "image/png":
         return VisionResult("needs_attention", [], [], None, None, "vision_compose_inputs_invalid", "Compose requires a PNG overlay image.")
     try:

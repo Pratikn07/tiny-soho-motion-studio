@@ -14,6 +14,10 @@ export type Slide = {
   protectedRegions: Region[];
   suggestions: Story[];
   video?: string;
+  assetId?: string;
+  reviewed?: boolean;
+  analysisSummary?: string;
+  run?: import("../../lib/carousel").CarouselRun;
 };
 export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 export const MAX_SLIDES = 20;
@@ -97,12 +101,19 @@ export function exportPlan(slide: Slide) {
     protectedRegionsPercent: slide.protectedRegions,
     camera: "locked",
     pace: "natural",
-    status: "draft-not-generated",
-    analysis:
-      slide.origin === "example"
+    status: slide.run?.outputAssetId
+      ? "generated-review-required"
+      : "draft-not-generated",
+    analysis: slide.analysisSummary
+      ? slide.reviewed
+        ? "model-suggestions-reviewed-by-user"
+        : "model-suggestions-awaiting-review"
+      : slide.origin === "example"
         ? "manually-authored-example"
         : "user-authored-not-analyzed",
-    generatedVideo: null,
+    generatedVideo: slide.run?.outputAssetId
+      ? { assetId: slide.run.outputAssetId, story: slide.run.snapshot.story }
+      : null,
   };
 }
 const exampleData: Slide[] = [

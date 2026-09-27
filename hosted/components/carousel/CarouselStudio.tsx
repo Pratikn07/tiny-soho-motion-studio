@@ -8,6 +8,8 @@ import {
   type PointerEvent,
 } from "react";
 import Icon from "./Icons";
+import { useCarouselWorkspace, type CarouselApi } from "./useCarouselWorkspace";
+import { WorkflowControls } from "./WorkflowControls";
 import {
   exampleSlides,
   exportPlan,
@@ -43,12 +45,18 @@ function downloadBlob(blob: Blob, name: string) {
 }
 
 type CarouselStudioProps = {
+  api?: CarouselApi;
   onOpenTools?: () => void;
   onSignOut?: () => void;
   active?: boolean;
 };
 
-export default function CarouselStudio({ onOpenTools, onSignOut, active: isActive = true }: CarouselStudioProps) {
+export default function CarouselStudio({
+  api,
+  onOpenTools,
+  onSignOut,
+  active: isActive = true,
+}: CarouselStudioProps) {
   const [slides, setSlides] = useState<Slide[]>(exampleSlides);
   const [selectedId, setSelectedId] = useState("meal-prep");
   const [projectName, setProjectName] = useState("Everyday little moments");
@@ -84,6 +92,13 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
     height: number;
     resize: boolean;
   } | null>(null);
+  const workspace = useCarouselWorkspace(
+    api,
+    slides,
+    setSlides,
+    projectName,
+    setProjectName,
+  );
   const active = slides.find((slide) => slide.id === selectedId) ?? slides[0];
   const activeIndex = active ? slides.indexOf(active) : -1;
   const overlap =
@@ -121,9 +136,22 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
     setShowRegion(false);
   }
   function patch(patch: Partial<Slide>) {
-    if (active) setSlides((all) => updateSlide(all, active.id, patch));
+    if (api && (workspace.busy || (active?.run && !active.run.outputAssetId)))
+      return;
+    if (active)
+      setSlides((all) =>
+        updateSlide(all, active.id, {
+          ...patch,
+          ...(patch.story !== undefined ||
+          patch.region ||
+          patch.protectedRegions
+            ? { reviewed: false }
+            : {}),
+        }),
+      );
   }
   async function addFiles(files: File[]) {
+    if (api && workspace.busy) return;
     if (!files.length || uploadingRef.current) return;
     uploadingRef.current = true;
     setUploading(true);
@@ -198,7 +226,11 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
     void addFiles(files);
   }
   function removeSlide() {
-    if (!active) return;
+    if (
+      !active ||
+      (api && (workspace.busy || (active.run && !active.run.outputAssetId)))
+    )
+      return;
     setUndo({ slide: active, index: activeIndex });
     const remaining = slides.filter((slide) => slide.id !== active.id);
     setSlides(remaining);
@@ -248,7 +280,9 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
       `${active.name.replace(/[^a-z0-9-]+/gi, "-").toLowerCase()}-story-plan.json`,
     );
     setNotice(
-      "Story plan downloaded. Your original image stays on this device.",
+      api
+        ? "Story plan downloaded."
+        : "Story plan downloaded. Your original image stays on this device.",
     );
   }
   function openPreview() {
@@ -353,10 +387,14 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
         accept="image/png,image/jpeg,image/webp"
         aria-label="Upload carousel images"
         onChange={filesChanged}
-        disabled={uploading}
+        disabled={uploading || (!!api && workspace.busy)}
       />
       <header className={s.topbar}>
-        <a href="#workspace" className={s.wordmark} aria-label="Tiny Soho Studio home">
+        <a
+          href="#workspace"
+          className={s.wordmark}
+          aria-label="Tiny Soho Studio home"
+        >
           tiny soho<span>STUDIO</span>
         </a>
         <nav className={s.primaryNav} aria-label="Studio navigation">
@@ -370,7 +408,9 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
           </button>
         </nav>
         <div className={s.topActions}>
-          <span className={s.previewBadge}>UI preview</span>
+          <span className={s.previewBadge}>
+            {api ? "Carousel Studio" : "UI preview"}
+          </span>
           <button
             className={s.iconButton}
             aria-label="About this preview"
@@ -378,7 +418,11 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
           >
             <Icon name="help" size={20} />
           </button>
-          {onSignOut && <button className={s.accountButton} onClick={onSignOut}>Sign out</button>}
+          {onSignOut && (
+            <button className={s.accountButton} onClick={onSignOut}>
+              Sign out
+            </button>
+          )}
           <span className={s.avatar} aria-label="Tiny Soho workspace">
             TS
           </span>
@@ -387,6 +431,7 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
       <div className={s.projectbar}>
         <div className={s.projectTitle}>
           <input
+            disabled={!!api && workspace.busy}
             aria-label="Project name"
             value={projectName}
             maxLength={70}
@@ -395,9 +440,41 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
           <span>
             {slides.length} {slides.length === 1 ? "slide" : "slides"}
             <i />
-            Session draft
+            {api
+              ? workspace.dirty
+                ? "Unsaved changes"
+                : "Saved"
+              : "Session draft"}
           </span>
         </div>
+        {api && (
+          <div className={s.projectActions}>
+            <select
+              aria-label="Open saved project"
+              value={workspace.project?.id ?? ""}
+              disabled={
+                workspace.busy || (!!workspace.project && workspace.dirty)
+              }
+              onChange={(event) => {
+                if (event.target.value) void workspace.open(event.target.value);
+              }}
+            >
+              <option value="">Open a saved project</option>
+              {workspace.projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            <button
+              className={s.secondary}
+              disabled={workspace.busy}
+              onClick={() => void workspace.save()}
+            >
+              {workspace.busy ? "Working…" : "Save project"}
+            </button>
+          </div>
+        )}
         <ol className={s.steps}>
           {(["upload", "story", "preview"] as Stage[]).map((item, index) => (
             <li key={item}>
@@ -449,7 +526,28 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
           </button>
         </div>
       )}
-      <main id="workspace" className={s.workspace}>
+      {api && (
+        <div
+          className={s.workspaceStatus}
+          role={workspace.error ? "alert" : "status"}
+        >
+          {workspace.error || workspace.status}
+          {workspace.error.includes("another tab") && workspace.project && (
+            <button
+              className={s.textButton}
+              disabled={workspace.busy}
+              onClick={() => void workspace.open(workspace.project!.id)}
+            >
+              Discard local edits and reopen saved version
+            </button>
+          )}
+        </div>
+      )}
+      <main
+        inert={!!api && workspace.busy}
+        id="workspace"
+        className={s.workspace}
+      >
         <aside className={s.rail} aria-label="Carousel slides">
           <div className={s.railHeading}>
             <h2>Your slides</h2>
@@ -499,9 +597,15 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
           <div className={s.railFooter}>
             <Icon name="lock" size={14} />
             <span>
-              Your artwork stays
-              <br />
-              on this device.
+              {api ? (
+                "Save to keep your artwork in your private workspace."
+              ) : (
+                <>
+                  Your artwork stays
+                  <br />
+                  on this device.
+                </>
+              )}
             </span>
           </div>
         </aside>
@@ -626,7 +730,11 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                       onTimeUpdate={(event) =>
                         setCurrentTime(event.currentTarget.currentTime)
                       }
-                      aria-label="Previously generated meal-prep sample video"
+                      aria-label={
+                        active.run?.outputAssetId
+                          ? "Generated Carousel video"
+                          : "Previously generated meal-prep sample video"
+                      }
                     />
                   )}
                   {view === "compare" && (
@@ -756,7 +864,9 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                 <div className={s.player}>
                   {videoError ? (
                     <div role="alert">
-                      The sample could not be loaded.{" "}
+                      {active.run?.outputAssetId
+                        ? "The video could not be loaded."
+                        : "The sample could not be loaded."}{" "}
                       <button
                         onClick={() => {
                           setVideoError(false);
@@ -770,9 +880,7 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                     <>
                       <button
                         className={s.playButton}
-                        aria-label={
-                          playing ? "Pause sample video" : "Play sample video"
-                        }
+                        aria-label={playing ? "Pause video" : "Play video"}
                         onClick={togglePlayback}
                         disabled={!videoReady}
                       >
@@ -794,7 +902,11 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                       />
                       <span className={s.time}>0:05</span>
                       <span className={s.playerSample}>
-                        {videoReady ? "Existing sample" : "Loading sample…"}
+                        {videoReady
+                          ? active.run?.outputAssetId
+                            ? "Your video"
+                            : "Existing sample"
+                          : "Loading video…"}
                       </span>
                     </>
                   )}
@@ -840,7 +952,9 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
               )}
               <p className={s.stageNote}>
                 {videoVisible
-                  ? "Previously generated sample. Edits to your story or area do not change this clip."
+                  ? active.run?.outputAssetId
+                    ? "Saved video. Review the full action and boundaries before publishing."
+                    : "Previously generated sample. Edits to your story or area do not change this clip."
                   : active.origin === "example"
                     ? "Example artwork · Your original is always the starting point."
                     : "Your image · Add a story and review the moving area before creating a video."}
@@ -862,7 +976,7 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
               <button
                 className={s.primary}
                 onClick={() => input.current?.click()}
-                disabled={uploading}
+                disabled={uploading || (!!api && workspace.busy)}
               >
                 <Icon name="upload" />
                 Upload your images
@@ -890,17 +1004,24 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                   <p>
                     {active.video
                       ? "See what a little movement can add to your original artwork."
-                      : "Keep the plan with your artwork. Video creation will be connected after this UI review."}
+                      : api
+                        ? "Save the plan, review your movement area, then create your video."
+                        : "Keep the plan with your artwork. Video creation will be connected after this UI review."}
                   </p>
                 </div>
                 <div className={s.previewDetails}>
                   <span className={s.sectionLabel}>
-                    {active.video ? "EXISTING WAN SAMPLE" : "STORY PLAN"}
+                    {active.run?.outputAssetId
+                      ? "FINISHED VIDEO · REVIEW REQUIRED"
+                      : active.video
+                        ? "EXISTING WAN SAMPLE"
+                        : "STORY PLAN"}
                   </span>
                   <h2>{active.name}</h2>
                   <p>
                     {active.video
-                      ? "She picks up a bite, tastes it, and gives a little smile."
+                      ? (active.run?.snapshot.story ??
+                        "She picks up a bite, tastes it, and gives a little smile.")
                       : active.story ||
                         "Add a story before exporting this plan."}
                   </p>
@@ -921,7 +1042,7 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                     </div>
                   </dl>
                 </div>
-                {active.video && (
+                {active.video && !active.run?.outputAssetId && (
                   <div className={s.reviewNote}>
                     <Icon name="alert" size={17} />
                     <div>
@@ -945,10 +1066,40 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                     <a
                       className={s.primary}
                       href={active.video}
-                      download="tiny-soho-meal-prep-sample.mp4"
+                      onClick={async (event) => {
+                        if (!api || !active.run?.outputAssetId) return;
+                        event.preventDefault();
+                        try {
+                          const url = await api.assetUrl(
+                            active.run.outputAssetId,
+                          );
+                          const response = await fetch(url);
+                          if (!response.ok)
+                            throw new Error(
+                              "Video download failed. Please try again.",
+                            );
+                          downloadBlob(
+                            await response.blob(),
+                            `${active.name}.mp4`,
+                          );
+                        } catch (error) {
+                          setError(
+                            error instanceof Error
+                              ? error.message
+                              : "Video download failed.",
+                          );
+                        }
+                      }}
+                      download={
+                        active.run?.outputAssetId
+                          ? `${active.name}.mp4`
+                          : "tiny-soho-meal-prep-sample.mp4"
+                      }
                     >
                       <Icon name="download" size={17} />
-                      Download sample video
+                      {active.run?.outputAssetId
+                        ? "Download finished video"
+                        : "Download sample video"}
                     </a>
                   )}
                   <button
@@ -974,8 +1125,9 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                     />
                   </button>
                   <p>
-                    The sample is a previous test. No new video has been
-                    generated.
+                    {active.run?.outputAssetId
+                      ? "Your finished video is saved with this project."
+                      : "The sample is a previous test. No new video has been generated."}
                   </p>
                 </div>
               </>
@@ -1053,7 +1205,9 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                     ) : (
                       <p className={s.manualNote}>
                         Write a small action with a beginning and a reaction.
-                        Image analysis is not connected in this preview.
+                        {api
+                          ? "Request image suggestions below, or write your own story."
+                          : "Image analysis is not connected in this preview."}
                       </p>
                     )}
                     <label className={s.storyLabel} htmlFor="story">
@@ -1111,7 +1265,14 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                     </button>
                   </div>
                 ) : (
-                  <div className={s.movementControls}>
+                  <div
+                    className={s.movementControls}
+                    inert={
+                      !!api &&
+                      (workspace.busy ||
+                        (!!active.run && !active.run.outputAssetId))
+                    }
+                  >
                     <div className={s.sectionHeading}>
                       <h2>Room for the action</h2>
                       <Icon name="move" size={16} />
@@ -1198,7 +1359,9 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                             ? "Move or shrink the area to leave breathing room around the words."
                             : active.protectedRegions.length
                               ? "Leave room for hair, hands and the full action. The example markings are manually prepared."
-                              : "Automatic text detection is not connected. Keep the moving area away from all text and branding."}
+                              : api
+                                ? "Mark text areas above, or request suggestions and review them. Keep movement away from text and branding."
+                                : "Automatic text detection is not connected. Keep the moving area away from all text and branding."}
                         </p>
                       </div>
                     </div>
@@ -1216,14 +1379,18 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
                       <Icon name="check" size={16} />
                     )}{" "}
                     {active.video
-                      ? "Preview sample video"
+                      ? active.run?.outputAssetId
+                        ? "Review finished video"
+                        : "Preview sample video"
                       : "Review story plan"}
                     <Icon name="arrow" size={17} />
                   </button>
                   <p>
                     {active.video
                       ? "Explore the existing test clip. No new generation."
-                      : "Live generation will follow this UI review."}
+                      : api
+                        ? "Save and review your plan, then create your video above."
+                        : "Live generation will follow this UI review."}
                   </p>
                 </div>
               </>
@@ -1235,6 +1402,13 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
               <p>Upload an image to choose its action and movement area.</p>
             </div>
           )}
+          {api && active && (
+            <WorkflowControls
+              slide={active}
+              patch={patch}
+              workspace={workspace}
+            />
+          )}
         </aside>
       </main>
       <footer className={s.footer}>
@@ -1244,14 +1418,16 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
           Thoughtfully made, frame by frame.
         </span>
         <span>
-          Images stay local
+          {api ? "Private workspace storage" : "Images stay local"}
           <span className={s.footerDot} />
           {onOpenTools ? (
             <button className={s.toolsLink} onClick={onOpenTools}>
               Open existing tools <Icon name="arrow" size={12} />
             </button>
           ) : (
-            <a href="/legacy">Open previous studio <Icon name="arrow" size={12} /></a>
+            <a href="/legacy">
+              Open previous studio <Icon name="arrow" size={12} />
+            </a>
           )}
         </span>
       </footer>
@@ -1320,8 +1496,9 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
           </button>
         </div>
         <p>
-          This is the interactive UI preview of Carousel Studio. Upload or paste
-          an image, edit its story, and review where the action can happen.
+          {api
+            ? "Upload your artwork, save it to your private workspace, review a five-second story and its movement area, then create a video."
+            : "This is the interactive UI preview of Carousel Studio. Upload or paste an image, edit its story, and review where the action can happen."}
         </p>
         <ul>
           <li>
@@ -1332,12 +1509,14 @@ export default function CarouselStudio({ onOpenTools, onSignOut, active: isActiv
             area does not regenerate it.
           </li>
           <li>
-            Your images stay in this browser session. Download story plans to
-            keep your work; refreshing resets the workspace.
+            {api
+              ? "Save project uploads your images and draft. Later edits save automatically. Reopen projects with the project menu; refresh restores the open project."
+              : "Your images stay in this browser session. Download story plans to keep your work; refreshing resets the workspace."}
           </li>
           <li>
-            Live image analysis, text protection and video generation are not
-            connected to this screen yet.
+            {api
+              ? "Image analysis requires NVIDIA configuration. WAN requires your account acknowledgement. All suggestions and finished videos need visual review; an area selection cannot guarantee natural movement."
+              : "Live image analysis, text protection and video generation are not connected to this screen yet."}
           </li>
         </ul>
         <button className={s.primary} onClick={() => help.current?.close()}>
