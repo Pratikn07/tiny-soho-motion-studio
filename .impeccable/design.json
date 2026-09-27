@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-27T00:00:00.000Z",
+  "title": "Design System: Tiny Soho Studio",
+  "extensions": {
+    "colorMeta": {
+      "ink": { "role": "neutral", "displayName": "Near-Black Ink", "canonical": "#242622", "tonalRamp": ["#242622", "#343630", "#444740", "#585a53", "#6e7069", "#94968d", "#b9bab1", "#fdfdf9"] },
+      "muted": { "role": "neutral", "displayName": "Quiet Muted", "canonical": "#6e7069", "tonalRamp": ["#30322e", "#464843", "#5a5c56", "#6e7069", "#85877f", "#a2a39b", "#c8c9c1", "#f5f5ef"] },
+      "line": { "role": "neutral", "displayName": "Fine Rule", "canonical": "#e2e2d9", "tonalRamp": ["#3b3c38", "#5d5e58", "#7c7d75", "#9b9c94", "#b9bab1", "#d0d1c9", "#e2e2d9", "#fdfdf9"] },
+      "paper": { "role": "neutral", "displayName": "Ivory Paper", "canonical": "#f5f5ef", "tonalRamp": ["#343530", "#55564f", "#777870", "#999a91", "#b9bab1", "#d6d6cd", "#e7e7df", "#f5f5ef"] },
+      "surface": { "role": "neutral", "displayName": "Editorial Surface", "canonical": "#fdfdf9", "tonalRamp": ["#343530", "#55564f", "#777870", "#999a91", "#b9bab1", "#d6d6cd", "#ededE6", "#fdfdf9"] },
+      "sage": { "role": "primary", "displayName": "Worktable Sage", "canonical": "#486452", "tonalRamp": ["#1d2b20", "#2b3d2f", "#394f3d", "#486452", "#617d69", "#819888", "#a9b9aa", "#e6ede5"] },
+      "sage-deep": { "role": "primary", "displayName": "Sage Deep", "canonical": "#272e25", "tonalRamp": ["#171c16", "#20271e", "#272e25", "#3e493a", "#5b6755", "#7e8978", "#adb5a8", "#edf2e9"] },
+      "sage-wash": { "role": "secondary", "displayName": "Sage Wash", "canonical": "#edf2e9", "tonalRamp": ["#263329", "#3b4a3d", "#516252", "#718171", "#94a395", "#b7c3b7", "#d5ded4", "#edf2e9"] },
+      "warm-alert": { "role": "tertiary", "displayName": "Warm Clay", "canonical": "#a14c2d", "tonalRamp": ["#3c1d12", "#5c2919", "#783723", "#984323", "#a14c2d", "#c17a5d", "#dfaa91", "#fae8df"] },
+      "warm-note": { "role": "tertiary", "displayName": "Warm Review", "canonical": "#f4f1e7", "tonalRamp": ["#443b2c", "#695a43", "#8b7958", "#ab9876", "#c7bda5", "#ddd5c1", "#ebe6d7", "#f4f1e7"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Studio Didot", "purpose": "Inspector headings and modal titles." },
+      "headline": { "displayName": "Studio Didot Headline", "purpose": "Project naming and editorial hierarchy." },
+      "body": { "displayName": "Avenir Next / System Sans", "purpose": "Base copy and readable guidance." },
+      "label": { "displayName": "Working Label", "purpose": "Controls, tabs, metadata, and field labels." }
+    },
+    "shadows": [
+      { "name": "artwork-lift", "value": "0 12px 30px #33332212, 0 2px 6px #3333220b", "purpose": "Separates the uncropped artwork from the paper mat." },
+      { "name": "selected-view", "value": "0 1px 3px #272f2310", "purpose": "Quiet emphasis for the active view switch." },
+      { "name": "dialog-depth", "value": "0 24px 80px #21251e33", "purpose": "Provides depth for library and help dialogs only." }
+    ],
+    "motion": [
+      { "name": "control-state", "value": "0.15s ease", "purpose": "Short background, color, and border transitions for working controls." },
+      { "name": "reduced-motion", "value": "none", "purpose": "Disable transitions and smooth scrolling when prefers-reduced-motion is requested." }
+    ],
+    "breakpoints": [
+      { "name": "mobile-stack", "value": "740px" },
+      { "name": "compact-desktop", "value": "900px" },
+      { "name": "wide-desktop", "value": "1600px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Full-width dark sage action for the next truthful studio step.",
+      "html": "<button class=\"ds-btn-primary\">PREVIEW &amp; EXPORT <span aria-hidden=\"true\">→</span></button>",
+      "css": ".ds-btn-primary { display:flex; align-items:center; justify-content:center; gap:9px; width:100%; min-height:44px; padding:12px 14px; background:#272e25; border:1px solid #272e25; border-radius:4px; color:#fff; font:500 11px/1.4 'Avenir Next', Avenir, sans-serif; transition:background-color .15s ease, border-color .15s ease; } .ds-btn-primary:hover { background:#424d3b; border-color:#424d3b; } .ds-btn-primary:focus-visible { outline:2px solid #476853; outline-offset:4px; } .ds-btn-primary:disabled { opacity:.4; cursor:not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined action for reversible or supporting work.",
+      "html": "<button class=\"ds-btn-secondary\">DOWNLOAD STORY PLAN</button>",
+      "css": ".ds-btn-secondary { display:flex; align-items:center; justify-content:center; width:100%; min-height:42px; padding:10px; background:transparent; border:1px solid #c9cec1; border-radius:4px; color:#3d4936; font:500 11px/1.4 'Avenir Next', Avenir, sans-serif; transition:background-color .15s ease, border-color .15s ease; } .ds-btn-secondary:hover { background:#f0f3e9; border-color:#9faa98; } .ds-btn-secondary:focus-visible { outline:2px solid #476853; outline-offset:4px; }"
+    },
+    {
+      "name": "Icon Button",
+      "kind": "button",
+      "refersTo": "button-icon",
+      "description": "Compact neutral control for canvas and navigation actions.",
+      "html": "<button class=\"ds-btn-icon\" aria-label=\"Add slide\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg></button>",
+      "css": ".ds-btn-icon { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; padding:4px; border:0; border-radius:4px; background:transparent; color:#6e7069; transition:background-color .15s ease, color .15s ease; } .ds-btn-icon:hover { background:#eeeee6; color:#242622; } .ds-btn-icon:focus-visible { outline:2px solid #476853; outline-offset:4px; } .ds-btn-icon svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; }"
+    },
+    {
+      "name": "Story Choice",
+      "kind": "card",
+      "refersTo": "story-choice",
+      "description": "A bordered editorial option that becomes sage-washed when chosen.",
+      "html": "<button class=\"ds-story-choice\"><span class=\"ds-choice-number\">01</span><span>Begin with the first small action</span><span class=\"ds-choice-radio\" aria-hidden=\"true\"></span></button>",
+      "css": ".ds-story-choice { display:flex; align-items:center; gap:10px; width:100%; min-height:45px; padding:10px 12px; text-align:left; background:#fdfdf9; border:1px solid #e1e2d8; border-radius:4px; color:#50544b; font:400 11px/1.4 'Avenir Next', Avenir, sans-serif; transition:background-color .15s ease, border-color .15s ease; } .ds-story-choice:hover { background:#f3f4ed; } .ds-story-choice:focus-visible { outline:2px solid #476853; outline-offset:4px; } .ds-choice-number { color:#718165; font:400 17px/1 'StudioDidot', Georgia, serif; } .ds-choice-radio { width:13px; height:13px; margin-left:auto; border:1px solid #c6cbbc; border-radius:50%; }"
+    },
+    {
+      "name": "Story Text Field",
+      "kind": "input",
+      "refersTo": "text-field",
+      "description": "White, generously padded textarea for creator-authored story copy.",
+      "html": "<label class=\"ds-field\">ACTION<textarea placeholder=\"Describe the meaningful movement\"></textarea></label>",
+      "css": ".ds-field { display:flex; flex-direction:column; gap:9px; color:#242622; font:600 11px/1.4 'Avenir Next', Avenir, sans-serif; } .ds-field textarea { width:100%; min-height:146px; padding:12px; resize:vertical; background:#fff; border:1px solid #dcded2; border-radius:4px; color:#50564a; font:400 11px/1.8 'Avenir Next', Avenir, sans-serif; transition:border-color .15s ease; } .ds-field textarea:focus { border-color:#718364; outline:2px solid #476853; outline-offset:3px; }"
+    },
+    {
+      "name": "Top Navigation",
+      "kind": "nav",
+      "refersTo": "nav-current",
+      "description": "White ruled top bar with Didot wordmark and underlined current route.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-wordmark\" href=\"#\">Tiny Soho</a><a class=\"ds-current\" href=\"#\">Carousel Studio</a></nav>",
+      "css": ".ds-nav { display:flex; align-items:center; gap:36px; height:78px; padding:0 34px; border-bottom:1px solid #e2e2d9; background:#fff; color:#242622; font:500 12px/1.4 'Avenir Next', Avenir, sans-serif; } .ds-wordmark { color:#242622; text-decoration:none; font:400 29px/1 'StudioDidot', Georgia, serif; letter-spacing:-1px; } .ds-current { align-self:stretch; display:flex; align-items:center; color:#242622; text-decoration:none; border-bottom:2px solid #242622; } .ds-nav a:focus-visible { outline:2px solid #476853; outline-offset:4px; }"
+    },
+    {
+      "name": "Movement Region",
+      "kind": "custom",
+      "refersTo": "movement-region",
+      "description": "Bounded, ratio-preserving overlay that marks the editable motion area.",
+      "html": "<div class=\"ds-region\"><span>MOVING AREA</span><button aria-label=\"Resize movement area\"><svg viewBox=\"0 0 24 24\"><path d=\"M8 6l4-4 4 4M8 18l4 4 4-4\"/></svg></button></div>",
+      "css": ".ds-region { position:relative; width:55%; height:42%; border:1.5px solid #456d53; background:#91b69a1a; box-shadow:0 0 0 1000px #232d1c0d; color:#fff; } .ds-region > span { position:absolute; top:0; left:0; padding:3px 5px; background:#3f644e; color:#fff; font:400 8px/1 'Avenir Next', Avenir, sans-serif; } .ds-region button { position:absolute; right:-8px; bottom:-8px; display:grid; place-items:center; width:23px; height:23px; padding:0; border:1px solid #456d53; border-radius:3px; background:#fffffa; color:#456d53; } .ds-region button:focus-visible { outline:2px solid #476853; outline-offset:4px; } .ds-region svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Editorial Worktable",
+    "overview": "Tiny Soho Studio treats the creator's finished artwork as the primary material on a quiet, premium worktable. Ivory and white surfaces, near-black controls, fine rules, generous space, and restrained serif display lettering make room for the image to lead. Working controls use plain creator language and a calm system sans so that the interface feels considered without becoming precious.\n\nThe desktop workspace is an ordered rail, uncropped source stage, and focused inspector. The rail and inspector provide structure around the artwork; the inspector can scroll while the primary action remains reserved at the bottom. At the 740px breakpoint, the rail becomes a horizontal strip and the inspector follows the image. Source ratio is preserved at every viewport, including the sample preview and movement overlay.",
+    "keyCharacteristics": ["Light editorial surfaces with near-black ink and restrained sage state.", "GFS Didot display voice paired with Avenir Next/system sans controls.", "Thin dividers, compact four-pixel corners, and quiet tonal depth.", "Artwork leads; samples, movement regions, and review states remain explicit."],
+    "rules": [
+      { "name": "The Rare Sage Rule", "body": "Use sage as a state signal for active, safe, or editable controls; keep the majority of every screen ivory, white, or ink.", "section": "colors" },
+      { "name": "The Two Voices Rule", "body": "Reserve Didot for naming and hierarchy; use the sans for every action, state, measurement, and explanation.", "section": "typography" },
+      { "name": "The Flat Worktable Rule", "body": "Start surfaces flat; use a restrained shadow only where an image, dialog, or active control needs physical separation.", "section": "elevation" }
+    ],
+    "dos": ["Do let the supplied artwork lead the workspace and preserve its exact source ratio.", "Do use Didot for project and inspector naming, and Avenir Next/system sans for operations.", "Do use fine rules, warm whites, and restrained sage to clarify state.", "Do keep sample labels, review notes, focus rings, and recovery copy visible and truthful.", "Do honor the 740px stack and reduced-motion preference; preserve keyboard focus visibility."],
+    "donts": ["Don't crop, stretch, or replace original artwork with a fabricated preview.", "Don't introduce dark application chrome, saturated accents, gradients, or decorative glass effects.", "Don't imply provider progress, AI analysis, or generation success for the local sample UI.", "Don't hide the primary action behind an inspector scroll or make mobile a shrunken desktop grid.", "Don't use motion that persists when `prefers-reduced-motion: reduce` is active."]
+  }
+}
