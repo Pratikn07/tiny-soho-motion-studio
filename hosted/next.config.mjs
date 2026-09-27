@@ -4,9 +4,9 @@ const hostedRoot = fileURLToPath(new URL(".", import.meta.url));
 
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "connect-src 'self' https://kukpvpklizsvedcmybhn.supabase.co",
-  "img-src 'self' blob: data:",
-  "media-src 'self' blob:",
+  "connect-src 'self' https://kukpvpklizsvedcmybhn.supabase.co blob:",
+  "img-src 'self' blob: data: https://kukpvpklizsvedcmybhn.supabase.co",
+  "media-src 'self' blob: https://kukpvpklizsvedcmybhn.supabase.co",
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self' 'unsafe-inline'",
   "frame-ancestors 'none'",

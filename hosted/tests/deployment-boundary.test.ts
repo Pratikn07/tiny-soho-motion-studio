@@ -12,6 +12,16 @@ describe("hosted deployment boundary", () => {
 
     expect(headers?.[0]?.source).toBe("/:path*");
     expect(policy).toContain("connect-src 'self' https://kukpvpklizsvedcmybhn.supabase.co");
+    const directives = new Map(policy?.split("; ").map((rule: string) => {
+      const [name, ...sources] = rule.split(" "); return [name, sources];
+    }));
+    expect(directives.get("connect-src")).toContain("blob:");
+    expect(directives.get("img-src")).toContain("https://kukpvpklizsvedcmybhn.supabase.co");
+    expect(directives.get("media-src")).toContain("https://kukpvpklizsvedcmybhn.supabase.co");
+    for (const sources of directives.values()) {
+      expect(sources).not.toContain("*");
+      expect(sources).not.toContain("https:");
+    }
     expect(policy).toContain("frame-ancestors 'none'");
   });
 });
