@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   assertGenerationReady,
+  carouselDocumentSchema,
   persistentSlide,
   planSnapshot,
   type CarouselDocument,
@@ -131,7 +132,7 @@ export function useCarouselWorkspace(
       })),
     );
     if (!mounted.current) return;
-    saved.current = JSON.stringify(p.document);
+    saved.current = JSON.stringify(carouselDocumentSchema.parse(p.document));
     adoptProject(p);
     setName(p.document.name);
     setSlides(result);
@@ -249,7 +250,7 @@ export function useCarouselWorkspace(
     };
     const next = await api.saveCarousel(p.id, p.revision, document);
     if (!mounted.current) return next;
-    saved.current = JSON.stringify(next.document);
+    saved.current = JSON.stringify(carouselDocumentSchema.parse(next.document));
     adoptProject(next);
     setSlides(uploaded);
     setName(next.document.name);

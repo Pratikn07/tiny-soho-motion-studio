@@ -26,6 +26,11 @@ const initial: Slide = {
   suggestions: [],
   reviewed: true,
 };
+function databaseOrder(value: any): any {
+  if (Array.isArray(value)) return value.map(databaseOrder);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map(key => [key, databaseOrder(value[key])]));
+  return value;
+}
 function setup() {
   let stored: any = {
     id: projectId,
@@ -48,7 +53,7 @@ function setup() {
       async (id: string, revision: number, document: unknown) => {
         if (revision !== stored.revision)
           throw new Error("changed in another tab");
-        stored = { id, revision: revision + 1, document };
+        stored = { id, revision: revision + 1, document: databaseOrder(document) };
         return stored;
       },
     ),
@@ -193,4 +198,14 @@ it("preserves an initial upload when opening another project until it is saved",
   expect(api.getCarousel).not.toHaveBeenCalled();
   expect(result.current.slides[0].story).toBe("Keep my new upload");
   expect(result.current.workspace.error).toMatch(/save/i);
+});
+
+it("settles after the database reorders saved JSON fields", async () => {
+  window.history.replaceState(null, "", `/?carousel=${projectId}`);
+  const { result, api } = setup();
+  await waitFor(() => expect(result.current.workspace.busy).toBe(false));
+  act(() => result.current.setSlides([{...result.current.slides[0], story: "Saved once"}]));
+  await act(() => result.current.workspace.save());
+  expect(result.current.workspace.dirty).toBe(false);
+  expect(api.saveCarousel).toHaveBeenCalledTimes(1);
 });
