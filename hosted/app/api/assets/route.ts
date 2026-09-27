@@ -5,7 +5,7 @@ import { StudioError } from "@/lib/errors";
 import { routeErrorResponse } from "@/lib/http";
 import { StudioRepository } from "@/lib/repository";
 import { createServiceSupabaseClient } from "@/lib/supabase-server";
-import { uploadSourceImage } from "@/lib/storage";
+import { uploadSourceMedia } from "@/lib/storage";
 
 const projectIdSchema = z.string().uuid();
 
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const projectId = projectIdSchema.safeParse(formData.get("projectId"));
     const file = formData.get("file");
     if (!projectId.success || !(file instanceof File)) {
-      throw new StudioError(400, "invalid_asset_upload", "Provide a project and source image.");
+      throw new StudioError(400, "invalid_asset_upload", "Provide a project and source media file.");
     }
 
     const repository = repositoryFor(owner);
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     const assetId = crypto.randomUUID();
     const client = createServiceSupabaseClient();
-    const uploaded = await uploadSourceImage({
+    const uploaded = await uploadSourceMedia({
       client,
       ownerUserId: owner.userId,
       projectId: project.id,
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       const asset = await repository.createAsset({
         id: assetId,
         projectId: project.id,
-        kind: "source-image",
+        kind: uploaded.kind,
         name: file.name,
         mimeType: uploaded.mimeType,
         objectPath: uploaded.objectPath,

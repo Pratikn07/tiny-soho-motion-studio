@@ -14,6 +14,9 @@ export type CreativeEvidence = {
   summary: string;
   score: number;
   confidence: number | null;
+  status?: string;
+  evidenceType?: string;
+  scoreComponents?: Record<string, number>;
 };
 
 export type CreativeKnowledge = {
@@ -35,25 +38,43 @@ const maximumEvidence = 8;
 
 function text(value: unknown) { return typeof value === "string" ? value.trim() : ""; }
 function number(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? value : null; }
+function decimal(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string" || !/^-?(?:\d+\.?\d*|\.\d+)$/.test(value.trim())) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 function recordId(row: KnowledgeRecord) { return text(row.id); }
 function normalizedTokens(brief: string) {
   return [...new Set((brief.toLowerCase().match(/[a-z0-9]{2,}/g) || []).filter((term) => !stopWords.has(term)))].slice(0, 10);
 }
 
-type EvidenceShape = { title: string; summary: string; confidence?: number | null; timesUsed?: number | null };
+type EvidenceShape = { title: string; summary: string; confidence?: number | null; timesUsed?: number | null; useCases?: string; status?: string; evidenceType?: string; performanceLift?: number | null; performanceLiftComparable?: boolean };
 
 function scoreEvidence(terms: string[], shape: EvidenceShape) {
-  const haystackTerms = new Set((`${shape.title} ${shape.summary}`.toLowerCase().match(/[a-z0-9]{2,}/g) || []));
+  const haystackTerms = new Set((`${shape.title} ${shape.summary} ${shape.useCases || ""}`.toLowerCase().match(/[a-z0-9]{2,}/g) || []));
   const matches = terms.filter((term) => haystackTerms.has(term));
   if (!matches.length) return null;
-  return Math.round(matches.length * 100 + (shape.confidence || 0) * 10 + Math.log1p(shape.timesUsed || 0) * 5);
+  const useCaseTerms = new Set((shape.useCases || "").toLowerCase().match(/[a-z0-9]{2,}/g) || []);
+  const useCase = terms.filter((term) => useCaseTerms.has(term)).length * 120;
+  const status = ({ active: 30, candidate: 15, draft: 5, merged: 0 } as Record<string, number>)[(shape.status || "").toLowerCase()] || 0;
+  const evidenceType = ({ observed: 25, inferred: 10, hypothesis: 0 } as Record<string, number>)[(shape.evidenceType || "").toLowerCase()] || 0;
+  const confidence = Math.max(0, Math.min(shape.confidence || 0, 1)) * 10;
+  const timesUsed = Math.min(Math.log1p(Math.max(shape.timesUsed || 0, 0)), 5) * 3;
+  // A lift value has no portable meaning without an explicit source-side comparability flag.
+  // The source value is a normalized fraction, so its bounded contribution is percentage points.
+  const performanceLift = shape.performanceLiftComparable && shape.performanceLift !== null && shape.performanceLift !== undefined && Number.isFinite(shape.performanceLift)
+    ? Math.round(Math.max(0, Math.min(shape.performanceLift * 100, 25)))
+    : null;
+  const components = { lexical: matches.length * 100, useCase, status, evidenceType, confidence: Math.round(confidence), timesUsed: Math.round(timesUsed), ...(performanceLift === null ? {} : { performanceLift }) };
+  return { score: Object.values(components).reduce((total, value) => total + value, 0), components };
 }
 
 function evidence(source: KnowledgeSourceName, row: KnowledgeRecord, terms: string[], shape: EvidenceShape): CreativeEvidence | null {
   const sourceId = recordId(row);
-  const score = scoreEvidence(terms, shape);
-  if (!sourceId || !shape.title || !shape.summary || score === null) return null;
-  return { source, sourceId, title: shape.title, summary: shape.summary, score, confidence: shape.confidence ?? null };
+  const ranking = scoreEvidence(terms, shape);
+  if (!sourceId || !shape.title || !shape.summary || ranking === null) return null;
+  return { source, sourceId, title: shape.title, summary: shape.summary, score: ranking.score, confidence: shape.confidence ?? null, ...(shape.status ? { status: shape.status } : {}), ...(shape.evidenceType ? { evidenceType: shape.evidenceType } : {}), scoreComponents: ranking.components };
 }
 
 function techniqueEvidence(row: KnowledgeRecord, terms: string[]) {
@@ -61,6 +82,8 @@ function techniqueEvidence(row: KnowledgeRecord, terms: string[]) {
     title: text(row.name),
     summary: [text(row.category), text(row.mechanism), text(row.why_it_works), text(row.prompt_fragment)].filter(Boolean).join(" · "),
     confidence: number(row.confidence), timesUsed: number(row.times_used),
+    useCases: text(row.tinysoho_use_cases), status: text(row.status), evidenceType: text(row.evidence_type),
+    performanceLift: decimal(row.avg_performance_lift), performanceLiftComparable: row.performance_lift_comparable === true || text(row.performance_lift_comparable).toLowerCase() === "true",
   });
 }
 
@@ -134,9 +157,11 @@ type QueryPool = {
 const readerStatementTimeoutMs = 3_000;
 
 const queryPlans = {
-  techniques: `SELECT id, name, category, mechanism, why_it_works, prompt_fragment, confidence, times_used
-    FROM public.ts_techniques
-    WHERE concat_ws(' ', name, category, mechanism, why_it_works, prompt_fragment) ILIKE ANY($1::text[])
+  techniques: `SELECT t.id, t.name, t.category, t.mechanism, t.why_it_works, t.prompt_fragment, t.confidence, t.times_used,
+      to_jsonb(t)->>'tinysoho_use_cases' AS tinysoho_use_cases, to_jsonb(t)->>'status' AS status, to_jsonb(t)->>'evidence_type' AS evidence_type,
+      to_jsonb(t)->>'avg_performance_lift' AS avg_performance_lift, to_jsonb(t)->>'performance_lift_comparable' AS performance_lift_comparable
+    FROM public.ts_techniques t
+    WHERE concat_ws(' ', t.name, t.category, t.mechanism, t.why_it_works, t.prompt_fragment, to_jsonb(t)->>'tinysoho_use_cases', to_jsonb(t)->>'status', to_jsonb(t)->>'evidence_type') ILIKE ANY($1::text[])
     LIMIT 25`,
   segments: `SELECT id, narrative_role, visual_description, camera_movement, technique_notes, why_it_works, tinysoho_adaptation
     FROM public.ts_segments

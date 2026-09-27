@@ -1,0 +1,5 @@
+# CPU-safe hosted Vision only. Do not add OCR, SAM2, Qwen, PyTorch, or model weights here.
+fastapi==0.141.1
+httpx==0.28.1
+Pillow==12.3.0
+uvicorn==0.53.0

@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { databasePath, dataDir } from "./config";
 
-export type JobStatus = "queued" | "submitting" | "submitted" | "running" | "downloading" | "processing" | "completed" | "failed" | "submission_unknown" | "needs_attention" | "canceled";
+export type JobStatus = "queued" | "preparing_media" | "submitting" | "submitted" | "running" | "downloading" | "processing" | "completed" | "failed" | "submission_unknown" | "needs_attention" | "canceled";
 export type Project = { id: string; name: string; canvas: string; storyboard: string; createdAt: string; updatedAt: string };
-export type Asset = { id: string; projectId: string | null; kind: string; name: string; mime: string; path: string; width: number | null; height: number | null; duration: number | null; hash: string; provenance: string; createdAt: string };
+export type Asset = { id: string; projectId: string | null; kind: string; name: string; mime: string; path: string; width: number | null; height: number | null; duration: number | null; hash: string; provenance: string; createdAt: string; sizeBytes?: number | null; codec?: string | null; container?: string | null; fps?: number | null };
 export type Job = { id: string; projectId: string; idempotencyKey: string; modelId: string; task: string; prompt: string; inputAssetIds: string; options: string; status: JobStatus; providerTaskId: string | null; outputAssetId: string | null; error: string | null; createdAt: string; updatedAt: string };
 export type PublicJob = Omit<Job, "options"> & { options: string };
 export type WorkflowRun = { id: string; workflowId: string; projectId: string; graph: string; state: string; createdAt: string; updatedAt: string };
@@ -18,6 +18,7 @@ export function toPublicJob(job: Job): PublicJob {
   try {
     const options = parse<Record<string, unknown>>(job.options);
     delete options.internalProvenance;
+    delete options.preparedMedia;
     return { ...job, options: JSON.stringify(options) };
   } catch {
     return { ...job, options: "{}" };
@@ -43,15 +44,33 @@ function baselineSchema() {
   }
 }
 
+function migrationSchema(filename: string, fallback: string) {
+  try {
+    return fs.readFileSync(path.join(process.cwd(), "migrations", filename), "utf8");
+  } catch {
+    return fallback;
+  }
+}
+
 function runMigrations(db: Database.Database) {
   let version = Number(db.pragma("user_version", { simple: true }));
-  if (version > 1) throw new Error(`Database schema version ${version} is newer than this application supports.`);
+  if (version > 3) throw new Error(`Database schema version ${version} is newer than this application supports.`);
   db.exec("BEGIN IMMEDIATE");
   try {
     if (version < 1) {
       db.exec(baselineSchema());
       db.pragma("user_version = 1");
       version = 1;
+    }
+    if (version < 2) {
+      db.exec(migrationSchema("002_preparing_media.sql", "CREATE INDEX IF NOT EXISTS jobs_status_created_at ON jobs(status, created_at);"));
+      db.pragma("user_version = 2");
+      version = 2;
+    }
+    if (version < 3) {
+      db.exec(migrationSchema("003_asset_media_metadata.sql", "ALTER TABLE assets ADD COLUMN size_bytes INTEGER; ALTER TABLE assets ADD COLUMN codec TEXT; ALTER TABLE assets ADD COLUMN container TEXT; ALTER TABLE assets ADD COLUMN fps REAL;"));
+      db.pragma("user_version = 3");
+      version = 3;
     }
     db.exec("COMMIT");
   } catch (error) {
@@ -67,7 +86,7 @@ export function createStore(filename = databasePath()) {
   db.pragma("journal_mode = WAL");
   const schemaVersion = runMigrations(db);
   const projectFrom = (row: any): Project => ({ id: row.id, name: row.name, canvas: row.canvas, storyboard: row.storyboard, createdAt: row.created_at, updatedAt: row.updated_at });
-  const assetFrom = (row: any): Asset => ({ id: row.id, projectId: row.project_id, kind: row.kind, name: row.name, mime: row.mime, path: row.path, width: row.width, height: row.height, duration: row.duration, hash: row.hash, provenance: row.provenance, createdAt: row.created_at });
+  const assetFrom = (row: any): Asset => ({ id: row.id, projectId: row.project_id, kind: row.kind, name: row.name, mime: row.mime, path: row.path, width: row.width, height: row.height, duration: row.duration, hash: row.hash, provenance: row.provenance, createdAt: row.created_at, sizeBytes: row.size_bytes ?? null, codec: row.codec ?? null, container: row.container ?? null, fps: row.fps ?? null });
   const jobFrom = (row: any): Job => ({ id: row.id, projectId: row.project_id, idempotencyKey: row.idempotency_key, modelId: row.model_id, task: row.task, prompt: row.prompt, inputAssetIds: row.input_asset_ids, options: row.options, status: row.status, providerTaskId: row.provider_task_id, outputAssetId: row.output_asset_id, error: row.error, createdAt: row.created_at, updatedAt: row.updated_at });
   const runFrom = (row: any): WorkflowRun => ({ id: row.id, workflowId: row.workflow_id, projectId: row.project_id, graph: row.graph, state: row.state, createdAt: row.created_at, updatedAt: row.updated_at });
   return {
@@ -77,13 +96,14 @@ export function createStore(filename = databasePath()) {
     listProjects() { return db.prepare("SELECT * FROM projects ORDER BY updated_at DESC").all().map(projectFrom); },
     getProject(projectId: string) { const row = db.prepare("SELECT * FROM projects WHERE id=?").get(projectId); return row ? projectFrom(row) : null; },
     updateProject(projectId: string, patch: Partial<Pick<Project, "name" | "canvas" | "storyboard">>) { const existing = this.getProject(projectId); if (!existing) throw new Error("Project not found"); const next = { ...existing, ...patch, updatedAt: now() }; db.prepare("UPDATE projects SET name=@name,canvas=@canvas,storyboard=@storyboard,updated_at=@updatedAt WHERE id=@id").run(next); return next; },
-    addAsset(asset: Omit<Asset, "id" | "createdAt">) { const next = { ...asset, id: id("asset"), createdAt: now() }; db.prepare("INSERT INTO assets VALUES (@id,@projectId,@kind,@name,@mime,@path,@width,@height,@duration,@hash,@provenance,@createdAt)").run(next); return next; },
+    addAsset(asset: Omit<Asset, "id" | "createdAt" | "sizeBytes" | "codec" | "container" | "fps"> & Pick<Asset, "sizeBytes" | "codec" | "container" | "fps">) { const next = { ...asset, id: id("asset"), createdAt: now(), sizeBytes: asset.sizeBytes ?? null, codec: asset.codec ?? null, container: asset.container ?? null, fps: asset.fps ?? null }; db.prepare("INSERT INTO assets(id,project_id,kind,name,mime,path,width,height,duration,hash,provenance,created_at,size_bytes,codec,container,fps) VALUES (@id,@projectId,@kind,@name,@mime,@path,@width,@height,@duration,@hash,@provenance,@createdAt,@sizeBytes,@codec,@container,@fps)").run(next); return next; },
     listAssets(projectId?: string) { const rows = projectId ? db.prepare("SELECT * FROM assets WHERE project_id=? ORDER BY created_at DESC").all(projectId) : db.prepare("SELECT * FROM assets ORDER BY created_at DESC").all(); return rows.map(assetFrom); },
     getAsset(assetId: string) { const row = db.prepare("SELECT * FROM assets WHERE id=?").get(assetId); return row ? assetFrom(row) : null; },
     createJob(input: { projectId: string; idempotencyKey: string; modelId: string; task: string; prompt: string; inputAssetIds: string[]; options: Record<string, unknown> }) { const fingerprint = createHash("sha256").update(JSON.stringify({ modelId: input.modelId, task: input.task, prompt: input.prompt, inputAssetIds: input.inputAssetIds, options: input.options })).digest("hex"); const duplicate = db.prepare("SELECT * FROM jobs WHERE project_id=? AND idempotency_key=?").get(input.projectId, input.idempotencyKey) as { fingerprint: string } | undefined; if (duplicate) { if (duplicate.fingerprint !== fingerprint) throw new Error("Idempotency key was reused with a different request."); const prior = db.prepare("SELECT * FROM jobs WHERE project_id=? AND idempotency_key=?").get(input.projectId, input.idempotencyKey); return jobFrom(prior); } const next = { id: id("job"), projectId: input.projectId, idempotencyKey: input.idempotencyKey, fingerprint, modelId: input.modelId, task: input.task, prompt: input.prompt, inputAssetIds: JSON.stringify(input.inputAssetIds), options: JSON.stringify(input.options), status: "queued" as JobStatus, providerTaskId: null, outputAssetId: null, error: null, createdAt: now(), updatedAt: now() }; db.prepare("INSERT INTO jobs VALUES (@id,@projectId,@idempotencyKey,@fingerprint,@modelId,@task,@prompt,@inputAssetIds,@options,@status,@providerTaskId,@outputAssetId,@error,@createdAt,@updatedAt)").run(next); return next; },
     listJobs(projectId?: string) { const rows = projectId ? db.prepare("SELECT * FROM jobs WHERE project_id=? ORDER BY created_at DESC").all(projectId) : db.prepare("SELECT * FROM jobs ORDER BY created_at DESC").all(); return rows.map(jobFrom); },
     getJob(jobId: string) { const row = db.prepare("SELECT * FROM jobs WHERE id=?").get(jobId); return row ? jobFrom(row) : null; },
-    claimNextJob() { const row = db.prepare("SELECT id FROM jobs WHERE status='queued' ORDER BY created_at LIMIT 1").get() as { id: string } | undefined; if (!row) return null; const stamp = now(); const result = db.prepare("UPDATE jobs SET status='submitting',updated_at=? WHERE id=? AND status='queued'").run(stamp, row.id); return result.changes ? this.getJob(row.id) : null; },
+    updateJobOptions(jobId: string, options: Record<string, unknown>) { const existing = this.getJob(jobId); if (!existing) throw new Error("Job not found"); const next = { ...existing, options: JSON.stringify(options), updatedAt: now() }; db.prepare("UPDATE jobs SET options=@options,updated_at=@updatedAt WHERE id=@id").run(next); return next; },
+    claimNextJob() { const row = db.prepare("SELECT id FROM jobs WHERE status='queued' ORDER BY created_at LIMIT 1").get() as { id: string } | undefined; if (!row) return null; const stamp = now(); const result = db.prepare("UPDATE jobs SET status='preparing_media',updated_at=? WHERE id=? AND status='queued'").run(stamp, row.id); return result.changes ? this.getJob(row.id) : null; },
     updateJob(jobId: string, patch: Partial<Pick<Job, "status" | "providerTaskId" | "outputAssetId" | "error">>) { const existing = this.getJob(jobId); if (!existing) throw new Error("Job not found"); const next = { ...existing, ...patch, updatedAt: now() }; db.prepare("UPDATE jobs SET status=@status,provider_task_id=@providerTaskId,output_asset_id=@outputAssetId,error=@error,updated_at=@updatedAt WHERE id=@id").run(next); return next; },
     transitionJob(jobId: string, expectedStatuses: JobStatus[], patch: Partial<Pick<Job, "status" | "providerTaskId" | "outputAssetId" | "error">>) {
       if (!expectedStatuses.length) throw new Error("At least one expected job status is required.");
@@ -100,9 +120,10 @@ export function createStore(filename = databasePath()) {
     reconcileInterruptedJobs() {
       const stamp = now();
       const reconcile = db.transaction(() => {
+        const preparation = db.prepare("UPDATE jobs SET status='queued',error=?,updated_at=? WHERE status='preparing_media'").run("Worker interrupted during media preparation; safe to retry before provider submission.", stamp).changes;
         const ambiguous = db.prepare("UPDATE jobs SET status='submission_unknown',error=?,updated_at=? WHERE status='submitting'").run("Worker interrupted while submitting; provider acceptance is unknown.", stamp).changes;
         const attention = db.prepare("UPDATE jobs SET status='needs_attention',error=?,updated_at=? WHERE status IN ('downloading','processing')").run("Worker interrupted during local result handling; retry downstream work explicitly.", stamp).changes;
-        return { submissionUnknown: ambiguous, needsAttention: attention };
+        return { preparationReset: preparation, submissionUnknown: ambiguous, needsAttention: attention };
       });
       return reconcile();
     },

@@ -85,6 +85,11 @@ def report() -> dict[str, object]:
     )
     return {
         "capability": "image.ocr",
+        "baseDependencies": {
+            "fastapi": importlib.util.find_spec("fastapi") is not None,
+            "pillow": importlib.util.find_spec("PIL") is not None,
+            "uvicorn": importlib.util.find_spec("uvicorn") is not None,
+        },
         "profile": settings.profile,
         "enabled": settings.enabled,
         "language": settings.language,

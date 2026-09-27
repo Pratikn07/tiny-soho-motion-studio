@@ -35,6 +35,19 @@ describe("durable generation jobs", () => {
     expect(store.getJob(downloading.id)?.status).toBe("needs_attention");
   });
 
+  it("recovers interrupted media preparation to queued without treating it as provider submission", () => {
+    const store = createStore(":memory:"); stores.push(store);
+    const project = store.createProject("Test project");
+    const queued = store.createJob({ projectId: project.id, idempotencyKey: "preparation", modelId: "alibaba:wan2.7-i2v", task: "image-to-video", prompt: "Move", inputAssetIds: [], options: {} });
+
+    const preparing = store.claimNextJob();
+    expect(preparing?.id).toBe(queued.id);
+    expect(preparing?.status).toBe("preparing_media");
+    store.reconcileInterruptedJobs();
+
+    expect(store.getJob(queued.id)?.status).toBe("queued");
+  });
+
   it("cancels only a still-queued job", () => {
     const store = createStore(":memory:"); stores.push(store);
     const project = store.createProject("Test project");

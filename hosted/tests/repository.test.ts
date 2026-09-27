@@ -127,4 +127,29 @@ describe("hosted Studio repository ownership", () => {
       status: "queued",
     }));
   });
+
+  it("records model acknowledgement against the authenticated owner", async () => {
+    const upsert = vi.fn();
+    const single = vi.fn().mockResolvedValue({
+      data: { model_id: "wan2.7-t2v", contract_version: "2026-09-20", owner_user_id: "owner-a" },
+      error: null,
+    });
+    const query = {
+      upsert: upsert.mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single,
+    };
+    const repository = new StudioRepository(
+      { from: vi.fn().mockReturnValue(query) },
+      { userId: "owner-a", email: "owner@tinysoho.test" },
+    );
+
+    await repository.acknowledgeModel({ modelId: "wan2.7-t2v", contractVersion: "2026-09-20" });
+
+    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
+      owner_user_id: "owner-a",
+      model_id: "wan2.7-t2v",
+      contract_version: "2026-09-20",
+    }), { onConflict: "owner_user_id,model_id,contract_version" });
+  });
 });

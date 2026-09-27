@@ -69,6 +69,28 @@ textarea {
   gap: 1rem;
 }
 
+.suite-view {
+  display: grid;
+  gap: 1rem;
+}
+
+.studio-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.studio-nav button {
+  background: #e7dbcc;
+  color: #251d18;
+}
+
+.studio-nav button.active {
+  background: #251d18;
+  color: #fffaf1;
+}
+
 .panel {
   display: grid;
   gap: 1rem;

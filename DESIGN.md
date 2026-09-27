@@ -143,8 +143,8 @@ The palette is warm, nearly monochrome, and low saturation. Sage is reserved for
 
 ## Typography
 
-**Display Font:** StudioDidot (GFS Didot asset) with Georgia, serif fallback  
-**Body Font:** Avenir Next with Avenir and system sans fallbacks  
+**Display Font:** StudioDidot (GFS Didot asset) with Georgia, serif fallback
+**Body Font:** Avenir Next with Avenir and system sans fallbacks
 **Label/Mono Font:** System sans labels with tabular numerals for time and dimensions
 
 **Character:** Didot gives project names and inspector headings an editorial, composed voice. The sans stays small, direct, and operational for controls, metadata, and recovery copy.

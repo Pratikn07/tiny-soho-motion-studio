@@ -45,6 +45,14 @@ class VisionDoctorTests(unittest.TestCase):
         self.assertFalse(result["enabled"])
         self.assertIn("does not load a model", result["note"])
 
+    def test_base_sidecar_dependencies_are_reported_without_exposing_configuration(self) -> None:
+        doctor = importlib.import_module("services.vision.vision_doctor")
+        result = doctor.report()
+
+        self.assertIn("baseDependencies", result)
+        self.assertEqual(set(result["baseDependencies"]), {"fastapi", "pillow", "uvicorn"})
+        self.assertTrue(all(isinstance(available, bool) for available in result["baseDependencies"].values()))
+
     def test_qwen_remote_token_is_never_returned_by_the_doctor(self) -> None:
         doctor = importlib.import_module("services.vision.vision_doctor")
         with patch.dict(

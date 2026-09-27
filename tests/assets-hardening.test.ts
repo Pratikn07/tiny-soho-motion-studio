@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { adoptProviderDownload, downloadProviderAsset, extensionForMime, isAllowedProviderResultUrl } from "@/lib/assets";
+import { adoptProviderDownload, downloadProviderAsset, extensionForMime, inspectAssetMedia, isAllowedProviderResultUrl } from "@/lib/assets";
 
 const ONE_PIXEL_PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==", "base64");
 const publicResolver = async () => [{ address: "8.8.8.8" }];
@@ -66,5 +66,14 @@ describe("provider result persistence", () => {
 
   it("uses a real MP4 extension rather than a generic binary extension", () => {
     expect(extensionForMime("video/mp4")).toBe("mp4");
+    expect(extensionForMime("video/quicktime")).toBe("mov");
+  });
+
+  it("retains FFprobe metadata for MOV video and WAV audio assets", async () => {
+    const video = await inspectAssetMedia("/owner-only/reference.mov", "video/quicktime", async () => JSON.stringify({ format: { format_name: "mov,mp4,m4a,3gp,3g2,mj2", duration: "2.5" }, streams: [{ codec_type: "video", codec_name: "h264", width: 320, height: 240, r_frame_rate: "30000/1001" }] }));
+    const audio = await inspectAssetMedia("/owner-only/voice.wav", "audio/wav", async () => JSON.stringify({ format: { format_name: "wav", duration: "3.25" }, streams: [{ codec_type: "audio", codec_name: "pcm_s16le" }] }));
+
+    expect(video).toEqual({ width: 320, height: 240, duration: 2.5, codec: "h264", container: "mov,mp4,m4a,3gp,3g2,mj2", fps: 30000 / 1001 });
+    expect(audio).toEqual({ width: null, height: null, duration: 3.25, codec: "pcm_s16le", container: "wav", fps: null });
   });
 });
