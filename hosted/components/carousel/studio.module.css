@@ -2130,3 +2130,18 @@
     flex-wrap: wrap;
   }
 }
+
+/* The connected workflow has more controls than the fixed preview footer. */
+@media (min-width: 741px) {
+  .inspector.liveInspector {
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .liveInspector .storyControls,
+  .liveInspector .movementControls,
+  .liveInspector .previewDetails,
+  .liveInspector .workflowControls {
+    flex: 0 0 auto;
+    overflow-y: visible;
+  }
+}

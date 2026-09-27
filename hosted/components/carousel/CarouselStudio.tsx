@@ -991,7 +991,7 @@ export default function CarouselStudio({
             </div>
           )}
         </section>
-        <aside className={s.inspector} aria-label="Story and movement controls">
+        <aside className={`${s.inspector} ${api ? s.liveInspector : ""}`} aria-label="Story and movement controls">
           {active ? (
             stage === "preview" ? (
               <>
