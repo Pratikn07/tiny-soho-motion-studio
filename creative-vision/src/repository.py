@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -29,7 +29,10 @@ class SupabaseVisionRepository:
         }
 
     def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        response = self.client.request(method, f"{self.config.supabase_url}{path}", headers=self.headers | kwargs.pop("headers", {}), **kwargs)
+        try:
+            response = self.client.request(method, f"{self.config.supabase_url}{path}", headers=self.headers | kwargs.pop("headers", {}), **kwargs)
+        except httpx.RequestError as error:
+            raise VisionRepositoryError("Supabase Vision connection is temporarily unavailable.") from error
         if response.is_error:
             raise VisionRepositoryError("Supabase Vision storage is temporarily unavailable.")
         return response
@@ -50,6 +53,17 @@ class SupabaseVisionRepository:
             input_asset_ids=row.get("input_asset_ids", []),
             worker_lease_id=row.get("worker_lease_id"),
         )
+
+    def extend_job_lease(self, job: VisionJob) -> None:
+        # Download, CPU composition and upload can exceed the initial two-minute claim.
+        response = self._request(
+            "PATCH", "/rest/v1/creative_studio_vision_jobs",
+            params={"id": f"eq.{job.id}", "owner_user_id": f"eq.{job.owner_user_id}", "worker_lease_id": f"eq.{job.worker_lease_id}", "status": "eq.running"},
+            headers={"Prefer": "return=representation"},
+            json={"worker_lease_expires_at": (datetime.now(UTC) + timedelta(minutes=10)).isoformat()},
+        )
+        if not response.json():
+            raise VisionRepositoryError("Vision job lease changed before processing.")
 
     def storage_for(self, job: VisionJob) -> "JobStorage":
         return JobStorage(self, job)
@@ -82,7 +96,10 @@ class SupabaseVisionRepository:
         if not isinstance(signed_url, str):
             raise VisionRepositoryError("Vision input URL could not be signed.")
         url = signed_url if signed_url.startswith("http") else f"{self.config.supabase_url}/storage/v1{signed_url}"
-        response = self.client.get(url, timeout=httpx.Timeout(60.0))
+        try:
+            response = self.client.get(url, timeout=httpx.Timeout(60.0))
+        except httpx.RequestError as error:
+            raise VisionRepositoryError("Vision input download was interrupted.") from error
         if response.is_error or not response.content:
             raise VisionRepositoryError("Vision input could not be downloaded.")
         return response.content, asset["mime_type"], url
@@ -147,7 +164,7 @@ class SupabaseVisionRepository:
         now = datetime.now(UTC).isoformat()
         rows = [
             {"capability_id": operation, "service_version": self.config.service_version, "status": "available", "reason": None, "refreshed_at": now, "updated_at": now}
-            for operation in ("inspect", "overlay", "plate", "compose")
+            for operation in ("inspect", "overlay", "plate", "compose", "carousel_compose")
         ] + [
             {"capability_id": operation, "service_version": self.config.service_version, "status": "unavailable", "reason": "Not configured in the CPU-safe hosted Vision service.", "refreshed_at": now, "updated_at": now}
             for operation in ("ocr", "segment", "layers")

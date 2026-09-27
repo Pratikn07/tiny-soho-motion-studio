@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { StudioError } from "@/lib/errors";
+import { StudioError } from "./errors";
 
 export type VideoTask =
   | "text-to-video"

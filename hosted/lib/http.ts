@@ -1,6 +1,17 @@
+import { ZodError } from "zod";
 import { StudioError } from "@/lib/errors";
 
 export function routeErrorResponse(error: unknown) {
+  if (error instanceof ZodError)
+    return Response.json(
+      {
+        error: {
+          code: "invalid_request",
+          message: "Request fields are invalid.",
+        },
+      },
+      { status: 400 },
+    );
   if (error instanceof StudioError) {
     return Response.json(
       { error: { code: error.code, message: error.message } },
@@ -9,7 +20,12 @@ export function routeErrorResponse(error: unknown) {
   }
 
   return Response.json(
-    { error: { code: "studio_internal_error", message: "Studio service is temporarily unavailable." } },
+    {
+      error: {
+        code: "studio_internal_error",
+        message: "Studio service is temporarily unavailable.",
+      },
+    },
     { status: 500 },
   );
 }

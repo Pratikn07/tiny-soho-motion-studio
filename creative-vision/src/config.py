@@ -9,7 +9,7 @@ class HostedVisionConfig:
     supabase_url: str
     service_role_key: str
     poll_seconds: float
-    service_version: str = "0.1.0"
+    service_version: str = "0.2.0"
 
     @classmethod
     def from_env(cls) -> "HostedVisionConfig":

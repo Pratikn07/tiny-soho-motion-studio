@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -14,7 +15,7 @@ from .repository import SupabaseVisionRepository, VisionRepositoryError
 
 
 SERVICE_NAME = "tiny-soho-creative-vision"
-SERVICE_VERSION = "0.1.0"
+SERVICE_VERSION = "0.2.0"
 logger = logging.getLogger(__name__)
 
 
@@ -26,6 +27,7 @@ def claim_and_process_once(repository: SupabaseVisionRepository, processor: Visi
     job = repository.claim_vision_job()
     if not job:
         return False
+    repository.extend_job_lease(job)
     try:
         result = process_vision_job(job, repository.storage_for(job), processor)
     except (VisionRepositoryError, ValueError, OSError):
@@ -53,16 +55,17 @@ def worker_loop(stop: threading.Event) -> None:
         config = HostedVisionConfig.from_env()
         repository = SupabaseVisionRepository(config)
         processor = VisionProcessor(ffmpeg_path="ffmpeg", ffprobe_path="ffprobe")
-        repository.upsert_capabilities()
     except (ValueError, VisionRepositoryError):
         logger.exception("Vision worker is not configured")
         return
+    heartbeat_at = 0.0
     while not stop.is_set():
         handled = False
         try:
-            handled = claim_and_process_once(repository, processor)
-            if not handled:
+            if time.monotonic() - heartbeat_at >= 30:
                 repository.upsert_capabilities()
+                heartbeat_at = time.monotonic()
+            handled = claim_and_process_once(repository, processor)
         except (ValueError, VisionRepositoryError):
             logger.exception("Vision worker tick failed")
         stop.wait(0.1 if handled else config.poll_seconds)
