@@ -32,7 +32,7 @@ class SupabaseVisionRepository:
         try:
             response = self.client.request(method, f"{self.config.supabase_url}{path}", headers=self.headers | kwargs.pop("headers", {}), **kwargs)
         except httpx.RequestError as error:
-            raise VisionRepositoryError("Supabase Vision connection is temporarily unavailable.") from error
+            raise VisionRepositoryError("Supabase Vision connection is temporarily unavailable.") from None
         if response.is_error:
             raise VisionRepositoryError("Supabase Vision storage is temporarily unavailable.")
         return response
@@ -55,10 +55,12 @@ class SupabaseVisionRepository:
         )
 
     def extend_job_lease(self, job: VisionJob) -> None:
+        if not job.worker_lease_id:
+            raise VisionRepositoryError("Vision job has no active lease.")
         # Download, CPU composition and upload can exceed the initial two-minute claim.
         response = self._request(
             "PATCH", "/rest/v1/creative_studio_vision_jobs",
-            params={"id": f"eq.{job.id}", "owner_user_id": f"eq.{job.owner_user_id}", "worker_lease_id": f"eq.{job.worker_lease_id}", "status": "eq.running"},
+            params={"id": f"eq.{job.id}", "owner_user_id": f"eq.{job.owner_user_id}", "worker_lease_id": f"eq.{job.worker_lease_id}", "status": "eq.running", "worker_lease_expires_at": f"gt.{datetime.now(UTC).isoformat()}"},
             headers={"Prefer": "return=representation"},
             json={"worker_lease_expires_at": (datetime.now(UTC) + timedelta(minutes=10)).isoformat()},
         )
@@ -99,12 +101,13 @@ class SupabaseVisionRepository:
         try:
             response = self.client.get(url, timeout=httpx.Timeout(60.0))
         except httpx.RequestError as error:
-            raise VisionRepositoryError("Vision input download was interrupted.") from error
+            raise VisionRepositoryError("Vision input download was interrupted.") from None
         if response.is_error or not response.content:
             raise VisionRepositoryError("Vision input could not be downloaded.")
         return response.content, asset["mime_type"], url
 
     def upload_derived(self, job: VisionJob, object_path: str, data: bytes, mime_type: str, kind: str) -> str:
+        self.extend_job_lease(job)
         uploaded = self._request(
             "POST",
             f"/storage/v1/object/creative-studio/{quote(object_path, safe='/')}",
@@ -119,6 +122,7 @@ class SupabaseVisionRepository:
             with Image.open(BytesIO(data)) as image:
                 width, height = image.size
         asset_uuid = str(uuid.uuid4())
+        self.extend_job_lease(job)
         created = self._request(
             "POST",
             "/rest/v1/creative_studio_assets",
@@ -144,11 +148,12 @@ class SupabaseVisionRepository:
         return created[0]["id"]
 
     def complete_job(self, job: VisionJob, *, status: str, asset_ids: list[str], error_code: str | None, error_message: str | None) -> None:
-        self._request(
+        self.extend_job_lease(job)
+        response = self._request(
             "PATCH",
             "/rest/v1/creative_studio_vision_jobs",
-            params={"id": f"eq.{job.id}", "owner_user_id": f"eq.{job.owner_user_id}", "worker_lease_id": f"eq.{job.worker_lease_id}"},
-            headers={"Content-Type": "application/json"},
+            params={"id": f"eq.{job.id}", "owner_user_id": f"eq.{job.owner_user_id}", "worker_lease_id": f"eq.{job.worker_lease_id}", "status": "eq.running", "worker_lease_expires_at": f"gt.{datetime.now(UTC).isoformat()}"},
+            headers={"Content-Type": "application/json", "Prefer": "return=representation"},
             json={
                 "status": status,
                 "output_asset_ids": asset_ids,
@@ -159,6 +164,9 @@ class SupabaseVisionRepository:
                 "updated_at": datetime.now(UTC).isoformat(),
             },
         )
+
+        if not response.json():
+            raise VisionRepositoryError("Vision lease changed before completion.")
 
     def upsert_capabilities(self) -> None:
         now = datetime.now(UTC).isoformat()

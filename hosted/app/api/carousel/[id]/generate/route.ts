@@ -2,6 +2,7 @@ import { POST as submitJob } from "@/app/api/jobs/route";
 import {
   compositorAvailable,
   assertGenerationReady,
+  assertExportDimensions,
   generationPrompt,
   planSnapshot,
 } from "@/lib/carousel";
@@ -25,6 +26,7 @@ export async function POST(
         "The Carousel compositor must be available before generating. Your plan is saved.",
       );
     assertGenerationReady(slide);
+    assertExportDimensions(run.snapshot.width, run.snapshot.height);
     if (JSON.stringify(planSnapshot(slide)) !== JSON.stringify(run.snapshot))
       throw new StudioError(
         409,

@@ -89,6 +89,7 @@ export function useCarouselWorkspace(
   const [acknowledged, setAcknowledged] = useState(false);
   const live = useRef({ slides, name });
   live.current = { slides, name };
+  const initialDraft = useRef(JSON.stringify({ slides, name }));
   const pausedRuns = useRef(new Set<string>());
   const projectRef = useRef(project),
     locked = useRef(false),
@@ -284,6 +285,18 @@ export function useCarouselWorkspace(
   const open = (id: string) =>
     exclusive(async () => {
       if (api) {
+        const current = live.current;
+        const hasInitialChanges =
+          JSON.stringify(current) !== initialDraft.current ||
+          current.slides.some((s) => s.origin === "upload" && !s.assetId);
+        if (
+          projectRef.current
+            ? serialize(current.slides, current.name) !== saved.current
+            : hasInitialChanges
+        )
+          throw new Error(
+            "Save your current project before opening another one. Your edits are still here.",
+          );
         setStatus("Opening project…");
         await hydrate(await api.getCarousel(id));
       }

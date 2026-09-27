@@ -52,18 +52,14 @@ function setup() {
         return stored;
       },
     ),
-    generateCarousel: vi
-      .fn()
-      .mockResolvedValue({
-        id: "33333333-3333-4333-8333-333333333333",
-        status: "running",
-      }),
-    getJob: vi
-      .fn()
-      .mockResolvedValue({
-        id: "33333333-3333-4333-8333-333333333333",
-        status: "running",
-      }),
+    generateCarousel: vi.fn().mockResolvedValue({
+      id: "33333333-3333-4333-8333-333333333333",
+      status: "running",
+    }),
+    getJob: vi.fn().mockResolvedValue({
+      id: "33333333-3333-4333-8333-333333333333",
+      status: "running",
+    }),
     composeCarousel: vi.fn(),
     getVisionJob: vi.fn(),
   } as unknown as CarouselApi;
@@ -178,4 +174,23 @@ describe("saved Carousel workspace", () => {
       vi.useRealTimers();
     }
   });
+});
+
+it("preserves an initial upload when opening another project until it is saved", async () => {
+  const { result, api } = setup();
+  await waitFor(() => expect(result.current.workspace.busy).toBe(false));
+  act(() =>
+    result.current.setSlides([
+      {
+        ...initial,
+        assetId: undefined,
+        src: "blob:local-upload",
+        story: "Keep my new upload",
+      },
+    ]),
+  );
+  await act(() => result.current.workspace.open(projectId));
+  expect(api.getCarousel).not.toHaveBeenCalled();
+  expect(result.current.slides[0].story).toBe("Keep my new upload");
+  expect(result.current.workspace.error).toMatch(/save/i);
 });

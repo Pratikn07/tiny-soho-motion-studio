@@ -3,6 +3,7 @@ import {
   carouselDocumentSchema,
   assertOwnedSlides,
   assertGenerationReady,
+  assertExportDimensions,
   planSnapshot,
   persistentSlide,
 } from "@/lib/carousel";
@@ -37,15 +38,13 @@ describe("Carousel document persistence and review", () => {
     ).toBe(id);
   });
   it("rejects wrong project or mismatched source dimensions", async () => {
-    const getAsset = vi
-      .fn()
-      .mockResolvedValue({
-        id,
-        project_id: "another",
-        kind: "source-image",
-        width: 1122,
-        height: 1402,
-      });
+    const getAsset = vi.fn().mockResolvedValue({
+      id,
+      project_id: "another",
+      kind: "source-image",
+      width: 1122,
+      height: 1402,
+    });
     await expect(
       assertOwnedSlides([slide], "project", getAsset),
     ).rejects.toThrow(/project/);
@@ -116,5 +115,9 @@ describe("Carousel document persistence and review", () => {
     ).rejects.toThrow(/another tab|changed/i);
     expect(q.eq).toHaveBeenCalledWith("owner_user_id", "owner");
     expect(q.eq).toHaveBeenCalledWith("carousel_revision", 3);
+  });
+  it("rejects oversized exact-ratio exports before a provider request", () => {
+    expect(() => assertExportDimensions(1129, 1393)).not.toThrow();
+    expect(() => assertExportDimensions(4001, 4001)).toThrow(/smaller image/);
   });
 });

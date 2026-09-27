@@ -3,12 +3,24 @@ import { createOrGetJob } from "@/lib/jobs";
 
 describe("hosted Studio jobs", () => {
   it("returns the original job for an identical idempotency replay", async () => {
-    const existing = { id: "job-1", fingerprint: "same", status: "submitted" as const };
+    const existing = {
+      id: "job-1",
+      fingerprint: "same",
+      status: "submitted" as const,
+    };
 
     await expect(
       createOrGetJob(
-        { find: async () => existing, create: async () => { throw new Error("must not create"); } },
-        { idempotencyKey: "ce82a151-4c9d-47b0-a112-48fa8bcbe9cf", fingerprint: "same" },
+        {
+          find: async () => existing,
+          create: async () => {
+            throw new Error("must not create");
+          },
+        },
+        {
+          idempotencyKey: "ce82a151-4c9d-47b0-a112-48fa8bcbe9cf",
+          fingerprint: "same",
+        },
       ),
     ).resolves.toEqual({ job: existing, created: false });
   });
@@ -16,9 +28,69 @@ describe("hosted Studio jobs", () => {
   it("rejects reuse of an idempotency key with a different generation request", async () => {
     await expect(
       createOrGetJob(
-        { find: async () => ({ id: "job-1", fingerprint: "old", status: "submitted" as const }), create: async () => { throw new Error("must not create"); } },
-        { idempotencyKey: "ce82a151-4c9d-47b0-a112-48fa8bcbe9cf", fingerprint: "new" },
+        {
+          find: async () => ({
+            id: "job-1",
+            fingerprint: "old",
+            status: "submitted" as const,
+          }),
+          create: async () => {
+            throw new Error("must not create");
+          },
+        },
+        {
+          idempotencyKey: "ce82a151-4c9d-47b0-a112-48fa8bcbe9cf",
+          fingerprint: "new",
+        },
       ),
     ).rejects.toMatchObject({ status: 409, code: "idempotency_conflict" });
   });
+});
+
+it("recovers a concurrent insert or lost response without duplicating the job", async () => {
+  const existing = {
+    id: "race",
+    fingerprint: "same",
+    status: "queued" as const,
+  };
+  let reads = 0;
+  await expect(
+    createOrGetJob(
+      {
+        find: async () => (++reads === 1 ? null : existing),
+        create: async () => {
+          throw new Error("duplicate key");
+        },
+      },
+      { idempotencyKey: "key", fingerprint: "same" },
+    ),
+  ).resolves.toEqual({ job: existing, created: false });
+});
+it("rejects a conflicting concurrent insert and preserves real creation errors", async () => {
+  let reads = 0;
+  await expect(
+    createOrGetJob(
+      {
+        find: async () =>
+          ++reads === 1
+            ? null
+            : { id: "race", fingerprint: "other", status: "queued" as const },
+        create: async () => {
+          throw new Error("duplicate");
+        },
+      },
+      { idempotencyKey: "key", fingerprint: "same" },
+    ),
+  ).rejects.toMatchObject({ status: 409 });
+  await expect(
+    createOrGetJob(
+      {
+        find: async () => null,
+        create: async () => {
+          throw new Error("offline");
+        },
+      },
+      { idempotencyKey: "key", fingerprint: "same" },
+    ),
+  ).rejects.toThrow("offline");
 });

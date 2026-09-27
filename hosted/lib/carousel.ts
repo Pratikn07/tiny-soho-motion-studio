@@ -130,9 +130,7 @@ export function assertGenerationReady(
 export async function assertOwnedSlides(
   slides: SavedSlide[],
   projectId: string,
-  getAsset: (
-    id: string,
-  ) => Promise<{
+  getAsset: (id: string) => Promise<{
     project_id: string;
     kind: string;
     width: number | null;
@@ -193,4 +191,14 @@ export function compositorAvailable(
       now - Date.parse(c.refreshed_at) >= -60_000 &&
       now - Date.parse(c.refreshed_at) < 300_000,
   );
+}
+
+export function assertExportDimensions(width: number, height: number) {
+  const multiplier = width % 2 || height % 2 ? 2 : 1;
+  if (width * height * multiplier * multiplier > 16_000_000)
+    throw new StudioError(
+      400,
+      "carousel_export_too_large",
+      "This image is too large for a Carousel export. Upload a smaller image at the same proportions before generating.",
+    );
 }
