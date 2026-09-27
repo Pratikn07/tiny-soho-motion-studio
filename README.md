@@ -2,6 +2,34 @@
 
 Local, browser-based creative studio for Alibaba Model Studio in Singapore. It keeps API credentials on the server, stores projects and media on your Mac, and uses an approval-first workflow for generation.
 
+## Carousel Studio UI preview
+
+The new entry screen is an interactive Carousel Studio: add or paste images,
+edit a five-second story, adjust its moving area, and review a labelled sample video.
+Original source proportions are retained. The previous local interface is available
+at `/legacy`. In the hosted app, Carousel Studio opens after the server verifies
+the signed-in owner. **Open existing tools** returns to Motion, Director,
+Workflows and Vision without discarding the current carousel draft.
+
+```bash
+npm run ui:dev
+```
+
+Open [Carousel Studio](http://127.0.0.1:3011). This command starts Next.js only;
+it does not start the provider worker. For a production-mode local preview, run
+`npm run build` followed by `npm run ui:start` instead. Do not run development and
+production builds simultaneously in the same checkout.
+
+The three example images and meal-prep video are supplied proof assets. Story ideas
+and text regions are manually authored examples. Live analysis and generation are
+not connected to the new screen; editing a plan never changes the sample clip.
+Drafts and uploaded images last for the browser session. Download a story plan to
+retain it before refreshing. The example video has a disclosed hair/caption defect.
+
+See [the UI brief](docs/ui/carousel-studio-brief.md), [product scope](PRODUCT.md),
+and [design system](DESIGN.md). The original app startup below includes its worker
+and is intended for the previous generation workflows.
+
 ## Start
 
 ```bash

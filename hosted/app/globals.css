@@ -12,21 +12,18 @@ body {
   margin: 0;
   min-height: 100vh;
 }
-
-main {
+:where(.legacy-studio) main {
   width: min(100% - 2rem, 72rem);
   margin: 0 auto;
   padding: 3rem 0;
 }
-
-button,
-input,
-select,
-textarea {
+:where(.legacy-studio) button,
+:where(.legacy-studio) input,
+:where(.legacy-studio) select,
+:where(.legacy-studio) textarea {
   font: inherit;
 }
-
-button {
+:where(.legacy-studio) button {
   border: 0;
   border-radius: 0.35rem;
   background: #251d18;
@@ -34,22 +31,19 @@ button {
   cursor: pointer;
   padding: 0.7rem 1rem;
 }
-
-button:disabled {
+:where(.legacy-studio) button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
-
-label {
+:where(.legacy-studio) label {
   display: grid;
   gap: 0.4rem;
   font-size: 0.92rem;
   font-weight: 600;
 }
-
-input,
-select,
-textarea {
+:where(.legacy-studio) input,
+:where(.legacy-studio) select,
+:where(.legacy-studio) textarea {
   width: 100%;
   border: 1px solid #b8ac9d;
   border-radius: 0.3rem;
@@ -57,41 +51,34 @@ textarea {
   color: #251d18;
   padding: 0.65rem;
 }
-
-textarea {
+:where(.legacy-studio) textarea {
   min-height: 7rem;
   resize: vertical;
 }
-
-.studio-shell,
-.login-shell {
+:where(.legacy-studio) .studio-shell,
+:where(.legacy-studio) .login-shell {
   display: grid;
   gap: 1rem;
 }
-
-.suite-view {
+:where(.legacy-studio) .suite-view {
   display: grid;
   gap: 1rem;
 }
-
-.studio-nav {
+:where(.legacy-studio) .studio-nav {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 1rem;
 }
-
-.studio-nav button {
+:where(.legacy-studio) .studio-nav button {
   background: #e7dbcc;
   color: #251d18;
 }
-
-.studio-nav button.active {
+:where(.legacy-studio) .studio-nav button.active {
   background: #251d18;
   color: #fffaf1;
 }
-
-.panel {
+:where(.legacy-studio) .panel {
   display: grid;
   gap: 1rem;
   border: 1px solid #d8ccbc;
@@ -99,29 +86,24 @@ textarea {
   background: rgba(255, 250, 241, 0.72);
   padding: 1.25rem;
 }
-
-.row {
+:where(.legacy-studio) .row {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 1rem;
 }
-
-.row > label {
+:where(.legacy-studio) .row > label {
   flex: 1 1 12rem;
 }
-
-.checkbox {
+:where(.legacy-studio) .checkbox {
   display: flex;
   align-items: center;
   gap: 0.6rem;
 }
-
-.checkbox input {
+:where(.legacy-studio) .checkbox input {
   width: auto;
 }
-
-.eyebrow {
+:where(.legacy-studio) .eyebrow {
   margin: 0;
   color: #8b3e2f;
   font-size: 0.8rem;
@@ -129,8 +111,7 @@ textarea {
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-
-.note {
+:where(.legacy-studio) .note {
   margin: 0;
   color: #675c52;
   font-size: 0.9rem;
