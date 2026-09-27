@@ -2021,3 +2021,15 @@
     border-top: 1px solid var(--line);
   }
 }
+
+.accountButton,
+.toolsLink {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+.toolsLink { display: inline-flex; align-items: center; gap: 5px; }
+.accountButton:hover,
+.toolsLink:hover { text-decoration: underline; text-underline-offset: 4px; }

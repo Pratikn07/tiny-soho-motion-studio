@@ -4,10 +4,12 @@ Local, browser-based creative studio for Alibaba Model Studio in Singapore. It k
 
 ## Carousel Studio UI preview
 
-The new local entry screen is an interactive Carousel Studio: add or paste images,
+The new entry screen is an interactive Carousel Studio: add or paste images,
 edit a five-second story, adjust its moving area, and review a labelled sample video.
 Original source proportions are retained. The previous local interface is available
-at `/legacy`; the independent `hosted/` app is unchanged.
+at `/legacy`. In the hosted app, Carousel Studio opens after the server verifies
+the signed-in owner. **Open existing tools** returns to Motion, Director,
+Workflows and Vision without discarding the current carousel draft.
 
 ```bash
 npm run ui:dev

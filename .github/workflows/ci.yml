@@ -27,9 +27,13 @@ jobs:
           cache-dependency-path: services/vision/requirements.txt
       - run: npm ci
       - run: npm --prefix creative-worker ci
+      - run: npm --prefix hosted ci
       - run: npm test
       - run: npm run check
       - run: npm run build
+      - run: npm --prefix hosted test
+      - run: npm --prefix hosted run check
+      - run: npm --prefix hosted run build
       - run: npm --prefix creative-worker test
       - run: npm --prefix creative-worker run check
       - run: npm run verify:vision-repository

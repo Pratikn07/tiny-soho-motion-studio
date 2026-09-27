@@ -139,6 +139,9 @@ export function createStudioApi(client: SessionClient, fetcher: Fetcher = fetch)
   };
 
   return {
+    async authorize(): Promise<void> {
+      await request("/api/session");
+    },
     async listProjects(): Promise<StudioProjectView[]> {
       const body = await request<{ projects: ApiProject[] }>("/api/projects");
       return body.projects.map(projectView);
