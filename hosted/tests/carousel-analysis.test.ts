@@ -96,3 +96,34 @@ it("accepts a valid image analysis response", async () => {
     ),
   ).resolves.toEqual(plan);
 });
+
+it("separates provider, response, plan, and timeout failures without leaking provider output", async () => {
+  const config = {
+    NVIDIA_API_KEY: "private-key",
+    NVIDIA_VISION_MODEL: "vision-model",
+  };
+  const cases: Array<[Response, string]> = [
+    [new Response("private-provider-details", { status: 500 }), "analysis_provider_failed"],
+    [new Response("private-provider-details"), "analysis_invalid_response"],
+    [
+      new Response(JSON.stringify({ choices: [{ message: { content: "not json" } }] })),
+      "analysis_invalid_plan",
+    ],
+  ];
+  for (const [response, code] of cases) {
+    const fetcher = vi.fn().mockResolvedValue(response);
+    await expect(
+      analyzeCarousel("data:image/png;base64,AA==", config, fetcher),
+    ).rejects.toMatchObject({ code });
+  }
+  const timeout = Object.assign(new Error("private-provider-details"), {
+    name: "TimeoutError",
+  });
+  await expect(
+    analyzeCarousel(
+      "data:image/png;base64,AA==",
+      config,
+      vi.fn().mockRejectedValue(timeout),
+    ),
+  ).rejects.toMatchObject({ code: "analysis_timeout" });
+});
