@@ -24,6 +24,20 @@ it("validates suggestions and rejects arbitrary model output", () => {
     ).stories,
   ).toHaveLength(1);
 });
+it("extracts a complete plan from explanatory model prose without relaxing validation", () => {
+  const plan = {
+    summary: "A recipe slide with {fixed} labels",
+    stories: [{ title: "A bite", prompt: "A fork lifts a bite." }],
+    region: { x: 40, y: 35, width: 50, height: 35 },
+    protectedRegions: [{ x: 0, y: 0, width: 100, height: 25 }],
+  };
+  expect(
+    parseAnalysis(`Here is a careful plan:\n\`\`\`json\n${JSON.stringify(plan)}\n\`\`\``),
+  ).toEqual(plan);
+  expect(() =>
+    parseAnalysis(`Here is a plan: ${JSON.stringify({ ...plan, stories: [] })}`),
+  ).toThrow();
+});
 it("does not invoke a provider when configuration is missing", async () => {
   const fetcher = vi.fn();
   await expect(

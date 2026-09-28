@@ -21,7 +21,39 @@ export function parseAnalysis(content: string) {
     .trim()
     .replace(/^```(?:json)?\s*/, "")
     .replace(/\s*```$/, "");
-  return schema.parse(JSON.parse(text));
+  try {
+    return schema.parse(JSON.parse(text));
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+  }
+  const starts: number[] = [];
+  let quoted = false;
+  let escaped = false;
+  let shapeError: z.ZodError | undefined;
+  for (let i = 0; i < text.length; i += 1) {
+    const character = text[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"' && starts.length) quoted = true;
+    else if (character === "{") starts.push(i);
+    else if (character === "}" && starts.length) {
+      const start = starts.pop()!;
+      try {
+        const candidate = JSON.parse(text.slice(start, i + 1));
+        const result = schema.safeParse(candidate);
+        if (result.success) return result.data;
+        shapeError ??= result.error;
+      } catch {
+        // A prose brace is not a JSON plan; keep looking for a valid object.
+      }
+    }
+  }
+  if (shapeError) throw shapeError;
+  throw new SyntaxError("No valid JSON analysis object");
 }
 export async function analyzeCarousel(
   imageUrl: string,
