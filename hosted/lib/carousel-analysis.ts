@@ -90,18 +90,56 @@ export async function analyzeCarousel(
         "analysis_request_rejected",
         "NVIDIA rejected the model or image request. Check NVIDIA_VISION_MODEL and the model's supported image input.",
       );
-    if (!response.ok) throw new Error("provider");
+    if (!response.ok)
+      throw new StudioError(
+        502,
+        "analysis_provider_failed",
+        "NVIDIA could not complete image analysis. Try again later or check the model's availability in NVIDIA Build.",
+      );
     const raw = await response.text();
-    if (raw.length > 50000) throw new Error("oversize");
-    const content = JSON.parse(raw).choices?.[0]?.message?.content;
-    if (typeof content !== "string") throw new Error("invalid");
-    return parseAnalysis(content);
+    if (raw.length > 50000)
+      throw new StudioError(
+        502,
+        "analysis_invalid_response",
+        "NVIDIA returned an unexpectedly large response. Try again or choose a different vision model.",
+      );
+    let content: unknown;
+    try {
+      content = JSON.parse(raw).choices?.[0]?.message?.content;
+    } catch {
+      throw new StudioError(
+        502,
+        "analysis_invalid_response",
+        "NVIDIA returned an unreadable response. Try again or choose a different vision model.",
+      );
+    }
+    if (typeof content !== "string")
+      throw new StudioError(
+        502,
+        "analysis_invalid_response",
+        "NVIDIA did not return an image-analysis message. Check the selected vision model.",
+      );
+    try {
+      return parseAnalysis(content);
+    } catch {
+      throw new StudioError(
+        502,
+        "analysis_invalid_plan",
+        "NVIDIA responded, but its suggested plan could not be used. Try again or write the story and mark text manually.",
+      );
+    }
   } catch (error) {
     if (error instanceof StudioError) throw error;
+    if (error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name))
+      throw new StudioError(
+        504,
+        "analysis_timeout",
+        "NVIDIA took too long to analyze this image. Try again later or use a smaller image.",
+      );
     throw new StudioError(
       502,
       "analysis_unavailable",
-      "Image analysis is unavailable or returned an invalid plan. Your saved image is safe; try again or edit manually.",
+      "Image analysis is temporarily unavailable. Your saved image is safe; try again or edit manually.",
     );
   }
 }
