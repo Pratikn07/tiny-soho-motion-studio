@@ -145,6 +145,30 @@ it("separates provider, response, plan, and timeout failures without leaking pro
   } finally {
     warn.mockRestore();
   }
+  const invalidReply = new Response(
+    JSON.stringify({ choices: [{ message: { content: "private-user-artwork not json" } }] }),
+  );
+  await expect(
+    analyzeCarousel(
+      "data:image/png;base64,AA==",
+      config,
+      vi.fn().mockResolvedValue(invalidReply.clone()),
+    ),
+  ).rejects.toMatchObject({
+    code: "analysis_invalid_plan",
+    message: "NVIDIA responded, but its suggested plan could not be used. Try again or write the story and mark text manually.",
+  });
+  await expect(
+    analyzeCarousel(
+      "data:image/png;base64,AA==",
+      config,
+      vi.fn().mockResolvedValue(invalidReply),
+      true,
+    ),
+  ).rejects.toMatchObject({
+    code: "analysis_invalid_plan",
+    message: expect.stringContaining("private-user-artwork not json"),
+  });
   const timeout = Object.assign(new Error("private-provider-details"), {
     name: "TimeoutError",
   });

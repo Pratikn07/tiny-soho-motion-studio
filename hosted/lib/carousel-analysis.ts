@@ -59,6 +59,7 @@ export async function analyzeCarousel(
   imageUrl: string,
   env: Record<string, string | undefined> = process.env,
   fetcher: typeof fetch = fetch,
+  inspectReply = false,
 ) {
   if (!env.NVIDIA_API_KEY || !env.NVIDIA_VISION_MODEL)
     throw new StudioError(
@@ -181,7 +182,9 @@ export async function analyzeCarousel(
       throw new StudioError(
         502,
         "analysis_invalid_plan",
-        "NVIDIA responded, but its suggested plan could not be used. Try again or write the story and mark text manually.",
+        inspectReply
+          ? `NVIDIA reply for owner inspection: ${content.slice(0, 3000)}`
+          : "NVIDIA responded, but its suggested plan could not be used. Try again or write the story and mark text manually.",
       );
     }
   } catch (error) {
