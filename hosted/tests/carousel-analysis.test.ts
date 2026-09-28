@@ -43,6 +43,7 @@ it("sends an image and treats the output as suggestions, with sanitized errors",
     ),
   ).rejects.toThrow(/API key/);
   const body = JSON.parse(fetcher.mock.calls[0][1].body);
+  expect(body.max_tokens).toBe(900);
   expect(
     body.messages.map((message: { role: string }) => message.role),
   ).toEqual(["user"]);
