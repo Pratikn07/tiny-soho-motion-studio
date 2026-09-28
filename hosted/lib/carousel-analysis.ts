@@ -104,8 +104,12 @@ export async function analyzeCarousel(
         "NVIDIA returned an unexpectedly large response. Try again or choose a different vision model.",
       );
     let content: unknown;
+    let finishReason = "other";
     try {
-      content = JSON.parse(raw).choices?.[0]?.message?.content;
+      const choice = JSON.parse(raw).choices?.[0];
+      content = choice?.message?.content;
+      if (["stop", "length"].includes(choice?.finish_reason))
+        finishReason = choice.finish_reason;
     } catch {
       throw new StudioError(
         502,
@@ -121,7 +125,26 @@ export async function analyzeCarousel(
       );
     try {
       return parseAnalysis(content);
-    } catch {
+    } catch (error) {
+      const fields =
+        error instanceof z.ZodError
+          ? [...new Set(error.issues.map((issue) => String(issue.path[0] ?? "root")))].filter(
+              (field) =>
+                ["summary", "stories", "region", "protectedRegions", "root"].includes(field),
+            )
+          : [];
+      console.warn("carousel-analysis-invalid-plan", {
+        reason:
+          error instanceof SyntaxError
+            ? "json"
+            : error instanceof z.ZodError
+              ? "schema"
+              : "other",
+        finishReason,
+        contentLength: content.length,
+        startsWithJson: /^\s*(?:```(?:json)?\s*)?\s*[{[]/.test(content),
+        fields,
+      });
       throw new StudioError(
         502,
         "analysis_invalid_plan",

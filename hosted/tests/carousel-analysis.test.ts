@@ -107,15 +107,28 @@ it("separates provider, response, plan, and timeout failures without leaking pro
     [new Response("private-provider-details", { status: 500 }), "analysis_provider_failed"],
     [new Response("private-provider-details"), "analysis_invalid_response"],
     [
-      new Response(JSON.stringify({ choices: [{ message: { content: "not json" } }] })),
+      new Response(JSON.stringify({ choices: [{ finish_reason: "length", message: { content: "private-user-artwork not json" } }] })),
       "analysis_invalid_plan",
     ],
   ];
-  for (const [response, code] of cases) {
-    const fetcher = vi.fn().mockResolvedValue(response);
-    await expect(
-      analyzeCarousel("data:image/png;base64,AA==", config, fetcher),
-    ).rejects.toMatchObject({ code });
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    for (const [response, code] of cases) {
+      const fetcher = vi.fn().mockResolvedValue(response);
+      await expect(
+        analyzeCarousel("data:image/png;base64,AA==", config, fetcher),
+      ).rejects.toMatchObject({ code });
+    }
+    expect(warn).toHaveBeenCalledWith("carousel-analysis-invalid-plan", {
+      reason: "json",
+      finishReason: "length",
+      contentLength: "private-user-artwork not json".length,
+      startsWithJson: false,
+      fields: [],
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("private-user-artwork");
+  } finally {
+    warn.mockRestore();
   }
   const timeout = Object.assign(new Error("private-provider-details"), {
     name: "TimeoutError",
