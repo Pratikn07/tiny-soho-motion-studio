@@ -52,6 +52,9 @@ export async function POST(request: Request) {
       .toBuffer();
     const analysis = await analyzeCarousel(
       `data:image/jpeg;base64,${bytes.toString("base64")}`,
+      process.env,
+      fetch,
+      new URL(request.url).searchParams.get("inspect") === "1",
     );
     return Response.json({ analysis });
   } catch (error) {
