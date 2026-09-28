@@ -81,6 +81,7 @@ export async function analyzeCarousel(
           model: env.NVIDIA_VISION_MODEL,
           temperature: 0.2,
           max_tokens: 900,
+          response_format: { type: "json_object" },
           stream: false,
           messages: [
             {
