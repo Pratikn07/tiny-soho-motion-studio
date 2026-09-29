@@ -12,8 +12,9 @@ import {
 } from "../../lib/carousel";
 import { getVideoModelContract } from "../../lib/video-catalog";
 import type { Slide } from "./model";
+import type { CarouselCreationSummary } from "../../lib/api";
 export type CarouselApi = {
-  listProjects(): Promise<Array<{ id: string; name: string }>>;
+  listCarouselCreations(): Promise<CarouselCreationSummary[]>;
   createProject(input: {
     name: string;
     canvas: string;
@@ -76,21 +77,21 @@ export function useCarouselWorkspace(
   name: string,
   setName: (name: string) => void,
 ) {
-  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>(
+  const [creations, setCreations] = useState<CarouselCreationSummary[]>(
     [],
   );
   const [project, setProject] = useState<CarouselProject | null>(null);
   const [busy, setBusy] = useState(false),
-    [status, setStatus] = useState("Unsaved project"),
+    [status, setStatus] = useState("Ready to begin"),
     [error, setError] = useState("");
   const [runStatus, setRunStatus] = useState<Record<string, string>>({});
   const [acknowledged, setAcknowledged] = useState(false);
   const live = useRef({ slides, name });
   live.current = { slides, name };
-  const initialDraft = useRef(JSON.stringify({ slides, name }));
   const pausedRuns = useRef(new Set<string>());
   const projectRef = useRef(project),
     locked = useRef(false),
+    inFlight = useRef<Promise<boolean> | null>(null),
     mounted = useRef(true),
     saved = useRef("");
   const model = getVideoModelContract("wan2.7-i2v")!;
@@ -103,7 +104,9 @@ export function useCarouselWorkspace(
       return "";
     }
   })();
-  const dirty = !project || !signature || signature !== saved.current;
+  const dirty = project
+    ? !signature || signature !== saved.current
+    : slides.length > 0;
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -113,9 +116,12 @@ export function useCarouselWorkspace(
   const adoptProject = (p: CarouselProject) => {
     projectRef.current = p;
     setProject(p);
+  };
+  const setLocation = (id: string | null, mode: "push" | "replace") => {
     const url = new URL(window.location.href);
-    url.searchParams.set("carousel", p.id);
-    window.history.replaceState(null, "", url);
+    if (id) url.searchParams.set("carousel", id);
+    else url.searchParams.delete("carousel");
+    window.history[mode === "push" ? "pushState" : "replaceState"](null, "", url);
   };
   async function hydrate(p: CarouselProject) {
     if (!api) return;
@@ -135,24 +141,28 @@ export function useCarouselWorkspace(
     setSlides(result);
     setStatus("Saved to your workspace");
     setRunStatus({});
+    pausedRuns.current.clear();
   }
-  const refreshProjects = useCallback(async () => {
-    if (api) setProjects(await api.listProjects());
+  const refreshCreations = useCallback(async () => {
+    if (api) setCreations(await api.listCarouselCreations());
   }, [api]);
   useEffect(() => {
     if (!api) return;
     let canceled = false;
     locked.current = true;
     setBusy(true);
-    Promise.all([api.listProjects(), api.listAcknowledgements()])
+    Promise.all([api.listCarouselCreations(), api.listAcknowledgements()])
       .then(async ([list, acks]) => {
         if (canceled) return;
-        setProjects(list);
+        setCreations(list);
         const previous = new URL(window.location.href).searchParams.get(
           "carousel",
         );
-        if (previous && list.some((p) => p.id === previous))
+        if (previous) {
+          if (!list.some((p) => p.id === previous))
+            throw new Error("This creation could not be found. Start a new creation or choose one from your history.");
           await hydrate(await api.getCarousel(previous));
+        }
         if (canceled) return;
         setAcknowledged(
           acks.some(
@@ -176,23 +186,31 @@ export function useCarouselWorkspace(
   async function exclusive(
     action: () => Promise<void>,
     onError?: (message: string) => void,
-  ) {
-    if (locked.current) return;
+  ): Promise<boolean> {
+    if (locked.current) return false;
     locked.current = true;
     setBusy(true);
     setError("");
-    try {
-      await action();
-    } catch (e) {
-      if (mounted.current) {
-        setError(errorMessage(e));
-        setStatus("Needs attention");
-        onError?.(errorMessage(e));
+    const operation = (async () => {
+      try {
+        await action();
+        return true;
+      } catch (e) {
+        if (mounted.current) {
+          setError(errorMessage(e));
+          setStatus("Needs attention");
+          onError?.(errorMessage(e));
+        }
+        return false;
+      } finally {
+        locked.current = false;
+        if (mounted.current) setBusy(false);
       }
-    } finally {
-      locked.current = false;
-      if (mounted.current) setBusy(false);
-    }
+    })();
+    inFlight.current = operation;
+    const success = await operation;
+    if (inFlight.current === operation) inFlight.current = null;
+    return success;
   }
   async function persist(
     inputSlides = live.current.slides,
@@ -202,7 +220,7 @@ export function useCarouselWorkspace(
     let p = projectRef.current;
     if (!p) {
       const created = await api.createProject({
-        name: inputName.trim() || "Untitled carousel",
+        name: inputName.trim() || "Untitled creation",
         canvas: "1080x1350",
       });
       p = {
@@ -211,6 +229,7 @@ export function useCarouselWorkspace(
         document: { name: inputName, slides: [] },
       };
       adoptProject(p);
+      setLocation(p.id, "replace");
     }
     const uploaded: Slide[] = [];
     for (const slide of inputSlides) {
@@ -242,7 +261,7 @@ export function useCarouselWorkspace(
       setSlides(checkpoint);
     }
     const document: CarouselDocument = {
-      name: inputName.trim() || "Untitled carousel",
+      name: inputName.trim() || "Untitled creation",
       slides: uploaded.map(persistentSlide),
     };
     const next = await api.saveCarousel(p.id, p.revision, document);
@@ -253,19 +272,20 @@ export function useCarouselWorkspace(
     setName(next.document.name);
     live.current = { slides: uploaded, name: next.document.name };
     setStatus("Saved to your workspace");
-    setProjects((all) => [
-      { id: next.id, name: next.document.name },
+    setCreations((all) => [
+      { id: next.id, name: next.document.name, updatedAt: new Date().toISOString(), slideCount: next.document.slides.length },
       ...all.filter((x) => x.id !== next.id),
     ]);
     return next;
   }
   const save = () =>
     exclusive(async () => {
+      if (!projectRef.current && !live.current.slides.length) return;
       setStatus("Saving images and story…");
       await persist();
     });
   useEffect(() => {
-    if (!api || !project || !dirty || busy || error) return;
+    if (!api || !dirty || busy || error) return;
     const timer = setTimeout(() => void save(), 1200);
     return () => clearTimeout(timer);
     // Use the current draft signature; URLs do not count as edits.
@@ -280,25 +300,57 @@ export function useCarouselWorkspace(
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty, api]);
-  const open = (id: string) =>
-    exclusive(async () => {
-      if (api) {
-        const current = live.current;
-        const hasInitialChanges =
-          JSON.stringify(current) !== initialDraft.current ||
-          current.slides.some((s) => s.origin === "upload" && !s.assetId);
-        if (
-          projectRef.current
-            ? serialize(current.slides, current.name) !== saved.current
-            : hasInitialChanges
-        )
-          throw new Error(
-            "Save your current project before opening another one. Your edits are still here.",
-          );
-        setStatus("Opening project…");
-        await hydrate(await api.getCarousel(id));
+  const switchTo = async (id: string | null, mode: "push" | "pop") => {
+    if (!api) return false;
+    if (inFlight.current && !(await inFlight.current)) return false;
+    if (locked.current) return false;
+    const currentId = projectRef.current?.id ?? null;
+    if (id === currentId && (id !== null || !live.current.slides.length)) return true;
+    return exclusive(async () => {
+      const current = live.current;
+      if (projectRef.current
+        ? serialize(current.slides, current.name) !== saved.current
+        : current.slides.length > 0) {
+        setStatus("Saving before switching creations…");
+        try {
+          await persist(current.slides, current.name);
+        } catch (error) {
+          throw new Error(`Could not save before switching creations: ${errorMessage(error)}`);
+        }
       }
+      if (id) {
+        setStatus("Opening creation…");
+        await hydrate(await api.getCarousel(id));
+      } else {
+        projectRef.current = null;
+        setProject(null);
+        saved.current = "";
+        live.current = { slides: [], name: "Untitled creation" };
+        setSlides([]);
+        setName("Untitled creation");
+        setRunStatus({});
+        pausedRuns.current.clear();
+        setStatus("Ready to begin");
+      }
+      if (mode === "push") setLocation(id, "push");
     });
+  };
+  const open = (id: string) => switchTo(id, "push");
+  const startNew = () => switchTo(null, "push");
+  useEffect(() => {
+    if (!api) return;
+    const onPopState = () => {
+      const previous = projectRef.current?.id ?? null;
+      const target = new URL(window.location.href).searchParams.get("carousel");
+      void switchTo(target, "pop").then((success) => {
+        if (!success) setLocation(previous, "replace");
+      });
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // Navigation uses refs for current state; listener identity follows the API session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api]);
   const analyze = (id: string) =>
     exclusive(async () => {
       if (!api) return;
@@ -516,7 +568,8 @@ export function useCarouselWorkspace(
     }
   };
   return {
-    projects,
+    creations,
+    projects: creations,
     project,
     busy,
     status,
@@ -526,10 +579,11 @@ export function useCarouselWorkspace(
     acknowledged,
     save,
     open,
+    startNew,
     analyze,
     acknowledge,
     generate,
-    refreshProjects,
+    refreshCreations,
     resume,
     retry,
   };

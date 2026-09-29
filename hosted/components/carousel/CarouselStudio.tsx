@@ -57,10 +57,10 @@ export default function CarouselStudio({
   onSignOut,
   active: isActive = true,
 }: CarouselStudioProps) {
-  const [slides, setSlides] = useState<Slide[]>(exampleSlides);
-  const [selectedId, setSelectedId] = useState("meal-prep");
-  const [projectName, setProjectName] = useState("Everyday little moments");
-  const [stage, setStage] = useState<Stage>("story");
+  const [slides, setSlides] = useState<Slide[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [projectName, setProjectName] = useState("Untitled creation");
+  const [stage, setStage] = useState<Stage>("upload");
   const [view, setView] = useState<View>("original");
   const [panel, setPanel] = useState<"story" | "movement">("story");
   const [showRegion, setShowRegion] = useState(false);
