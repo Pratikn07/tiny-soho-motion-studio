@@ -4,6 +4,9 @@ import type {
   StudioProjectView,
 } from "@/components/MotionStudio";
 import type { MediaRole, ModelAcknowledgement } from "@/lib/video-catalog";
+import type { CarouselCreationSummary } from "./carousel-creations";
+
+export type { CarouselCreationSummary } from "./carousel-creations";
 
 type SessionClient = {
   auth: {
@@ -40,13 +43,6 @@ type ApiAsset = {
 type ApiAcknowledgement = {
   model_id: string;
   contract_version: string;
-};
-
-export type CarouselCreationSummary = {
-  id: string;
-  name: string;
-  updatedAt: string;
-  slideCount: number;
 };
 
 export type StudioDirectorRequestView = {

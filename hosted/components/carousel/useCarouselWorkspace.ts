@@ -12,7 +12,7 @@ import {
 } from "../../lib/carousel";
 import { getVideoModelContract } from "../../lib/video-catalog";
 import type { Slide } from "./model";
-import type { CarouselCreationSummary } from "../../lib/api";
+import type { CarouselCreationSummary } from "../../lib/carousel-creations";
 export type CarouselApi = {
   listCarouselCreations(): Promise<CarouselCreationSummary[]>;
   createProject(input: {

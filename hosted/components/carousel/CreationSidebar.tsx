@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
-import type { CarouselCreationSummary } from "../../lib/api";
+import type { CarouselCreationSummary } from "../../lib/carousel-creations";
 import Icon from "./Icons";
 import c from "./creation.module.css";
 
