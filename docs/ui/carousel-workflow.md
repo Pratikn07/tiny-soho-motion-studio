@@ -1,6 +1,8 @@
 # Saved Carousel workflow
 
-The hosted Carousel now persists projects, source image IDs, stories, protected areas, review state, and a generation snapshot. Save project uploads the initial draft; later edits autosave. A project URL reopens the saved document after refresh. Saves use revision checks and keep local edits on conflict. Download a story plan before discarding a conflicting local draft.
+The hosted Carousel opens with an empty **New creation** and a history of the signed-in owner's saved carousel creations. Paste, drop, or choose one or more images, or explicitly choose an example from the library. The first accepted slide begins a private creation and autosaves it; an untouched start creates no project record. Each creation can hold up to 20 slides. The history excludes records made only in the other Studio tools.
+
+The existing visual editor opens inside the creation. It persists source image IDs, stories, protected areas, review state, and a generation snapshot. Later edits autosave. A `?carousel=<id>` URL reopens the saved document after refresh; selecting history or New creation saves pending edits before navigating. If saving fails, the current images and story remain visible with a retry action. Saves use revision checks and keep local edits on conflict. Download a story plan before discarding a conflicting local draft.
 
 Uploads use a private, short-lived Supabase upload URL, then server-side image validation before registration. Blob URLs and signed download URLs are never stored in project documents. Existing allowlist authentication and owner predicates apply to every route. No new public table or storage bucket is introduced.
 

@@ -33,7 +33,7 @@ function databaseOrder(value: any): any {
   if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map(key => [key, databaseOrder(value[key])]));
   return value;
 }
-function setup({ slides = [initial], name = "Draft" }: { slides?: Slide[]; name?: string } = {}) {
+function setup({ slides = [initial], name = "Draft", acknowledgementUnavailable = false }: { slides?: Slide[]; name?: string; acknowledgementUnavailable?: boolean } = {}) {
   let stored: any = {
     id: projectId,
     revision: 0,
@@ -47,11 +47,11 @@ function setup({ slides = [initial], name = "Draft" }: { slides?: Slide[]; name?
     listProjects: vi
       .fn()
       .mockResolvedValue([{ id: projectId, name: "Saved recipe" }]),
-    listAcknowledgements: vi
-      .fn()
-      .mockResolvedValue([
-        { modelId: model.id, contractVersion: model.contractVersion },
-      ]),
+    listAcknowledgements: acknowledgementUnavailable
+      ? vi.fn().mockRejectedValue(new Error("Acknowledgement service unavailable"))
+      : vi.fn().mockResolvedValue([
+          { modelId: model.id, contractVersion: model.contractVersion },
+        ]),
     getCarousel: vi.fn(async () => stored),
     createProject: vi.fn().mockResolvedValue({ id: projectId }),
     uploadCarouselImage: vi.fn().mockResolvedValue({ id, width: 1000, height: 1250 }),
@@ -109,6 +109,54 @@ describe("saved Carousel workspace", () => {
     expect(api.uploadCarouselImage).toHaveBeenCalledTimes(1);
     expect(api.saveCarousel).toHaveBeenCalledTimes(1);
     expect(result.current.workspace.project?.id).toBe(projectId);
+  });
+
+  it("can open a saved image draft when model acknowledgement lookup is unavailable", async () => {
+    window.history.replaceState(null, "", `/?carousel=${projectId}`);
+    const { result } = setup({ acknowledgementUnavailable: true });
+    await waitFor(() => expect(result.current.workspace.busy).toBe(false));
+    expect(result.current.workspace.project?.id).toBe(projectId);
+    expect(result.current.slides[0].name).toBe("Recipe");
+    expect(result.current.workspace.acknowledged).toBe(false);
+    expect(result.current.workspace.error).toBe("");
+  });
+
+  it("retains edits made while the first upload is in flight and saves them next", async () => {
+    const { result, api, stored } = setup({ slides: [], name: "Untitled creation" });
+    await waitFor(() => expect(result.current.workspace.busy).toBe(false));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(
+      new Blob(["image"], { type: "image/png" }),
+      { headers: { "Content-Type": "image/png" } },
+    ));
+    let finishUpload!: (value: { id: string; width: number; height: number }) => void;
+    vi.mocked(api.uploadCarouselImage).mockReturnValueOnce(new Promise(resolve => { finishUpload = resolve; }));
+    act(() => result.current.setSlides([{ ...initial, assetId: undefined, src: "blob:local-upload", story: "First idea" }]));
+    await waitFor(() => expect(api.uploadCarouselImage).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    act(() => result.current.setSlides([{ ...result.current.slides[0], story: "Better idea" }]));
+    await act(async () => finishUpload({ id, width: 1000, height: 1250 }));
+    expect(result.current.slides[0].story).toBe("Better idea");
+    await waitFor(() => expect(stored().document.slides[0].story).toBe("Better idea"), { timeout: 4000 });
+    expect(api.createProject).toHaveBeenCalledTimes(1);
+    expect(api.uploadCarouselImage).toHaveBeenCalledTimes(1);
+    expect(result.current.workspace.dirty).toBe(false);
+  });
+
+  it("keeps a failed first draft and blank URL until a successful retry", async () => {
+    const { result, api } = setup({ slides: [], name: "Untitled creation" });
+    await waitFor(() => expect(result.current.workspace.busy).toBe(false));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(
+      new Blob(["image"], { type: "image/png" }),
+      { headers: { "Content-Type": "image/png" } },
+    ));
+    vi.mocked(api.saveCarousel).mockRejectedValueOnce(new Error("Storage unavailable"));
+    act(() => result.current.setSlides([{ ...initial, assetId: undefined, src: "blob:local-upload", story: "Keep this" }]));
+    await waitFor(() => expect(result.current.workspace.error).toContain("Storage unavailable"), { timeout: 3000 });
+    expect(window.location.search).toBe("");
+    expect(result.current.slides[0].story).toBe("Keep this");
+    await act(() => result.current.workspace.save());
+    expect(api.createProject).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe(`?carousel=${projectId}`);
+    expect(result.current.workspace.dirty).toBe(false);
   });
 
   it("keeps a dirty creation and its URL when switching would lose a failed save", async () => {
@@ -171,6 +219,29 @@ describe("saved Carousel workspace", () => {
     await waitFor(() => expect(result.current.workspace.error).toContain("Storage unavailable"));
     expect(window.location.search).toBe(`?carousel=${projectId}`);
     expect(result.current.slides[0].story).toBe("Unsaved boundary");
+  });
+
+  it("opens the correct creation through Back and Forward without creating an empty record", async () => {
+    const { result, api } = setup({ slides: [], name: "Untitled creation" });
+    await waitFor(() => expect(result.current.workspace.busy).toBe(false));
+    await act(async () => {
+      window.history.replaceState(null, "", `/?carousel=${projectId}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await waitFor(() => expect(result.current.workspace.project?.id).toBe(projectId));
+    await act(async () => {
+      window.history.replaceState(null, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await waitFor(() => expect(result.current.workspace.project).toBeNull());
+    expect(result.current.slides).toEqual([]);
+    await act(async () => {
+      window.history.replaceState(null, "", `/?carousel=${projectId}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await waitFor(() => expect(result.current.workspace.project?.id).toBe(projectId));
+    expect(result.current.name).toBe("Saved recipe");
+    expect(api.createProject).not.toHaveBeenCalled();
   });
 
   it("shows recovery when a linked creation is not in the owner's history", async () => {

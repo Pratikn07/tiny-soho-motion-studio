@@ -28,7 +28,7 @@ describe("hosted Creative Studio shell", () => {
       listCarouselCreations: vi.fn().mockResolvedValue([]),
       listAcknowledgements: vi.fn().mockResolvedValue([]),
     } as never} />);
-    await waitFor(() => expect(screen.getByText("Ready to begin")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: /Give your stills/ })).toBeInTheDocument());
     expect(screen.queryByDisplayValue("Everyday little moments")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Select slide 2: Little bites, big joy/ })).not.toBeInTheDocument();
   });

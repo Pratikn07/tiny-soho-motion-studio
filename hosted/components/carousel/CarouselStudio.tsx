@@ -8,6 +8,8 @@ import {
   type PointerEvent,
 } from "react";
 import Icon from "./Icons";
+import { CreationSidebar } from "./CreationSidebar";
+import { CreationStart } from "./CreationStart";
 import { useCarouselWorkspace, type CarouselApi } from "./useCarouselWorkspace";
 import { WorkflowControls } from "./WorkflowControls";
 import {
@@ -25,6 +27,7 @@ import {
   type Slide,
 } from "./model";
 import s from "./studio.module.css";
+import c from "./creation.module.css";
 
 type View = "original" | "video" | "compare";
 type Stage = "upload" | "story" | "preview";
@@ -84,6 +87,11 @@ export default function CarouselStudio({
   const help = useRef<HTMLDialogElement>(null);
   const urls = useRef(new Set<string>());
   const uploadingRef = useRef(false);
+  const lastProjectId = useRef<string | null>(null);
+  const lastLocation = useRef<{ id: string | null; hasSlides: boolean }>({
+    id: null,
+    hasSlides: false,
+  });
   const movement = useRef<{
     startX: number;
     startY: number;
@@ -126,6 +134,41 @@ export default function CarouselStudio({
       help.current?.close();
     }
   }, [isActive]);
+
+  useEffect(() => {
+    const nextId = workspace.project?.id ?? null;
+    const firstSaveOfActiveDraft =
+      nextId !== null && lastProjectId.current === null && !!selectedId;
+    lastProjectId.current = nextId;
+    if (firstSaveOfActiveDraft) return;
+    if (nextId) {
+      setSelectedId("");
+      setStage("story");
+      setView("original");
+    } else if (!slides.length) {
+      setSelectedId("");
+      setStage("upload");
+      setView("original");
+    }
+    // A different creation changes the active editor; slide edits do not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.project?.id]);
+
+  useEffect(() => {
+    const next = {
+      id: workspace.project?.id ?? null,
+      hasSlides: slides.length > 0,
+    };
+    const previous = lastLocation.current;
+    if (
+      (next.id !== previous.id &&
+        (previous.id !== null || !previous.hasSlides)) ||
+      (previous.hasSlides && !next.hasSlides)
+    ) {
+      document.getElementById("workspace-heading")?.focus();
+    }
+    lastLocation.current = next;
+  }, [workspace.project?.id, slides.length]);
 
   function selectSlide(id: string) {
     setSelectedId(id);
@@ -428,11 +471,27 @@ export default function CarouselStudio({
           </span>
         </div>
       </header>
-      <div className={s.projectbar}>
+      <CreationSidebar
+        creations={workspace.creations}
+        activeId={workspace.project?.id ?? null}
+        busy={workspace.busy}
+        onNew={() => {
+          void workspace.startNew();
+        }}
+        onOpen={(id) => {
+          void workspace.open(id);
+        }}
+      />
+      <div className={c.content}>
+      {active && (
+        <div className={`${s.projectbar} ${c.projectbarOffset}`}>
         <div className={s.projectTitle}>
+          <h1 id="workspace-heading" tabIndex={-1} className={c.visuallyHidden}>
+            {projectName}
+          </h1>
           <input
             disabled={!!api && workspace.busy}
-            aria-label="Project name"
+            aria-label="Creation name"
             value={projectName}
             maxLength={70}
             onChange={(event) => setProjectName(event.target.value)}
@@ -441,40 +500,16 @@ export default function CarouselStudio({
             {slides.length} {slides.length === 1 ? "slide" : "slides"}
             <i />
             {api
-              ? workspace.dirty
-                ? "Unsaved changes"
-                : "Saved"
+              ? workspace.busy
+                ? workspace.status
+                : workspace.error
+                  ? "Needs attention"
+                  : workspace.dirty
+                    ? "Unsaved changes"
+                    : "Saved"
               : "Session draft"}
           </span>
         </div>
-        {api && (
-          <div className={s.projectActions}>
-            <select
-              aria-label="Open saved project"
-              value={workspace.project?.id ?? ""}
-              disabled={
-                workspace.busy || (!!workspace.project && workspace.dirty)
-              }
-              onChange={(event) => {
-                if (event.target.value) void workspace.open(event.target.value);
-              }}
-            >
-              <option value="">Open a saved project</option>
-              {workspace.projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-            <button
-              className={s.secondary}
-              disabled={workspace.busy}
-              onClick={() => void workspace.save()}
-            >
-              {workspace.busy ? "Working…" : "Save project"}
-            </button>
-          </div>
-        )}
         <ol className={s.steps}>
           {(["upload", "story", "preview"] as Stage[]).map((item, index) => (
             <li key={item}>
@@ -497,10 +532,11 @@ export default function CarouselStudio({
             </li>
           ))}
         </ol>
-      </div>
+        </div>
+      )}
       {(error || notice) && (
         <div
-          className={`${s.message} ${error ? s.error : ""}`}
+          className={`${s.message} ${error ? s.error : ""} ${!active ? c.messageOffset : ""}`}
           role={error ? "alert" : "status"}
         >
           <Icon name={error ? "alert" : "check"} size={16} />
@@ -526,12 +562,21 @@ export default function CarouselStudio({
           </button>
         </div>
       )}
-      {api && (
+      {api && (workspace.error || workspace.project || slides.length > 0) && (
         <div
-          className={s.workspaceStatus}
+          className={`${s.workspaceStatus} ${!active && !error && !notice ? c.statusOffset : ""}`}
           role={workspace.error ? "alert" : "status"}
         >
           {workspace.error || workspace.status}
+          {workspace.error && workspace.dirty && (
+            <button
+              className={s.textButton}
+              disabled={workspace.busy}
+              onClick={() => void workspace.save()}
+            >
+              Retry save
+            </button>
+          )}
           {workspace.error.includes("another tab") && workspace.project && (
             <button
               className={s.textButton}
@@ -543,7 +588,8 @@ export default function CarouselStudio({
           )}
         </div>
       )}
-      <main
+      {active ? (
+        <main
         inert={!!api && workspace.busy}
         id="workspace"
         className={s.workspace}
@@ -1410,7 +1456,14 @@ export default function CarouselStudio({
             />
           )}
         </aside>
-      </main>
+        </main>
+      ) : (
+        <CreationStart
+          onUpload={() => input.current?.click()}
+          onExamples={() => library.current?.showModal()}
+          busy={uploading || workspace.busy}
+        />
+      )}
       <footer className={s.footer}>
         <span>
           Tiny Soho Studio
@@ -1431,6 +1484,7 @@ export default function CarouselStudio({
           )}
         </span>
       </footer>
+      </div>
       {dragging && (
         <div className={s.dropOverlay}>
           <Icon name="upload" size={38} />
@@ -1471,7 +1525,7 @@ export default function CarouselStudio({
                   : " · story plan only"}
               </span>
               <span className={s.libraryAction}>
-                Open example <Icon name="arrow" size={16} />
+                Use this example <Icon name="arrow" size={16} />
               </span>
             </button>
           ))}
@@ -1510,7 +1564,7 @@ export default function CarouselStudio({
           </li>
           <li>
             {api
-              ? "Save project uploads your images and draft. Later edits save automatically. Reopen projects with the project menu; refresh restores the open project."
+              ? "Adding artwork starts a private creation. Changes save automatically. Reopen creations from the sidebar; refresh restores the open creation."
               : "Your images stay in this browser session. Download story plans to keep your work; refreshing resets the workspace."}
           </li>
           <li>

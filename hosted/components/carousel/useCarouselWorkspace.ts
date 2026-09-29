@@ -151,7 +151,11 @@ export function useCarouselWorkspace(
     let canceled = false;
     locked.current = true;
     setBusy(true);
-    Promise.all([api.listCarouselCreations(), api.listAcknowledgements()])
+    // Video acknowledgement availability must not block opening image drafts.
+    Promise.all([
+      api.listCarouselCreations(),
+      api.listAcknowledgements().catch(() => []),
+    ])
       .then(async ([list, acks]) => {
         if (canceled) return;
         setCreations(list);
@@ -217,6 +221,11 @@ export function useCarouselWorkspace(
     inputName = live.current.name,
   ) {
     if (!api) throw new Error("Sign in to the hosted Studio to save.");
+    // Analysis and generation pass an intentional new snapshot to persist.
+    if (inputSlides !== live.current.slides) {
+      live.current = { ...live.current, slides: inputSlides };
+      setSlides(inputSlides);
+    }
     let p = projectRef.current;
     if (!p) {
       const created = await api.createProject({
@@ -229,7 +238,6 @@ export function useCarouselWorkspace(
         document: { name: inputName, slides: [] },
       };
       adoptProject(p);
-      setLocation(p.id, "replace");
     }
     const uploaded: Slide[] = [];
     for (const slide of inputSlides) {
@@ -256,8 +264,17 @@ export function useCarouselWorkspace(
         height: asset.height,
       });
       // Retain successful uploads even if a later upload/save fails.
-      const checkpoint = [...uploaded, ...inputSlides.slice(uploaded.length)];
-      live.current = { slides: checkpoint, name: inputName };
+      const checkpoint = live.current.slides.map((current) =>
+        current.id === slide.id
+          ? {
+              ...current,
+              assetId: asset.id,
+              width: asset.width,
+              height: asset.height,
+            }
+          : current,
+      );
+      live.current = { ...live.current, slides: checkpoint };
       setSlides(checkpoint);
     }
     const document: CarouselDocument = {
@@ -268,9 +285,15 @@ export function useCarouselWorkspace(
     if (!mounted.current) return next;
     saved.current = JSON.stringify(carouselDocumentSchema.parse(next.document));
     adoptProject(next);
-    setSlides(uploaded);
-    setName(next.document.name);
-    live.current = { slides: uploaded, name: next.document.name };
+    if (live.current.name === inputName) {
+      setName(next.document.name);
+      live.current = { ...live.current, name: next.document.name };
+    }
+    if (
+      new URL(window.location.href).searchParams.get("carousel") !== next.id
+    ) {
+      setLocation(next.id, "replace");
+    }
     setStatus("Saved to your workspace");
     setCreations((all) => [
       { id: next.id, name: next.document.name, updatedAt: new Date().toISOString(), slideCount: next.document.slides.length },
@@ -305,7 +328,19 @@ export function useCarouselWorkspace(
     if (inFlight.current && !(await inFlight.current)) return false;
     if (locked.current) return false;
     const currentId = projectRef.current?.id ?? null;
-    if (id === currentId && (id !== null || !live.current.slides.length)) return true;
+    if (id === currentId && (id !== null || !live.current.slides.length)) {
+      if (id === null) {
+        setError("");
+        setStatus("Ready to begin");
+        if (
+          mode === "push" &&
+          new URL(window.location.href).searchParams.has("carousel")
+        ) {
+          setLocation(null, "push");
+        }
+      }
+      return true;
+    }
     return exclusive(async () => {
       const current = live.current;
       if (projectRef.current
@@ -569,7 +604,6 @@ export function useCarouselWorkspace(
   };
   return {
     creations,
-    projects: creations,
     project,
     busy,
     status,
