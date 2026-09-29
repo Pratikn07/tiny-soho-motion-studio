@@ -59,6 +59,7 @@ it("sends an image and treats the output as suggestions, with sanitized errors",
   const body = JSON.parse(fetcher.mock.calls[0][1].body);
   expect(body.max_tokens).toBe(900);
   expect(body.response_format).toEqual({ type: "json_object" });
+  expect(body.chat_template_kwargs).toBeUndefined();
   expect(
     body.messages.map((message: { role: string }) => message.role),
   ).toEqual(["user"]);
@@ -68,6 +69,24 @@ it("sends an image and treats the output as suggestions, with sanitized errors",
   expect(body.messages[0].content[0].image_url.url).toBe(
     "data:image/png;base64,AA==",
   );
+});
+it("disables reasoning for Nemotron vision to keep output in the request window", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(new Response("private provider text", { status: 401 }));
+  await expect(
+    analyzeCarousel(
+      "data:image/png;base64,AA==",
+      {
+        NVIDIA_API_KEY: "private-key",
+        NVIDIA_VISION_MODEL: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      },
+      fetcher,
+    ),
+  ).rejects.toMatchObject({ code: "analysis_auth_failed" });
+  expect(JSON.parse(fetcher.mock.calls[0][1].body).chat_template_kwargs).toEqual({
+    enable_thinking: false,
+  });
 });
 
 it("distinguishes provider limits without exposing response bodies or credentials", async () => {
@@ -163,11 +182,10 @@ it("separates provider, response, plan, and timeout failures without leaking pro
       "data:image/png;base64,AA==",
       config,
       vi.fn().mockResolvedValue(invalidReply),
-      true,
     ),
   ).rejects.toMatchObject({
     code: "analysis_invalid_plan",
-    message: expect.stringContaining("private-user-artwork not json"),
+    message: expect.not.stringContaining("private-user-artwork"),
   });
   const timeout = Object.assign(new Error("private-provider-details"), {
     name: "TimeoutError",

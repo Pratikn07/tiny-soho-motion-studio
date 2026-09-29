@@ -54,7 +54,6 @@ export async function POST(request: Request) {
       `data:image/jpeg;base64,${bytes.toString("base64")}`,
       process.env,
       fetch,
-      new URL(request.url).searchParams.get("inspect") === "1",
     );
     return Response.json({ analysis });
   } catch (error) {
