@@ -18,7 +18,7 @@ it("validates suggestions and rejects arbitrary model output", () => {
         stories: [
           { title: "A bite", prompt: "She picks up a bite and smiles." },
         ],
-        protectedRegions: [],
+        protectedRegions: [{ x: 0, y: 0, width: 100, height: 25 }],
         region: { x: 20, y: 40, width: 70, height: 50 },
       }),
     ).stories,
@@ -37,6 +37,94 @@ it("extracts a complete plan from explanatory model prose without relaxing valid
   expect(() =>
     parseAnalysis(`Here is a plan: ${JSON.stringify({ ...plan, stories: [] })}`),
   ).toThrow();
+});
+it("rejects a motion area that touches protected text clearance", () => {
+  expect(() =>
+    parseAnalysis(JSON.stringify({
+      summary: "Food beside a caption",
+      stories: [{ title: "Warm plate", prompt: "Steam rises from the cakes." }],
+      region: { x: 40, y: 30, width: 50, height: 40 },
+      protectedRegions: [{ x: 0, y: 0, width: 100, height: 31 }],
+    })),
+  ).toThrow();
+});
+it("keeps safe story ideas but requires manual placement when model geometry is invalid", async () => {
+  const content = JSON.stringify({
+    summary: "Salmon cakes beside recipe text",
+    stories: [{ title: "Fresh from the pan", prompt: "A wisp of steam rises from the cakes and fades." }],
+    region: { x: 340, y: 300, width: 960, height: 700 },
+    protectedRegions: [{ x: 0, y: 0, width: 1000, height: 250 }],
+  });
+  const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    choices: [{ finish_reason: "stop", message: { content } }],
+  })));
+  await expect(analyzeCarousel("data:image/png;base64,AA==", {
+    NVIDIA_API_KEY: "private-key",
+    NVIDIA_VISION_MODEL: "vision-model",
+  }, fetcher)).resolves.toMatchObject({
+    placement: "manual",
+    region: null,
+    protectedRegions: [],
+    stories: [{ title: "Fresh from the pan", prompt: "A wisp of steam rises from the cakes and fades." }],
+  });
+});
+it("never treats Nemotron's plausible-looking geometry as verified placement", async () => {
+  const plan = {
+    summary: "A recipe slide with salmon cakes",
+    stories: [{ title: "Warm cakes", prompt: "A wisp of steam rises from the cakes." }],
+    region: { x: 40, y: 35, width: 50, height: 35 },
+    protectedRegions: [{ x: 0, y: 0, width: 100, height: 25 }],
+  };
+  const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    choices: [{ finish_reason: "stop", message: { content: JSON.stringify(plan) } }],
+  })));
+  await expect(analyzeCarousel("data:image/png;base64,AA==", {
+    NVIDIA_API_KEY: "private-key",
+    NVIDIA_VISION_MODEL: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+  }, fetcher)).resolves.toMatchObject({
+    placement: "manual",
+    region: null,
+    protectedRegions: [],
+  });
+});
+it("does not trust fractional coordinates or a plan with no protected text areas", async () => {
+  const base = {
+    summary: "A recipe slide",
+    stories: [{ title: "Warm cakes", prompt: "A small wisp of steam rises from the cakes." }],
+    region: { x: 0.35, y: 0.3, width: 0.6, height: 0.4 },
+    protectedRegions: [{ x: 0, y: 0, width: 1, height: 0.25 }],
+  };
+  for (const plan of [base, { ...base, region: { x: 35, y: 30, width: 60, height: 40 }, protectedRegions: [] }]) {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(plan) } }],
+    })));
+    const result = await analyzeCarousel("data:image/png;base64,AA==", {
+      NVIDIA_API_KEY: "private-key",
+      NVIDIA_VISION_MODEL: "vision-model",
+    }, fetcher);
+    expect(result.placement).toBe("manual");
+  }
+});
+it("rejects model stories that direct movement toward text or move the camera", async () => {
+  for (const prompt of [
+    "Pan across the ingredient labels.",
+    "A slow zoom frames the plate.",
+    "The title fades in above the food.",
+  ]) {
+    const plan = {
+      summary: "Recipe slide",
+      stories: [{ title: "Read the tips", prompt }],
+      region: { x: 40, y: 35, width: 50, height: 35 },
+      protectedRegions: [{ x: 0, y: 0, width: 100, height: 25 }],
+    };
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ finish_reason: "stop", message: { content: JSON.stringify(plan) } }],
+    })));
+    await expect(analyzeCarousel("data:image/png;base64,AA==", {
+      NVIDIA_API_KEY: "private-key",
+      NVIDIA_VISION_MODEL: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+    }, fetcher)).rejects.toMatchObject({ code: "analysis_invalid_plan" });
+  }
 });
 it("does not invoke a provider when configuration is missing", async () => {
   const fetcher = vi.fn();
@@ -129,7 +217,7 @@ it("accepts a valid image analysis response", async () => {
       { NVIDIA_API_KEY: "private-key", NVIDIA_VISION_MODEL: "vision-model" },
       fetcher,
     ),
-  ).resolves.toEqual(plan);
+  ).resolves.toEqual({ ...plan, placement: "suggested" });
 });
 
 it("separates provider, response, plan, and timeout failures without leaking provider output", async () => {

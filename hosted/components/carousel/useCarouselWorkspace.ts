@@ -36,12 +36,9 @@ export type CarouselApi = {
     file: File,
   ): Promise<{ id: string; width: number; height: number }>;
   assetUrl(id: string): Promise<string>;
-  analyzeCarousel(id: string): Promise<{
-    summary: string;
-    stories: Array<{ title: string; prompt: string }>;
-    region: Slide["region"];
-    protectedRegions: Slide["region"][];
-  }>;
+  analyzeCarousel(id: string): Promise<
+    import("../../lib/carousel-analysis").CarouselAnalysis
+  >;
   generateCarousel(
     projectId: string,
     slideId: string,
@@ -314,23 +311,34 @@ export function useCarouselWorkspace(
         ...story,
         id: `analysis-${i}`,
       }));
+      const manualPlacement = result.placement === "manual";
+      const manualNote =
+        "This story needs manual placement. Mark every text area and set the movement area yourself.";
       const next = live.current.slides.map((s) =>
         s.id !== id
           ? s
           : {
               ...s,
-              region: result.region,
-              protectedRegions: result.protectedRegions,
+              region: manualPlacement ? s.region : result.region,
+              protectedRegions: manualPlacement
+                ? s.protectedRegions
+                : result.protectedRegions,
               suggestions,
               story: suggestions[0].prompt,
               selectedStory: suggestions[0].id,
-              analysisSummary: result.summary,
+              analysisSummary: manualPlacement
+                ? `${result.summary.slice(0, 1000)} ${manualNote}`
+                : result.summary,
               reviewed: false,
             },
       );
       setSlides(next);
       await persist(next);
-      setStatus("Suggestions saved. Review the words and movement area.");
+      setStatus(
+        manualPlacement
+          ? "Story saved. Mark text and movement areas before review."
+          : "Suggestions saved. Review the words and movement area.",
+      );
     });
   const acknowledge = () =>
     exclusive(async () => {

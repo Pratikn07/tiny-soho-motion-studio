@@ -85,6 +85,25 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("saved Carousel workspace", () => {
+  it("keeps owner-drawn areas and requires review when analysis placement is uncertain", async () => {
+    const { result, api, stored } = setup();
+    await waitFor(() => expect(result.current.workspace.busy).toBe(false));
+    await act(() => result.current.workspace.open(projectId));
+    api.analyzeCarousel = vi.fn().mockResolvedValue({
+      summary: "Salmon cakes and recipe notes",
+      stories: [{ title: "Fresh from the pan", prompt: "Steam rises from the cakes." }],
+      placement: "manual",
+      region: null,
+      protectedRegions: [],
+    });
+    await act(() => result.current.workspace.analyze(id));
+    expect(result.current.slides[0].region).toEqual(initial.region);
+    expect(result.current.slides[0].protectedRegions).toEqual(initial.protectedRegions);
+    expect(result.current.slides[0].reviewed).toBe(false);
+    expect(result.current.slides[0].story).toBe("Steam rises from the cakes.");
+    expect(result.current.slides[0].analysisSummary).toMatch(/mark.*area/i);
+    expect(stored().document.slides[0].reviewed).toBe(false);
+  });
   it("reopens durable source IDs with fresh URLs on refresh and keeps edited story after saving", async () => {
     window.history.replaceState(null, "", `/?carousel=${projectId}`);
     const { result, api, stored } = setup();
