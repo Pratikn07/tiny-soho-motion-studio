@@ -4,6 +4,9 @@ import type {
   StudioProjectView,
 } from "@/components/MotionStudio";
 import type { MediaRole, ModelAcknowledgement } from "@/lib/video-catalog";
+import type { CarouselCreationSummary } from "./carousel-creations";
+
+export type { CarouselCreationSummary } from "./carousel-creations";
 
 type SessionClient = {
   auth: {
@@ -180,6 +183,10 @@ export function createStudioApi(
   };
 
   return {
+    async listCarouselCreations(): Promise<CarouselCreationSummary[]> {
+      const body = await request<{ creations: CarouselCreationSummary[] }>("/api/carousel");
+      return body.creations;
+    },
     async getCarousel(
       projectId: string,
     ): Promise<import("./carousel").CarouselProject> {

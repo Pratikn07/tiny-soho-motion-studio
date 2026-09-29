@@ -128,6 +128,18 @@ export class StudioRepository {
     return databaseResult(result) ?? [];
   }
 
+  async listCarouselProjects(): Promise<Array<Pick<StudioProject, "id" | "name" | "updated_at" | "carousel_document">>> {
+    const result = (await this.client
+      .from("creative_studio_projects")
+      .select("id,name,updated_at,carousel_document")
+      .eq("owner_user_id", this.owner.userId)
+      .not("carousel_document", "is", null)
+      .order("updated_at", { ascending: false })) as DatabaseResult<
+      Array<Pick<StudioProject, "id" | "name" | "updated_at" | "carousel_document">>
+    >;
+    return databaseResult(result) ?? [];
+  }
+
   async createProject(input: {
     name: string;
     canvas: string;
