@@ -2,6 +2,23 @@ import { describe, expect, it, vi } from "vitest";
 import { createStudioApi } from "@/lib/api";
 
 describe("hosted Studio browser API", () => {
+  it("loads carousel creation summaries through the owner-gated route", async () => {
+    const creations = [{
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "Meal prep",
+      updatedAt: "2026-09-29T12:00:00.000Z",
+      slideCount: 2,
+    }];
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ creations }), { status: 200 }));
+    const api = createStudioApi({
+      auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: "session-token" } } }) },
+    } as never, fetcher);
+
+    await expect(api.listCarouselCreations()).resolves.toEqual(creations);
+    expect(fetcher).toHaveBeenCalledWith("/api/carousel", expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer session-token" }),
+    }));
+  });
   it("forwards the fresh Supabase access token to the same-origin project route", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
     const api = createStudioApi({

@@ -33,6 +33,24 @@ describe("hosted Studio repository ownership", () => {
     expect(eq).toHaveBeenCalledWith("owner_user_id", "owner-a");
   });
 
+  it("lists only this owner's saved carousel creations, newest first", async () => {
+    const query = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+    };
+    const repository = new StudioRepository(
+      { from: vi.fn().mockReturnValue(query) },
+      { userId: "owner-a", email: "owner@tinysoho.test" },
+    );
+
+    await expect(repository.listCarouselProjects()).resolves.toEqual([]);
+    expect(query.eq).toHaveBeenCalledWith("owner_user_id", "owner-a");
+    expect(query.not).toHaveBeenCalledWith("carousel_document", "is", null);
+    expect(query.order).toHaveBeenCalledWith("updated_at", { ascending: false });
+  });
+
   it("assigns the authenticated owner when creating a project", async () => {
     const insert = vi.fn();
     const single = vi.fn().mockResolvedValue({

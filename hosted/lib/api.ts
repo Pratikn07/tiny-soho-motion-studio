@@ -42,6 +42,13 @@ type ApiAcknowledgement = {
   contract_version: string;
 };
 
+export type CarouselCreationSummary = {
+  id: string;
+  name: string;
+  updatedAt: string;
+  slideCount: number;
+};
+
 export type StudioDirectorRequestView = {
   id: string;
   projectId: string;
@@ -180,6 +187,10 @@ export function createStudioApi(
   };
 
   return {
+    async listCarouselCreations(): Promise<CarouselCreationSummary[]> {
+      const body = await request<{ creations: CarouselCreationSummary[] }>("/api/carousel");
+      return body.creations;
+    },
     async getCarousel(
       projectId: string,
     ): Promise<import("./carousel").CarouselProject> {
