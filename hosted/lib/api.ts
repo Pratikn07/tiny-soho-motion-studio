@@ -234,13 +234,10 @@ export function createStudioApi(
     async analyzeCarousel(
       assetId: string,
     ): Promise<import("./carousel-analysis").CarouselAnalysis> {
-      const inspect =
-        typeof window !== "undefined" &&
-        new URLSearchParams(window.location.search).get("inspect") === "1";
       return (
         await request<{
           analysis: import("./carousel-analysis").CarouselAnalysis;
-        }>(inspect ? "/api/carousel/analyze?inspect=1" : "/api/carousel/analyze", {
+        }>("/api/carousel/analyze", {
           method: "POST",
           body: JSON.stringify({ assetId }),
         })
