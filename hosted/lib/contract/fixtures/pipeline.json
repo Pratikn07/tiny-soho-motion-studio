@@ -56,10 +56,30 @@
     "finalAssetId": "7d2e0a31-3b4c-4d5e-8f60-7b8c9d0e1f20",
     "textAssetId": "5f5c3a16-5b7e-4dae-8e6a-1c9b8a7f6e54",
     "modelId": "ltx-2.5-distilled",
-    "endFramePinned": true
+    "endFramePinned": true,
+    "width": 1122,
+    "height": 1402
   },
   "checkResult": {
     "checks": { "cameraDrift": 3.2, "behindTextPercent": 6.9, "loopDifference": 2.6, "textDrift": 2.1, "reasons": [] },
-    "verdict": "accepted"
+    "verdict": "accepted",
+    "failed": [],
+    "calibrated": true,
+    "thresholds": { "cameraDrift": 12, "behindTextPercent": 9, "loopDifference": 5, "textDrift": 3 }
+  },
+  "checkResultRejected": {
+    "checks": {
+      "cameraDrift": 4.1,
+      "behindTextPercent": 10.8,
+      "behindTextLine": 3,
+      "behindTextAtSeconds": 1.0,
+      "loopDifference": 2.4,
+      "textDrift": 1.9,
+      "reasons": ["The child moved behind 'Start with the basics:' at 1.0 s."]
+    },
+    "verdict": "rejected",
+    "failed": ["behindText"],
+    "calibrated": true,
+    "thresholds": { "cameraDrift": 12, "behindTextPercent": 9, "loopDifference": 5, "textDrift": 3 }
   }
 }

@@ -57,12 +57,32 @@ export const checkJobOptionsSchema = z.object({
   textAssetId: z.string().uuid().nullable(),
   modelId: z.string().trim().min(1).max(120),
   endFramePinned: z.boolean(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
 });
 export type CheckJobOptions = z.infer<typeof checkJobOptionsSchema>;
 
-/** `creative_studio_vision_jobs.result` for a completed `check` job. */
-export const checkJobResultSchema = z.object({
-  checks: takeChecksSchema,
-  verdict: z.enum(["accepted", "rejected"]),
+/** Check codes in `CheckJobResult.failed`, used by B3's retry policy to count repeated reasons. */
+export const CHECK_FAILURE_CODES = ["cameraDrift", "behindText", "loop", "textDrift"] as const;
+export const checkFailureCodeSchema = z.enum(CHECK_FAILURE_CODES);
+export type CheckFailureCode = z.infer<typeof checkFailureCodeSchema>;
+
+export const checkThresholdsSchema = z.object({
+  cameraDrift: z.number().positive(),
+  behindTextPercent: z.number().positive(),
+  loopDifference: z.number().positive(),
+  textDrift: z.number().positive(),
 });
+export type CheckThresholds = z.infer<typeof checkThresholdsSchema>;
+
+/** `creative_studio_vision_jobs.result` for a completed `check` job. */
+export const checkJobResultSchema = z
+  .object({
+    checks: takeChecksSchema,
+    verdict: z.enum(["accepted", "rejected"]),
+    failed: z.array(checkFailureCodeSchema).max(CHECK_FAILURE_CODES.length),
+    calibrated: z.boolean(),
+    thresholds: checkThresholdsSchema,
+  })
+  .refine((result) => (result.verdict === "accepted") === (result.failed.length === 0), "Rejected exactly when a check failed.");
 export type CheckJobResult = z.infer<typeof checkJobResultSchema>;

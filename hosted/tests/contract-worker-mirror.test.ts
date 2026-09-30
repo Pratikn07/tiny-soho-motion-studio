@@ -17,6 +17,8 @@ same<worker.FinishJobOptions, hosted.FinishJobOptions>(true);
 same<worker.FinishJobResult, hosted.FinishJobResult>(true);
 same<worker.CheckJobOptions, hosted.CheckJobOptions>(true);
 same<worker.CheckJobResult, hosted.CheckJobResult>(true);
+same<worker.CheckThresholds, hosted.CheckThresholds>(true);
+same<worker.CheckFailureCode, hosted.CheckFailureCode>(true);
 same<worker.PipelineRunRow, hosted.PipelineRunRow>(true);
 same<worker.TakeRow, hosted.TakeRow>(true);
 same<worker.SpendRow, hosted.SpendRow>(true);
@@ -37,6 +39,7 @@ describe("worker contract mirror", () => {
     expect(worker.TAKE_STAGES).toEqual(hosted.TAKE_STAGES);
     expect(worker.TAKE_VERDICTS).toEqual(hosted.TAKE_VERDICTS);
     expect(worker.CHECK_THRESHOLDS).toEqual(hosted.CHECK_THRESHOLDS);
+    expect(worker.CHECK_FAILURE_CODES).toEqual(hosted.CHECK_FAILURE_CODES);
     expect([worker.DEFAULT_FRAMES, worker.DEFAULT_FPS]).toEqual([hosted.DEFAULT_FRAMES, hosted.DEFAULT_FPS]);
     expect([worker.DEFAULT_SEEDS_PLANNED, worker.DEFAULT_MAX_ATTEMPTS]).toEqual([
       hosted.DEFAULT_SEEDS_PLANNED,

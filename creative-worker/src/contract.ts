@@ -142,11 +142,26 @@ export type CheckJobOptions = {
   textAssetId: string | null;
   modelId: string;
   endFramePinned: boolean;
+  width: number;
+  height: number;
+};
+
+export const CHECK_FAILURE_CODES = ["cameraDrift", "behindText", "loop", "textDrift"] as const;
+export type CheckFailureCode = (typeof CHECK_FAILURE_CODES)[number];
+
+export type CheckThresholds = {
+  cameraDrift: number;
+  behindTextPercent: number;
+  loopDifference: number;
+  textDrift: number;
 };
 
 export type CheckJobResult = {
   checks: TakeChecks;
   verdict: "accepted" | "rejected";
+  failed: CheckFailureCode[];
+  calibrated: boolean;
+  thresholds: CheckThresholds;
 };
 
 export type PipelineRunRow = {

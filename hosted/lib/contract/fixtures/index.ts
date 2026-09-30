@@ -66,6 +66,7 @@ export const fixtureManifest = {
   finishResult: [finishJobResultSchema, pipeline.finishResult],
   checkOptions: [checkJobOptionsSchema, pipeline.checkOptions],
   checkResult: [checkJobResultSchema, pipeline.checkResult],
+  checkResultRejected: [checkJobResultSchema, pipeline.checkResultRejected],
   budget: [budgetResponseSchema, budget.budget],
   budgetExceeded: [errorResponseSchema, budget.exceeded],
 } as const satisfies Record<string, readonly [z.ZodTypeAny, unknown]>;

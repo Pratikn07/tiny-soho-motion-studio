@@ -261,8 +261,12 @@ always `{ error: { code, message } }`.
   - `ProviderPoll` `succeeded` may report `width`/`height` of the returned clip (P3 records Wan's own size).
   - `GET /api/catalog` returns `CatalogModelView`: `CatalogModel` plus `isDefault`, `billingAcknowledged` and, with
     `?slideId=`, `fit { ok, reason? }`.
-  - `check` job (P5, proposal for Agent 2): `options` = `{ takeId, rawAssetId, finalAssetId, textAssetId | null,
-    modelId, endFramePinned }`, source asset = raw clip; `result` = `{ checks: TakeChecks, verdict }`.
+  - `check` job (P5, agreed with Agent 2 on #44): source asset = raw clip; `options` = `{ takeId, rawAssetId,
+    finalAssetId, textAssetId | null, modelId, endFramePinned, width, height }` (slide size in px); `result` =
+    `{ checks: TakeChecks, verdict, failed: ("cameraDrift" | "behindText" | "loop" | "textDrift")[], calibrated,
+    thresholds: { cameraDrift, behindTextPercent, loopDifference, textDrift } }` (camelCase, same keys as
+    `CHECK_THRESHOLDS`). `verdict` is `rejected` exactly when `failed` is non-empty. B3 stores `checks` and
+    `verdict` on the take and applies P5's retry policy using `failed` and `calibrated`.
   - `creative_studio_jobs.submit_attempt_id uuid` for B4's submit idempotency, so B4 needs no migration.
   - `creative_studio_pipeline_runs` also has `fingerprint` (idempotency conflict detection, as for jobs),
     `settings jsonb` (`RunSettings` snapshot: layers, slide and generation size, frames, fps, end-frame strength,

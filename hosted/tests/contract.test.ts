@@ -16,6 +16,8 @@ import {
   TAKE_STAGES,
   TAKE_VERDICTS,
   catalogResponseSchema,
+  checkJobOptionsSchema,
+  checkJobResultSchema,
   creationDocumentV2Schema,
   generationInputSchema,
   ideaCheckResultSchema,
@@ -163,6 +165,14 @@ describe("contract rejects invalid shapes", () => {
     const catalog = clone(fixtureManifest.catalog[1]);
     catalog.models[1].isDefault = true;
     expect(catalogResponseSchema.safeParse(catalog).success).toBe(false);
+  });
+
+  it("rejects check results whose verdict disagrees with the failed checks", () => {
+    const result = clone(fixtureManifest.checkResultRejected[1]);
+    expect(checkJobResultSchema.safeParse({ ...result, verdict: "accepted" }).success).toBe(false);
+    expect(checkJobResultSchema.safeParse({ ...result, failed: ["zoom"] }).success).toBe(false);
+    const { width: _width, ...withoutSize } = fixtureManifest.checkOptions[1];
+    expect(checkJobOptionsSchema.safeParse(withoutSize).success).toBe(false);
   });
 
   it("rejects unknown provider poll states and a non-URL background", () => {
