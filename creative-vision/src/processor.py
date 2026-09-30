@@ -9,6 +9,7 @@ from typing import Protocol
 
 from PIL import Image
 from .carousel import compose_carousel
+from .checks import run_check_job
 from .finish import run_finish_job
 
 from services.vision.composition import build_overlay_command, validate_overlay_dimensions, video_dimensions
@@ -17,7 +18,7 @@ from services.vision.overlay import create_typography_overlay
 from services.vision.schemas.ocr import OcrRegion
 
 
-CPU_SAFE_OPERATIONS = {"inspect", "overlay", "plate", "compose", "finish"}
+CPU_SAFE_OPERATIONS = {"inspect", "overlay", "plate", "compose", "finish", "check"}
 OPTIONAL_OPERATIONS = {"ocr", "segment", "layers"}
 
 
@@ -129,6 +130,8 @@ def process_vision_job(job: VisionJob, storage: VisionStorage, processor: Vision
         )
     if job.operation == "finish":
         return run_finish_job(job, storage, processor.ffmpeg_path)  # type: ignore[arg-type]
+    if job.operation == "check":
+        return run_check_job(job, storage, processor.ffmpeg_path)
 
     source, source_mime, _ = storage.download_owned_source(job.owner_user_id, job.project_id, job.source_asset_id)
     if job.operation == "inspect":

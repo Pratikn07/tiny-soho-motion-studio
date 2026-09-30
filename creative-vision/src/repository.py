@@ -196,7 +196,7 @@ class SupabaseVisionRepository:
         now = datetime.now(UTC).isoformat()
         rows = [
             {"capability_id": operation, "service_version": self.config.service_version, "status": "available", "reason": None, "refreshed_at": now, "updated_at": now}
-            for operation in ("inspect", "overlay", "plate", "compose", "carousel_compose", "finish")
+            for operation in ("inspect", "overlay", "plate", "compose", "carousel_compose", "finish", "check")
         ] + [
             {"capability_id": operation, "service_version": self.config.service_version, "status": "unavailable", "reason": "Not configured in the CPU-safe hosted Vision service.", "refreshed_at": now, "updated_at": now}
             for operation in ("ocr", "segment", "layers")

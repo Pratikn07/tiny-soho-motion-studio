@@ -1,0 +1,19 @@
+{
+  "note": "Labelled benchmark takes. Paths point at git-ignored local folders (the clips show children); nothing here is an image.",
+  "takes": [
+    {"id": "potty-free-s42", "slide": "potty", "raw": "benchmarks/gpu/results/20260930-103418/potty-full-s42.raw.mp4", "pinned": false, "expect": "rejected", "why": "free prompt: walked into the text"},
+    {"id": "potty-free-s7", "slide": "potty", "raw": "benchmarks/gpu/results/20260930-103418/potty-full-s7.raw.mp4", "pinned": false, "expect": "rejected", "why": "free prompt: walked into the text"},
+    {"id": "potty-stay-right-s42", "slide": "potty", "raw": "benchmarks/gpu/results/20260930-150605/potty-full-s42.raw.mp4", "pinned": false, "expect": "rejected", "why": "negative 'stay right' prompt: walked anyway"},
+    {"id": "potty-stay-right-s7", "slide": "potty", "raw": "benchmarks/gpu/results/20260930-150605/potty-full-s7.raw.mp4", "pinned": false, "expect": "rejected", "why": "negative 'stay right' prompt: walked anyway"},
+    {"id": "potty-end-0.6-s42", "slide": "potty", "raw": "benchmarks/gpu/results/20260930-151145/potty-full-s42.raw.mp4", "pinned": true, "expect": "accepted", "why": "end frame 0.6: stayed put, calm smile"},
+    {"id": "potty-end-0.6-s7", "slide": "potty", "raw": "benchmarks/gpu/results/20260930-151145/potty-full-s7.raw.mp4", "pinned": true, "expect": "accepted", "why": "end frame 0.6: stayed put, calm smile"},
+    {"id": "potty-end-0.4-s42", "slide": "potty", "raw": "benchmarks/gpu/results/20260930-151652/potty-full-s42.raw.mp4", "pinned": true, "expect": "rejected", "why": "end frame 0.4: hair behind 'basics:'"},
+    {"id": "potty-end-0.4-s7", "slide": "potty", "raw": "benchmarks/gpu/results/20260930-151652/potty-full-s7.raw.mp4", "pinned": true, "expect": "rejected", "why": "end frame 0.4: hair behind 'basics:'"},
+    {"id": "understanding-s42", "slide": "understanding", "raw": "benchmarks/gpu/results/20260929-224546/understanding-full-s42.raw.mp4", "checks": ["cameraDrift"], "expect": "accepted", "why": "camera still (11.8 is close to the limit)"},
+    {"id": "understanding-s7", "slide": "understanding", "raw": "benchmarks/gpu/results/20260929-224546/understanding-full-s7.raw.mp4", "checks": ["cameraDrift"], "expect": "accepted", "why": "camera still"},
+    {"id": "meal-prep-s42", "slide": "meal-prep", "raw": "benchmarks/gpu/results/20260929-224546/meal-prep-full-s42.raw.mp4", "checks": ["cameraDrift"], "expect": "accepted", "why": "camera still"},
+    {"id": "meal-prep-s7", "slide": "meal-prep", "raw": "benchmarks/gpu/results/20260929-224546/meal-prep-full-s7.raw.mp4", "checks": ["cameraDrift"], "expect": "accepted", "why": "camera still"},
+    {"id": "salmon-s42", "slide": "salmon-cakes", "raw": "benchmarks/gpu/results/20260929-224546/salmon-cakes-full-s42.raw.mp4", "checks": ["cameraDrift"], "expect": "rejected", "why": "zoom into a fork close-up"},
+    {"id": "salmon-s7", "slide": "salmon-cakes", "raw": "benchmarks/gpu/results/20260929-224546/salmon-cakes-full-s7.raw.mp4", "checks": ["cameraDrift"], "expect": "accepted", "why": "camera still"}
+  ]
+}
