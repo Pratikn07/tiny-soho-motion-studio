@@ -1,0 +1,52 @@
+{
+  "pottyWarnings": {
+    "ok": true,
+    "items": [
+      {
+        "code": "text_not_solid",
+        "severity": "warning",
+        "message": "Letters look slightly see-through; they will be made solid."
+      },
+      {
+        "code": "text_haze",
+        "severity": "warning",
+        "message": "A faint haze around the text will be removed."
+      }
+    ],
+    "textLayer": { "solidPercent": 71.4, "partialPercent": 26.9, "hazePercent": 2.7, "lines": 14 },
+    "generationSize": { "width": 768, "height": 960 }
+  },
+  "sizeMismatch": {
+    "ok": false,
+    "items": [
+      {
+        "code": "size_mismatch",
+        "severity": "error",
+        "message": "The text layer is 1080×1350 but the background is 1122×1402. Export both at the same size."
+      }
+    ]
+  },
+  "noAlpha": {
+    "ok": false,
+    "items": [
+      {
+        "code": "no_alpha",
+        "severity": "error",
+        "message": "The text layer has a solid background. Export it as a PNG with transparency."
+      }
+    ],
+    "generationSize": { "width": 768, "height": 960 }
+  },
+  "cleanPortrait": {
+    "ok": true,
+    "items": [],
+    "textLayer": { "solidPercent": 99.1, "partialPercent": 0.9, "hazePercent": 0, "lines": 5 },
+    "generationSize": { "width": 640, "height": 1152 }
+  },
+  "square": {
+    "ok": true,
+    "items": [],
+    "textLayer": { "solidPercent": 97.5, "partialPercent": 2.5, "hazePercent": 0.1, "lines": 3 },
+    "generationSize": { "width": 832, "height": 832 }
+  }
+}
