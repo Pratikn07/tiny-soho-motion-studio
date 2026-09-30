@@ -1,0 +1,230 @@
+[
+  {
+    "id": "understanding",
+    "source": "hosted/public/studio-samples/understanding.png",
+    "width": 1129,
+    "height": 1393,
+    "protected": [
+      {
+        "label": "TINY SOHO logo, heart and lines",
+        "found": "measured by hand",
+        "x": 34.5,
+        "y": 4.5,
+        "width": 31,
+        "height": 8.5
+      },
+      {
+        "label": "WHEN THEY",
+        "found": "text detection",
+        "x": 5.6,
+        "y": 19.1,
+        "width": 36.3,
+        "height": 6.2
+      },
+      {
+        "label": "WERE ANGRY...",
+        "found": "text detection",
+        "x": 5.5,
+        "y": 25.7,
+        "width": 44.6,
+        "height": 7.3
+      },
+      {
+        "label": "They may forget",
+        "found": "text detection",
+        "x": 5.6,
+        "y": 34.1,
+        "width": 30.2,
+        "height": 4.4
+      },
+      {
+        "label": "your lecture.",
+        "found": "text detection",
+        "x": 5.8,
+        "y": 38.4,
+        "width": 23.4,
+        "height": 4.2
+      },
+      {
+        "label": "They'll remember",
+        "found": "text detection",
+        "x": 5.5,
+        "y": 46.0,
+        "width": 32.9,
+        "height": 5.8
+      },
+      {
+        "label": "whether you tried",
+        "found": "text detection",
+        "x": 5.8,
+        "y": 51.1,
+        "width": 31.8,
+        "height": 4.5
+      },
+      {
+        "label": "to understand",
+        "found": "text detection",
+        "x": 5.8,
+        "y": 55.5,
+        "width": 25.4,
+        "height": 3.8
+      },
+      {
+        "label": "before you",
+        "found": "text detection",
+        "x": 5.9,
+        "y": 59.5,
+        "width": 19.3,
+        "height": 4.4
+      },
+      {
+        "label": "corrected.",
+        "found": "text detection",
+        "x": 5.7,
+        "y": 63.6,
+        "width": 19.3,
+        "height": 4.4
+      },
+      {
+        "label": "divider line",
+        "found": "measured by hand",
+        "x": 5.5,
+        "y": 44,
+        "width": 34,
+        "height": 1.2
+      },
+      {
+        "label": "heart icon",
+        "found": "measured by hand",
+        "x": 6,
+        "y": 70,
+        "width": 8.5,
+        "height": 6.5
+      }
+    ],
+    "prompt": "A softly lit portrait of a little girl with curly brown hair and a small beige bow clipped on the left side of her head, wearing a cream knit top, sitting on a wooden chair behind a wooden table with simple wooden toys. At first her arms are crossed and she looks down with a frustrated pout. She takes a small breath, her shoulders relax, and she slowly uncrosses her arms and rests her hands on the table. She lifts her eyes and her face softens into a calm, gentle look. Her head stays at the same height and her bow stays in place. The wooden toys do not move. The camera remains static throughout, with no zoom, no pan and no cut."
+  },
+  {
+    "id": "meal-prep",
+    "source": "hosted/public/studio-samples/meal-prep.png",
+    "width": 1122,
+    "height": 1402,
+    "protected": [
+      {
+        "label": "TINY SOHO logo, heart and lines",
+        "found": "measured by hand",
+        "x": 36.5,
+        "y": 3,
+        "width": 27,
+        "height": 9
+      },
+      {
+        "label": "ONE HOUR",
+        "found": "text detection",
+        "x": 27.1,
+        "y": 13.0,
+        "width": 47.3,
+        "height": 7.0
+      },
+      {
+        "label": "WEEKLY TODDLER",
+        "found": "text detection",
+        "x": 10.0,
+        "y": 21.0,
+        "width": 80.5,
+        "height": 7.4
+      },
+      {
+        "label": "MEAL PREP",
+        "found": "text detection",
+        "x": 25.3,
+        "y": 29.4,
+        "width": 50.5,
+        "height": 7.1
+      },
+      {
+        "label": "PART 4",
+        "found": "text detection",
+        "x": 43.0,
+        "y": 41.6,
+        "width": 13.7,
+        "height": 2.9
+      },
+      {
+        "label": "heart divider",
+        "found": "measured by hand",
+        "x": 37.5,
+        "y": 37.8,
+        "width": 23,
+        "height": 3
+      }
+    ],
+    "baseline": "hosted/public/studio-samples/meal-prep-proof.mp4",
+    "prompt": "A toddler girl with dark curly hair tied up with a small pink bow sits at a table in a bright, warm room, eating from a divided white plate of small golden bites, wraps and a doughnut. She picks up one small golden bite between her fingers, brings it up to her mouth and takes a bite, then lowers her hand and smiles with a pleased expression. Her head stays at the same height and position throughout; only her hand, arm and face move. The plate and food stay in place. The camera remains static throughout, with no zoom, no pan and no cut. Natural speed."
+  },
+  {
+    "id": "salmon-cakes",
+    "source": "hosted/public/studio-samples/salmon-cakes.jpg",
+    "width": 1122,
+    "height": 1402,
+    "protected": [
+      {
+        "label": "TINY SOHO logo, heart and lines",
+        "found": "measured by hand",
+        "x": 36.5,
+        "y": 3,
+        "width": 27,
+        "height": 9
+      },
+      {
+        "label": "SALMON",
+        "found": "text detection",
+        "x": 31.2,
+        "y": 11.3,
+        "width": 41.0,
+        "height": 8.0
+      },
+      {
+        "label": "SWEET POTATO CAKES",
+        "found": "text detection",
+        "x": 4.8,
+        "y": 19.4,
+        "width": 93.2,
+        "height": 6.6
+      },
+      {
+        "label": "BENEFIT note card",
+        "found": "measured by hand",
+        "x": 3,
+        "y": 29.5,
+        "width": 28.5,
+        "height": 21
+      },
+      {
+        "label": "MOM TIP note card",
+        "found": "measured by hand",
+        "x": 3,
+        "y": 51,
+        "width": 28.5,
+        "height": 20.5
+      },
+      {
+        "label": "ingredients panel",
+        "found": "measured by hand",
+        "x": 3.5,
+        "y": 75,
+        "width": 94.5,
+        "height": 19
+      },
+      {
+        "label": "@TINYSOHO and heart",
+        "found": "measured by hand",
+        "x": 40.5,
+        "y": 95,
+        "width": 19,
+        "height": 4.5
+      }
+    ],
+    "prompt": "Three golden pan-seared salmon sweet potato cakes on a white plate with a lemon wedge and fresh dill, seen from above at a slight angle in soft daylight. A silver fork enters from the right edge, gently presses into the front cake, breaks off a small piece and lifts it slightly to show the soft pink centre, then holds it just above the plate. The plate, the other cakes and the lemon stay in place. The camera remains static throughout at the same distance and angle, with no zoom, no pan, no close-up and no cut."
+  }
+]
