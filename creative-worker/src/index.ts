@@ -1,13 +1,14 @@
 import { createServer } from "node:http";
 
 import { healthPayload } from "./health.js";
-import { runWorkerTick, workerConfig } from "./worker.js";
+import { runWorkerTick, skippedWork, workerConfig } from "./worker.js";
 
 const port = Number(process.env.PORT ?? "8080");
 const config = workerConfig();
 let ticking = false;
 
 if (config) {
+  for (const reason of skippedWork(config)) console.warn(`creative-worker: ${reason}`);
   const tick = async () => {
     if (ticking) return;
     ticking = true;
