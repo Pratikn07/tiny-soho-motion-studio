@@ -314,4 +314,3 @@ def run_finish_job(job: "VisionJob", storage: FinishStorage, ffmpeg: str) -> "Vi
     return VisionResult("completed", [final_id, cover_id], paths, result.width, result.height, data={
         "lines": result.lines, "textInBy": result.text_in_by, "step": result.step, "colourGains": list(result.gains),
         "style": animation.style, "coverFrame": animation.coverFrame})
-
