@@ -21,6 +21,8 @@ def test_valid_input_matches_the_benchmark_settings():
     job = parse(payload())
     assert (job.width, job.height, job.frames, job.fps, job.end_strength, job.seed) == (768, 960, 121, 24, 0.6, 42)
     assert parse(payload(endFrame=None)).end_strength is None
+    assert parse(payload(endFrame={"strength": 0})).end_strength is None
+    assert parse(payload(prompt="x" * 5000)).prompt == "x" * 5000
     assert parse({k: v for k, v in payload().items() if k not in ("frames", "fps")}).frames == 121
 
 
@@ -36,10 +38,9 @@ def test_other_ratios_at_multiples_of_64_are_accepted(sizes):
     ({"frames": 120}, "ltx_input_invalid"),
     ({"seed": -1}, "ltx_input_invalid"),
     ({"seed": True}, "ltx_input_invalid"),
-    ({"endFrame": {"strength": 0}}, "ltx_input_invalid"),
     ({"endFrame": {"strength": 1.5}}, "ltx_input_invalid"),
     ({"prompt": "  "}, "ltx_input_invalid"),
-    ({"prompt": "x" * 5000}, "ltx_input_invalid"),
+    ({"prompt": "x" * 5001}, "ltx_input_invalid"),
     ({"idempotencyKey": "take-1"}, "ltx_input_invalid"),
     ({"backgroundUrl": "http://db.example/bg"}, "ltx_input_invalid"),
     ({"backgroundUrl": "https://user:pw@db.example/bg"}, "ltx_input_invalid"),

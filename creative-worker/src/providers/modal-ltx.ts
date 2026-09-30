@@ -5,29 +5,9 @@
 // method and look a call up by id, so the app needs no public web endpoint. MODAL_TOKEN_ID/MODAL_TOKEN_SECRET stay
 // in the worker's environment; Modal only ever receives signed URLs for the background and the take's raw.mp4.
 
-// T0 shapes (hosted/lib/contract/provider.ts). Replace with B5's shared import once it lands in the worker.
-export type GenerationInput = {
-  idempotencyKey: string;
-  modelId: string;
-  backgroundUrl: string;
-  outputUploadUrl?: string;
-  prompt: string;
-  seed: number;
-  width: number;
-  height: number;
-  frames: number;
-  fps: number;
-  endFrame?: { strength: number };
-};
-export type ProviderPoll =
-  | { state: "running" }
-  | { state: "succeeded"; resultUrl?: string; uploaded?: boolean; gpuSeconds?: number; costUsd?: number; peakGib?: number }
-  | { state: "failed"; errorCode: string };
-export interface VideoProvider {
-  id: "modal-ltx" | "alibaba";
-  submit(input: GenerationInput): Promise<{ providerTaskId: string }>;
-  poll(providerTaskId: string): Promise<ProviderPoll>;
-}
+import type { GenerationInput, ProviderPoll, VideoProvider } from "../contract.js";
+
+export type { GenerationInput, ProviderPoll, VideoProvider };
 
 export type ModalCallResult =
   | { state: "running" }

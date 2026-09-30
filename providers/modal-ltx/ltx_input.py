@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 FPS, FRAMES = 24, 121  # 121 frames at 24 fps is 5.04 s; finishing trims to exactly 5 s.
 MIN_SIDE, MAX_SIDE = 256, 1536
 MAX_PIXELS = 1_000_000  # The benchmark's 768x960 is 737k; every B2 size keeps about that many pixels.
-MAX_PROMPT = 4000
+MAX_PROMPT = 5000  # T0 generationInputSchema.
 MAX_BACKGROUND_BYTES = 40 * 1024 * 1024
 TRANSFER_TIMEOUT = 60
 KEY = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -90,9 +90,9 @@ def parse(payload: object) -> Generation:
     strength = None
     if end is not None:
         raw = end.get("strength") if isinstance(end, dict) else None
-        if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw) or not 0 < raw <= 1:
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw) or not 0 <= raw <= 1:
             raise InputError("ltx_input_invalid", "endFrame.strength must be between 0 and 1.")
-        strength = float(raw)
+        strength = float(raw) or None  # T0 allows 0: a keyframe with no pull is the same as none.
     model_id = payload.get("modelId")
     if not isinstance(model_id, str) or not model_id:
         raise InputError("ltx_input_invalid", "modelId is missing.")
