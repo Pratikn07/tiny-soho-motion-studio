@@ -1,0 +1,11 @@
+[
+  {
+    "id": "potty",
+    "source": "benchmarks/gpu/slides-private/potty-background.webp",
+    "text": "benchmarks/gpu/slides-private/potty-text.png",
+    "width": 1122,
+    "height": 1402,
+    "prompt": "A toddler girl with curly brown hair tied up with a small cream scrunchie, wearing a cream cotton top and trousers, stands barefoot on a soft woven rug in a bright, warm bathroom beside a small wooden step stool, a white potty and a sink, on the right side of the frame. The left side of the frame is an empty cream wall with soft window shadows. She lifts the little floral underwear off the step stool with both hands and holds it up in front of her. She looks at the potty beside her, then breaks into a big, proud, happy smile, still holding the underwear up. Then she gently places the underwear back on the stool and stays standing on the rug beside it, still smiling. The towel, plant, sink, stool and potty stay still. The camera remains static throughout, with no zoom, no pan and no cut.",
+    "end_strength": 0.4
+  }
+]
