@@ -44,7 +44,7 @@ type SlideV2 = {
   id: string;                         // uuid
   name: string;
   order: number;
-  width: number; height: number;      // both layers must match (B2)
+  width: number | null; height: number | null; // both layers must match (B2); null until the background is uploaded
   layers: {
     backgroundAssetId: string | null; // kind "background-image"
     textAssetId: string | null;       // kind "text-layer" (PNG with alpha); null = no text animation
@@ -177,7 +177,7 @@ type CatalogModel = {
 ### AI review result (P1; matches the playbook's output format)
 
 `SlideReview` is the JSON object in `docs/strategy/motion-agent-playbook.md` ("Output format"): `subject,
-message, text_zones, clearance_percent, risks[], suggestions[3] {title, risk, end_strength, prompt},
+message, text_zones, clearance_percent, risks[], suggestions[3] {title, story, risk, end_strength, prompt},
 design_advice, creator_idea_review`. Store it as returned after zod validation; reject and retry once on invalid
 JSON.
 
@@ -215,6 +215,68 @@ type TakeChecks = {
 
 Endpoint handlers, UI, workers. Only shapes, fixtures and the migration.
 
+## Where the shapes live
+
+The code is the source of truth; this file describes it.
+
+| Module | Contents |
+|---|---|
+| `hosted/lib/contract/creation.ts` | `CreationDocumentV2`, `SlideV2`, `SlideMotion`, `TextAnimation` (+ `DEFAULT_TEXT_ANIMATION`), `UploadCheckResult`, layer kinds and MIME types, `END_FRAME_STRENGTH` |
+| `hosted/lib/contract/provider.ts` | `VideoProvider`, `GenerationInput`, `ProviderPoll`, `PROVIDER_IDS`, 121 frames / 24 fps |
+| `hosted/lib/contract/runs.ts` | Run statuses, take stages, provider job statuses and event types, `RunSettings`, `CreateRunRequest`, `ChooseTakeRequest`, `RunView` / `TakeView`, `PipelineRunRow`, `TakeRow` |
+| `hosted/lib/contract/checks.ts` | `TakeChecks`, `CHECK_THRESHOLDS`, verdicts, `finish` and `check` vision job options and results |
+| `hosted/lib/contract/catalog.ts` | `CatalogModel`, `CatalogModelView`, `CatalogResponse` |
+| `hosted/lib/contract/review.ts` | `SlideReview` (playbook JSON), `IdeaCheckResult`, `ReviewRunView`, `ReviewRunRow`, `STATIC_CAMERA_SENTENCE` |
+| `hosted/lib/contract/budget.ts` | `BudgetResponse`, `SpendRow` |
+| `hosted/lib/contract/api.ts` | Request and response bodies for `/api/creations/**`, error codes and the error envelope |
+| `hosted/lib/contract/fixtures/` | One JSON sample per shape; `contractFixtures` exports them parsed and typed for UI mocks |
+| `creative-worker/src/contract.ts` | Types-only mirror for the worker (its image ships only `creative-worker/src`); `hosted/tests/contract-worker-mirror.test.ts` fails the hosted `check` if it drifts |
+| `supabase/migrations/20260930233000_creation_v2.sql` | Tables, kinds, columns, event types, claim RPCs |
+
+Response envelopes: creation endpoints return `CreationView` (`{ id, revision, document }`); layer finalise returns
+`{ creation, checks }`; review endpoints return `{ reviewRun }`; idea-check returns `{ reviewRunId, result }`; run
+endpoints return `{ run }`; catalog returns `{ defaultModelId, models }`; budget returns `BudgetResponse`. Errors are
+always `{ error: { code, message } }`.
+
 ## Changelog
 
 - 2026-09-30: first version.
+- 2026-09-30 (proposed by P4, **accepted** into the T0 migration):
+  - `creative_studio_vision_jobs.operation` also allows `finish` (P4) and `check` (P5).
+  - New nullable column `creative_studio_vision_jobs.result jsonb` for operation results. The worker writes it
+    only for jobs that return data (finish, check), so legacy operations are unaffected.
+  - `finish` job: `source_asset_id` = raw clip (`generated-video`, MP4); `input_asset_ids` = background layer and,
+    if present, the text layer; `options` = `{ takeId, backgroundAssetId, textAssetId | null, width, height,
+    textAnimation?: TextAnimation }` (slide size in px). Outputs, in order: `final.mp4` (`derived-video`) and
+    `cover.png` (`derived-image`, colour-matched last frame with the full text layer), both at
+    `owners/{uid}/projects/{pid}/takes/{takeId}/`. An asset already recorded at those paths counts as done.
+    `result`: `{ lines, textInBy, step, colourGains: [r, g, b], style, coverFrame }`. If all lines would not be in
+    by 4.5 s, `step` is shortened so the last seconds always show the full design.
+  - Capability `finish` is advertised in `creative_studio_vision_capabilities`.
+- 2026-09-30 (T0 implementation, Agent 1). Additions and refinements found while writing the code:
+  - `SlideV2.width/height` are `null` until the background is uploaded, so the UI can save empty slides in order.
+  - `SlideReview.suggestions[]` gain `story` (one plain line for the creator, copied into `SlideV2.motion.story`),
+    and `risk` must start with `safe`, `some risk` or `risky`, optionally followed by `: reason`. P1 updates the
+    playbook's output format to match.
+  - `ProviderPoll` `succeeded` may report `width`/`height` of the returned clip (P3 records Wan's own size).
+  - `GET /api/catalog` returns `CatalogModelView`: `CatalogModel` plus `isDefault`, `billingAcknowledged` and, with
+    `?slideId=`, `fit { ok, reason? }`.
+  - `check` job (P5, proposal for Agent 2): `options` = `{ takeId, rawAssetId, finalAssetId, textAssetId | null,
+    modelId, endFramePinned }`, source asset = raw clip; `result` = `{ checks: TakeChecks, verdict }`.
+  - `creative_studio_jobs.submit_attempt_id uuid` for B4's submit idempotency, so B4 needs no migration.
+  - `creative_studio_pipeline_runs` also has `fingerprint` (idempotency conflict detection, as for jobs),
+    `settings jsonb` (`RunSettings` snapshot: layers, slide and generation size, frames, fps, end-frame strength,
+    text animation), `allow_fallback` (B5), `reasons jsonb` (plain-language reasons for `needs_attention`). A
+    partial unique index allows one active run per slide (`run_in_progress`). The claim RPC
+    `claim_creative_studio_pipeline_run()` leases without changing `status` or `attempt_count` (which counts paid
+    generations only).
+  - `creative_studio_takes` also has `attempt`, `model_id`, `provider`, `cover_asset_id`, `finish_job_id`,
+    `check_job_id`, `stage` (`generating | finishing | checking | done | failed`) and `updated_at`; unique per run
+    and attempt, and per run and seed; a decided verdict requires `checks`.
+  - `creative_studio_review_runs` also has `reviewer_provider` (privacy: which third party saw the photo) and
+    `error_code`.
+  - `creative_studio_spend` also has `video_seconds` (Alibaba); unique per `job_id` and per `review_run_id` so a
+    paid call is never counted twice.
+  - New RPC `claim_creative_studio_provider_job(allowed_providers text[])` (B4: the worker claims only providers it
+    has credentials for). The legacy `claim_creative_studio_job()` now claims only `alibaba` jobs, so the current
+    worker can never send a Modal job to Alibaba.

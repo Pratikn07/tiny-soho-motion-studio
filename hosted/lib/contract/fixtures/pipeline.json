@@ -1,0 +1,65 @@
+{
+  "generationInput": {
+    "idempotencyKey": "d1be5c3e-d3f0-4f26-80e2-9e13a2f1e0dd",
+    "modelId": "ltx-2.5-distilled",
+    "backgroundUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/slides/0b9e7c52-1d3a-4f6b-8a2c-7e5d4c3b2a10/background-4e6b4f25-4a6d-4c9e-9d5f-0b8a7f6e5d43.webp?token=fixture",
+    "outputUploadUrl": "https://example.supabase.co/storage/v1/object/upload/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/d1be5c3e-d3f0-4f26-80e2-9e13a2f1e0dd/raw.mp4?token=fixture",
+    "prompt": "A toddler girl with curly brown hair tied up with a small cream scrunchie stands on a soft woven rug beside a small wooden step stool, on the right side of the frame. She lifts the little floral underwear and gives a small, calm smile. At the end she is still standing on the rug beside the stool, smiling. The camera remains static throughout, with no zoom, no pan and no cut.",
+    "seed": 7,
+    "width": 768,
+    "height": 960,
+    "frames": 121,
+    "fps": 24,
+    "endFrame": { "strength": 0.6 }
+  },
+  "pollRunning": { "state": "running" },
+  "pollSucceededUploaded": { "state": "succeeded", "uploaded": true, "gpuSeconds": 35.8, "costUsd": 0.0301, "peakGib": 42.5 },
+  "pollSucceededUrl": {
+    "state": "succeeded",
+    "resultUrl": "https://dashscope-result-sgp.oss-ap-southeast-1.aliyuncs.com/fixture/output.mp4",
+    "costUsd": 0.5,
+    "width": 720,
+    "height": 1280
+  },
+  "pollFailed": { "state": "failed", "errorCode": "modal_out_of_memory" },
+  "runSettings": {
+    "backgroundAssetId": "4e6b4f25-4a6d-4c9e-9d5f-0b8a7f6e5d43",
+    "textAssetId": "5f5c3a16-5b7e-4dae-8e6a-1c9b8a7f6e54",
+    "slideWidth": 1122,
+    "slideHeight": 1402,
+    "generationWidth": 768,
+    "generationHeight": 960,
+    "frames": 121,
+    "fps": 24,
+    "endFrameStrength": 0.6,
+    "textAnimation": { "style": "fade-rise", "firstAt": 0.2, "step": 0.14, "fade": 0.35, "rise": 18, "coverFrame": "last" }
+  },
+  "finishOptions": {
+    "takeId": "d1be5c3e-d3f0-4f26-80e2-9e13a2f1e0dd",
+    "backgroundAssetId": "4e6b4f25-4a6d-4c9e-9d5f-0b8a7f6e5d43",
+    "textAssetId": "5f5c3a16-5b7e-4dae-8e6a-1c9b8a7f6e54",
+    "width": 1122,
+    "height": 1402,
+    "textAnimation": { "style": "fade-rise", "firstAt": 0.2, "step": 0.14, "fade": 0.35, "rise": 18, "coverFrame": "last" }
+  },
+  "finishResult": {
+    "lines": 14,
+    "textInBy": 2.37,
+    "step": 0.14,
+    "colourGains": [1.031, 1.027, 1.035],
+    "style": "fade-rise",
+    "coverFrame": "last"
+  },
+  "checkOptions": {
+    "takeId": "d1be5c3e-d3f0-4f26-80e2-9e13a2f1e0dd",
+    "rawAssetId": "6c1d9f20-2a3b-4c4d-9e5f-6a7b8c9d0e1f",
+    "finalAssetId": "7d2e0a31-3b4c-4d5e-8f60-7b8c9d0e1f20",
+    "textAssetId": "5f5c3a16-5b7e-4dae-8e6a-1c9b8a7f6e54",
+    "modelId": "ltx-2.5-distilled",
+    "endFramePinned": true
+  },
+  "checkResult": {
+    "checks": { "cameraDrift": 3.2, "behindTextPercent": 6.9, "loopDifference": 2.6, "textDrift": 2.1, "reasons": [] },
+    "verdict": "accepted"
+  }
+}
