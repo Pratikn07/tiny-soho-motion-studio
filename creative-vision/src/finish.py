@@ -62,7 +62,7 @@ class TextAnimation:
         merged = base | value
         if merged["style"] not in STYLES or merged["coverFrame"] not in ("first", "last"):
             raise ValueError("Text animation style is not supported.")
-        limits = {"firstAt": (0, 3), "step": (0, 1), "fade": (0, 2), "rise": (0, 200)}
+        limits = {"firstAt": (0, 4.5), "step": (0, 2), "fade": (0, 2), "rise": (0, 200)}  # T0 textAnimationSchema.
         for key, (low, high) in limits.items():
             number = merged[key]
             if isinstance(number, bool) or not isinstance(number, (int, float)) or not math.isfinite(number) \
@@ -175,6 +175,25 @@ class FinishOutput:
     gains: tuple[float, float, float]
 
 
+def finish_metadata(raw: bytes, background: Image.Image, layer: Image.Image | None, animation: TextAnimation,
+                    *, ffmpeg: str = "ffmpeg") -> dict[str, object]:
+    """The `finish` result (T0 FinishJobResult) for these inputs, without rendering: used when the take's final
+    already exists, so a retried job reports the same numbers as the run that made the file."""
+    boxes = text_lines(layer) if layer is not None else []
+    timing = schedule(animation, len(boxes))
+    with tempfile.TemporaryDirectory(prefix="tiny-soho-finish-") as directory:
+        raw_path = Path(directory) / "raw.mp4"
+        raw_path.write_bytes(raw)
+        gains = colour_gains(background, video_frame(raw_path, background.size, last=False, ffmpeg=ffmpeg))
+    return result_data(len(boxes), timing.text_in_by, timing.step, gains, animation)
+
+
+def result_data(lines: int, text_in_by: float, step: float, gains: tuple[float, float, float],
+                animation: TextAnimation) -> dict[str, object]:
+    return {"lines": lines, "textInBy": text_in_by, "step": step, "colourGains": list(gains),
+            "style": animation.style, "coverFrame": animation.coverFrame}
+
+
 def render_final(raw: bytes, background: Image.Image, layer: Image.Image | None, animation: TextAnimation,
                  *, ffmpeg: str = "ffmpeg") -> FinishOutput:
     """Colour-match the raw clip to the background and animate the text layer in, line by line."""
@@ -270,7 +289,7 @@ def run_finish_job(job: "VisionJob", storage: FinishStorage, ffmpeg: str) -> "Vi
     """`finish` operation: raw clip (source) + background and optional text layer (inputs) -> final.mp4, cover.png.
 
     Outputs go to the take's own folder. An asset already recorded there counts as done, so a retried job after a
-    crash neither renders twice nor leaves orphaned files.
+    crash neither renders twice nor leaves orphaned files; it still returns the full result (plus `reused: true`).
     """
     from .processor import VisionResult  # Imported here: processor registers this module.
 
@@ -285,8 +304,6 @@ def run_finish_job(job: "VisionJob", storage: FinishStorage, ffmpeg: str) -> "Vi
     prefix = take_prefix(job.owner_user_id, job.project_id, take_id)
     paths = [f"{prefix}final.mp4", f"{prefix}cover.png"]
     existing = [storage.find_derived(path) for path in paths]
-    if all(existing):
-        return VisionResult("completed", existing, paths, out_w, out_h, data={"reused": True})  # type: ignore[arg-type]
 
     raw, raw_mime, _ = storage.download_owned_source(job.owner_user_id, job.project_id, job.source_asset_id)
     if raw_mime != "video/mp4":
@@ -304,6 +321,9 @@ def run_finish_job(job: "VisionJob", storage: FinishStorage, ffmpeg: str) -> "Vi
             layer = clean_text_layer(open_layer(text_data, name="text layer"))
         if background.size != (width, height):
             raise ValueError("The background does not match the slide size.")
+        if all(existing):  # Already finished (a retried job): report the result, render and upload nothing.
+            data = finish_metadata(raw, background, layer, animation, ffmpeg=ffmpeg) | {"reused": True}
+            return VisionResult("completed", existing, paths, out_w, out_h, data=data)  # type: ignore[arg-type]
         result = render_final(raw, background, layer, animation, ffmpeg=ffmpeg)
     except ValueError as error:
         return attention("finish_inputs_invalid", str(error))
@@ -311,6 +331,5 @@ def run_finish_job(job: "VisionJob", storage: FinishStorage, ffmpeg: str) -> "Vi
         return attention("finish_failed", "The clip could not be finished. Try this take again.")
     cover_id = existing[1] or storage.upload_derived(paths[1], result.cover, "image/png", "derived-image", overwrite=True)
     final_id = existing[0] or storage.upload_derived(paths[0], result.video, "video/mp4", "derived-video", overwrite=True)
-    return VisionResult("completed", [final_id, cover_id], paths, result.width, result.height, data={
-        "lines": result.lines, "textInBy": result.text_in_by, "step": result.step, "colourGains": list(result.gains),
-        "style": animation.style, "coverFrame": animation.coverFrame})
+    return VisionResult("completed", [final_id, cover_id], paths, result.width, result.height,
+                        data=result_data(result.lines, result.text_in_by, result.step, result.gains, animation))

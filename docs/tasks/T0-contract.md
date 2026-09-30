@@ -218,15 +218,3 @@ Endpoint handlers, UI, workers. Only shapes, fixtures and the migration.
 ## Changelog
 
 - 2026-09-30: first version.
-- 2026-09-30 (proposed by P4, needs Agent 1's review; affects the T0 migration):
-  - `creative_studio_vision_jobs.operation` also allows `finish` (P4) and `check` (P5).
-  - New nullable column `creative_studio_vision_jobs.result jsonb` for operation results. The worker writes it
-    only for jobs that return data (finish, check), so legacy operations are unaffected.
-  - `finish` job: `source_asset_id` = raw clip (`generated-video`, MP4); `input_asset_ids` = background layer and,
-    if present, the text layer; `options` = `{ takeId, backgroundAssetId, textAssetId | null, width, height,
-    textAnimation?: TextAnimation }` (slide size in px). Outputs, in order: `final.mp4` (`derived-video`) and
-    `cover.png` (`derived-image`, colour-matched last frame with the full text layer), both at
-    `owners/{uid}/projects/{pid}/takes/{takeId}/`. An asset already recorded at those paths counts as done.
-    `result`: `{ lines, textInBy, step, colourGains: [r, g, b], style, coverFrame }`. If all lines would not be in
-    by 4.5 s, `step` is shortened so the last seconds always show the full design.
-  - Capability `finish` is advertised in `creative_studio_vision_capabilities`.

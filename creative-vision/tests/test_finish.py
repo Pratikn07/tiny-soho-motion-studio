@@ -120,7 +120,11 @@ def test_schedule_matches_the_benchmark_and_fits_long_layers_into_the_clip():
 def test_text_animation_rejects_unknown_or_out_of_range_settings():
     assert TextAnimation.parse(None) == TextAnimation()
     assert TextAnimation.parse({"style": "fade", "step": 0.2}).step == 0.2
+    assert TextAnimation.parse({"firstAt": 4.5, "step": 2}).firstAt == 4.5  # T0's upper limits are accepted.
+    late = schedule(TextAnimation.parse({"firstAt": 4.5, "step": 2}), 3)
+    assert late.text_in_by <= 4.5 and late.starts == sorted(late.starts)
     for bad in ({"style": "spin"}, {"fade": -1}, {"rise": 1000}, {"coverFrame": "middle"}, {"speed": 2},
+                {"firstAt": 4.6}, {"step": 2.1},
                 {"firstAt": float("nan")}, {"step": True}, "fade"):
         with pytest.raises(ValueError):
             TextAnimation.parse(bad)
@@ -218,10 +222,10 @@ def test_finish_job_writes_to_the_take_folder_and_is_idempotent(tmp_path):
     assert result.object_paths == [f"{prefix}final.mp4", f"{prefix}cover.png"]
     assert [u[1] for u in storage.uploads] == ["derived-image", "derived-video"] and all(u[2] for u in storage.uploads)
     assert result.data["lines"] == 3 and result.data["textInBy"] == 0.83
-    storage.downloads.clear()
     again = process_vision_job(finish_job(), storage, processor)
     assert again.status == "completed" and again.asset_ids == result.asset_ids
-    assert storage.downloads == [] and len(storage.uploads) == 2  # Existing outputs count as done.
+    assert len(storage.uploads) == 2  # Existing outputs count as done: nothing rendered or uploaded again.
+    assert again.data == result.data | {"reused": True}  # Still a complete T0 FinishJobResult.
 
 
 def test_finish_job_without_text_layer_and_with_bad_inputs(tmp_path):
