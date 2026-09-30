@@ -209,7 +209,8 @@ def png(image: Image.Image, fmt: str) -> bytes:
 
 def finish_job(**options) -> VisionJob:
     base = {"takeId": TAKE, "backgroundAssetId": BACKGROUND, "textAssetId": TEXT, "width": 240, "height": 240,
-            "textAnimation": {"style": "fade-rise"}}
+            "textAnimation": {"style": "fade-rise", "firstAt": 0.2, "step": 0.14, "fade": 0.35, "rise": 18,
+                              "coverFrame": "last"}}  # T0 FinishJobOptions.
     return VisionJob(JOB, OWNER, PROJECT, RAW, "finish", base | options, [BACKGROUND, TEXT])
 
 

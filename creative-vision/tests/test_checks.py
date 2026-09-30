@@ -171,8 +171,8 @@ class FakeStorage:
 
 
 def check_job(**options) -> VisionJob:
-    base = {"takeId": TAKE, "textAssetId": TEXT, "finalAssetId": FINAL, "width": 240, "height": 240,
-            "endFramePinned": True, "modelId": "ltx-2.5-distilled"}
+    base = {"takeId": TAKE, "rawAssetId": RAW, "textAssetId": TEXT, "finalAssetId": FINAL,  # T0 CheckJobOptions.
+            "endFramePinned": True, "modelId": "ltx-2.5-distilled", "width": 240, "height": 240}
     return VisionJob("job", OWNER, PROJECT, RAW, "check", base | options, [TEXT, FINAL])
 
 
@@ -187,7 +187,14 @@ def test_check_job_returns_take_checks_and_a_verdict(tmp_path):
     assert result.status == "completed" and result.asset_ids == []
     assert result.data["verdict"] == "rejected" and result.data["failed"] == ["behindText"]
     assert result.data["calibrated"] is True and result.data["checks"]["behindTextLine"] == 1
-    assert result.data["thresholds"] == {"camera_drift": 12, "behind_text": 9, "loop": 5, "text_drift": 3}
-    for bad in ({"takeId": "x"}, {"finalAssetId": RAW}, {"width": None}, {"endFramePinned": "yes"}, {"width": 300}):
+    assert result.data["thresholds"] == {"cameraDrift": 12, "behindTextPercent": 9, "loopDifference": 5, "textDrift": 3}
+    unsized = {k: v for k, v in check_job().options.items() if k not in ("width", "height")}
+    derived = run_check_job(VisionJob("job", OWNER, PROJECT, RAW, "check", unsized, [TEXT, FINAL]), storage, "ffmpeg")
+    assert derived.data == result.data  # Without a size, the text layer's size gives the same answer.
+    no_text = run_check_job(VisionJob("job", OWNER, PROJECT, RAW, "check", unsized | {"textAssetId": None}, [FINAL]),
+                            storage, "ffmpeg")  # Size from the final clip.
+    assert no_text.status == "completed" and (no_text.width, no_text.height) == (240, 240)
+    for bad in ({"takeId": "x"}, {"finalAssetId": RAW}, {"rawAssetId": FINAL}, {"height": None},
+                {"endFramePinned": "yes"}, {"width": 300, "height": 240}, {"textAssetId": None, "finalAssetId": None, "width": None, "height": None}):
         failed = run_check_job(check_job(**bad), storage, "ffmpeg")
         assert failed.status == "needs_attention" and failed.error_code == "check_inputs_invalid"

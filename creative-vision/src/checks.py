@@ -197,20 +197,40 @@ class CheckStorage(Protocol):
     def download_owned_input(self, owner_user_id: str, project_id: str, asset_id: str) -> tuple[bytes, str, str]: ...
 
 
-def check_options(options: dict[str, object], input_asset_ids: list[str]) -> tuple[str, str | None, str | None, int, int, bool, Thresholds]:
-    take_id, text_id, final_id = options.get("takeId"), options.get("textAssetId"), options.get("finalAssetId")
+def check_options(options: dict[str, object], job_source: str, input_asset_ids: list[str]
+                  ) -> tuple[str | None, str | None, tuple[int, int] | None, bool, Thresholds]:
+    """Validate T0 `CheckJobOptions`. T0 always sends `width`/`height`; if they are missing, the slide size comes
+    from the text layer, or else from the final clip."""
+    take_id, raw_id = options.get("takeId"), options.get("rawAssetId")
+    text_id, final_id = options.get("textAssetId"), options.get("finalAssetId")
     if not isinstance(take_id, str) or not UUID.match(take_id):
         raise ValueError("Checks need a take id.")
+    if raw_id is not None and raw_id != job_source:
+        raise ValueError("rawAssetId must be the job's source clip.")
     for value in (text_id, final_id):
         if value is not None and (not isinstance(value, str) or value not in input_asset_ids):
             raise ValueError("Check inputs must be listed on the job.")
+    size = None
     width, height = options.get("width"), options.get("height")
-    if not all(isinstance(v, int) and not isinstance(v, bool) and 16 <= v <= 8192 for v in (width, height)):
-        raise ValueError("Checks need the slide size.")
+    if width is not None or height is not None:
+        if not all(isinstance(v, int) and not isinstance(v, bool) and 16 <= v <= 8192 for v in (width, height)):
+            raise ValueError("The slide size must be whole pixels.")
+        size = (width, height)
+    elif text_id is None and final_id is None:
+        raise ValueError("Checks need the slide size, a text layer or the final clip.")
     pinned = options.get("endFramePinned", False)
     if not isinstance(pinned, bool):
         raise ValueError("endFramePinned must be true or false.")
-    return take_id, text_id, final_id, width, height, pinned, thresholds_for(options.get("modelId"))  # type: ignore[return-value]
+    return text_id, final_id, size, pinned, thresholds_for(options.get("modelId"))  # type: ignore[return-value]
+
+
+def frame_size(video: Path, *, ffmpeg: str = "ffmpeg") -> tuple[int, int]:
+    with tempfile.TemporaryDirectory(prefix="tiny-soho-size-") as tmp:
+        png = Path(tmp) / "frame.png"
+        subprocess.run([ffmpeg, "-v", "error", "-y", "-i", str(video), "-frames:v", "1", str(png)],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=60)
+        with Image.open(png) as image:
+            return image.size
 
 
 def run_check_job(job: "VisionJob", storage: CheckStorage, ffmpeg: str) -> "VisionResult":
@@ -221,7 +241,7 @@ def run_check_job(job: "VisionJob", storage: CheckStorage, ffmpeg: str) -> "Visi
         return VisionResult("needs_attention", [], [], None, None, code, message)
 
     try:
-        _, text_id, final_id, width, height, pinned, limits = check_options(job.options, job.input_asset_ids)
+        text_id, final_id, size, pinned, limits = check_options(job.options, job.source_asset_id, job.input_asset_ids)
     except ValueError as error:
         return attention("check_inputs_invalid", str(error))
     raw, raw_mime, _ = storage.download_owned_source(job.owner_user_id, job.project_id, job.source_asset_id)
@@ -238,7 +258,7 @@ def run_check_job(job: "VisionJob", storage: CheckStorage, ffmpeg: str) -> "Visi
                 if mime != "image/png":
                     raise ValueError("The text layer must be a PNG with transparency.")
                 layer = clean_text_layer(open_layer(data, name="text layer"))
-                if layer.size != (width, height):
+                if size is not None and layer.size != size:
                     raise ValueError("The text layer does not match the slide size.")
             if final_id:
                 data, mime, _ = storage.download_owned_input(job.owner_user_id, job.project_id, final_id)
@@ -246,13 +266,16 @@ def run_check_job(job: "VisionJob", storage: CheckStorage, ffmpeg: str) -> "Visi
                     raise ValueError("The final clip must be an MP4.")
                 final_path = folder / "final.mp4"
                 final_path.write_bytes(data)
-            report = measure(raw_path, (width, height), layer, final_path, limits, end_frame_pinned=pinned,
+            # A final of an odd-sized slide is doubled; every measure here is a mean, so its size works too.
+            size = size or (layer.size if layer is not None else frame_size(final_path, ffmpeg=ffmpeg))  # type: ignore[arg-type]
+            report = measure(raw_path, size, layer, final_path, limits, end_frame_pinned=pinned,
                              ffmpeg=ffmpeg)
     except ValueError as error:
         return attention("check_inputs_invalid", str(error))
     except (OSError, subprocess.SubprocessError):
         return attention("check_failed", "The take could not be measured. Try the checks again.")
-    return VisionResult("completed", [], [], width, height, data={
+    return VisionResult("completed", [], [], size[0], size[1], data={
         "checks": report.take_checks(), "verdict": "rejected" if report.failed else "accepted",
         "failed": report.failed, "calibrated": limits.calibrated,
-        "thresholds": {k: v for k, v in asdict(limits).items() if k != "calibrated"}})
+        "thresholds": {"cameraDrift": limits.camera_drift, "behindTextPercent": limits.behind_text,  # T0 names.
+                       "loopDifference": limits.loop, "textDrift": limits.text_drift}})
