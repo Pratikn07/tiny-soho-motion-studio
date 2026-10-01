@@ -8,6 +8,7 @@ export type ServerEnv = {
   supabaseServiceRoleKey: string;
   ownerEmails: string[];
   configured: boolean;
+  creationsV2Enabled: boolean;
 };
 
 const value = (input: EnvInput, key: string) => input[key]?.trim() ?? "";
@@ -26,6 +27,7 @@ export function parseServerEnv(input: EnvInput): ServerEnv {
     supabasePublishableKey,
     supabaseServiceRoleKey,
     ownerEmails,
+    creationsV2Enabled: value(input, "TINY_SOHO_CREATIONS_V2").toLowerCase() === "true",
     configured: Boolean(
       supabaseUrl
       && supabasePublishableKey
