@@ -333,3 +333,14 @@ always `{ error: { code, message } }`.
     and the hosted app. Start and retry also check the remaining budget up front (400 `budget_exceeded`); the
     worker's locked reservation stays the real gate.
   - `GET /api/budget` returns `BudgetResponse`; `byProvider[].clips` counts video provider jobs only.
+- 2026-09-30 (P1, Agent 1):
+  - `IdeaCheckResult` gains `suggestedPrompt`, required with `suggestedIdea` when `verdict = "adjust"`. `prompt` is
+    always the model prompt for her idea exactly as written ("Keep mine"); `suggestedPrompt` is for the suggested
+    change ("Use suggestion"). The UI never needs a second call to switch between them.
+  - The playbook's output format now shows `story` on each suggestion and the risk label rule, matching
+    `SlideReview` (the hosted bundle `hosted/lib/review/playbook-text.ts` is generated from it).
+  - `POST .../review` takes an optional `{ force: boolean }`. Without it, a finished review for the same layers,
+    checks, reviewer and playbook is returned instead of calling the reviewer again (no new cost). It answers 201
+    with the run, whose status is `completed` or `failed` (`review_unavailable`); 503 `review_unavailable` when no
+    reviewer is configured. A run still `running` two minutes after its last update is reported as `failed`.
+  - `POST .../idea-check` answers 502 `review_unavailable` on reviewer failure (her idea can still be used as written).

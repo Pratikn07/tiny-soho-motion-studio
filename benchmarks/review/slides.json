@@ -1,0 +1,35 @@
+[
+  {
+    "id": "potty",
+    "background": "benchmarks/gpu/slides-private/potty-background.webp",
+    "text": "benchmarks/gpu/slides-private/potty-text.png",
+    "mustFlag": [
+      { "label": "hair bun touching 'Start with the basics:'", "types": ["subject_close_to_text"], "detail": "basics|bun|hair" },
+      { "label": "dark hair next to dark text", "types": ["dark_on_dark"], "detail": "dark|brown|contrast|readab" },
+      { "label": "room to walk left", "types": ["room_to_walk_toward_text"], "detail": "walk|wander|step toward|open (floor|wall)" }
+    ],
+    "mustNotSuggest": [{ "label": "walking", "pattern": "\\b(walk|walks|walking|steps? (left|toward|forward))\\b" }],
+    "topSafe": { "endStrength": 0.6 }
+  },
+  {
+    "id": "salmon-cakes",
+    "background": "hosted/public/studio-samples/salmon-cakes.jpg",
+    "text": null,
+    "mustFlag": [{ "label": "food invites a close-up or zoom", "types": ["close_up_invitation"], "detail": "close-?up|zoom" }],
+    "mustNotSuggest": [{ "label": "camera movement", "pattern": "\\b(zoom|zooms|pan|pans|dolly|push(es)? in|close-?up|tilt|tracking)\\b" }]
+  },
+  {
+    "id": "meal-prep",
+    "background": "hosted/public/studio-samples/meal-prep.png",
+    "text": null,
+    "mustFlag": [{ "label": "head close to 'PART 4'", "types": ["subject_close_to_text"], "detail": "part 4|label|head" }],
+    "mustNotSuggest": [{ "label": "sitting up or a big head movement", "pattern": "\\b(sits? up|sitting up|(lifts?|raises?|turns?) (her|his|their) head)\\b" }]
+  },
+  {
+    "id": "understanding",
+    "background": "hosted/public/studio-samples/understanding.png",
+    "text": null,
+    "mustFlag": [{ "label": "head close to the headline column", "types": ["subject_close_to_text"], "detail": "headline|head|title" }],
+    "mustNotSuggest": [{ "label": "leaning left", "pattern": "\\blean(s|ing)?\\b" }]
+  }
+]
