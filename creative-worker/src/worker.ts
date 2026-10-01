@@ -27,6 +27,7 @@ import {
   type ProviderTaskStatus,
 } from "./process-job.js";
 import { providerRequest, type ProviderMedia, type WorkerMediaRole } from "./provider.js";
+import { dashscopePoll, dashscopeSubmit } from "./providers/alibaba.js";
 import { runWorkflowWorkerTick } from "./workflows.js";
 
 export type AlibabaConfig = {
@@ -100,46 +101,14 @@ export function skippedWork(config: WorkerConfig): string[] {
     : ["DASHSCOPE_API_KEY or ALIBABA_WORKSPACE_ID is not set: Alibaba jobs and director requests stay queued."];
 }
 
-const providerUrl = (workspaceId: string, path: string) => (
-  `https://${workspaceId}.ap-southeast-1.maas.aliyuncs.com/api/v1${path}`
-);
-
-const safeProviderError = async (response: Response) => {
-  const body = await response.json().catch(() => ({})) as Record<string, unknown>;
-  const code = typeof body.code === "string" ? body.code.slice(0, 80) : "provider_request_failed";
-  throw new Error(`alibaba_${code}`);
-};
-
 async function submitAlibaba(job: WorkerJob, media: ProviderMedia[], config: AlibabaConfig) {
   const request = providerRequest({ modelId: job.model_id, task: job.task, prompt: job.prompt, options: job.options, media });
-  const response = await fetch(providerUrl(config.workspaceId, request.path), {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      "Content-Type": "application/json",
-      "X-DashScope-Async": "enable",
-    },
-    body: JSON.stringify(request.body),
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!response.ok) await safeProviderError(response);
-  const body = await response.json() as { output?: { task_id?: string } };
-  if (!body.output?.task_id) throw new Error("alibaba_missing_task_id");
-  return body.output.task_id;
+  return dashscopeSubmit(config, request);
 }
 
 async function pollAlibaba(taskId: string, config: AlibabaConfig) {
-  const response = await fetch(`${providerUrl(config.workspaceId, "")}/tasks/${encodeURIComponent(taskId)}`, {
-    headers: { Authorization: `Bearer ${config.apiKey}` },
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!response.ok) await safeProviderError(response);
-  const body = await response.json() as { output?: { task_status?: string; video_url?: string } };
-  const candidate = String(body.output?.task_status ?? "UNKNOWN").toUpperCase();
-  const status = ["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "CANCELED"].includes(candidate)
-    ? candidate as ProviderTaskStatus
-    : "UNKNOWN";
-  return { status, ...(typeof body.output?.video_url === "string" ? { resultUrl: body.output.video_url } : {}) };
+  const task = await dashscopePoll(config, taskId);
+  return { status: task.status as ProviderTaskStatus, ...(task.videoUrl ? { resultUrl: task.videoUrl } : {}) };
 }
 
 const isTerminal = (status: JobUpdateStatus) => ["completed", "failed", "canceled", "needs_attention"].includes(status);

@@ -93,11 +93,15 @@ describe("starting a run", () => {
     expect((await (await start()).json()).error.code).toBe("layers_invalid");
   });
 
-  it("runs a Wan model without an end frame when the creator chose it", async () => {
+  it("runs the creator's Wan choice, pinning the end frame only where the model can", async () => {
     tables().creative_studio_model_acknowledgements.push({ owner_user_id: ownerId, model_id: "provider:alibaba", contract_version: "alibaba-billing-v1" });
     const response = await start({}, salmon.id);
     expect(runResponseSchema.parse(await response.json()).run).toMatchObject({ modelId: "wan2.7-i2v", provider: "alibaba" });
-    expect(tables().creative_studio_pipeline_runs[0].settings.endFrameStrength).toBeNull();
+    expect(tables().creative_studio_pipeline_runs[0].settings.endFrameStrength).toBe(0.6);
+    await start({ modelId: "wan3-i2v" }, potty.id);
+    expect(tables().creative_studio_pipeline_runs[1]).toMatchObject({ model_id: "wan3-i2v", settings: { endFrameStrength: null } });
+    expect((await (await start({ modelId: "sora-3" }, emptySlide.id)).json()).error.code).toBe("layers_missing");
+    tables().creative_studio_pipeline_runs.pop();
     expect((await (await start({ modelId: "sora-3" }, potty.id)).json()).error.code).toBe("model_unsupported_for_slide");
   });
 });

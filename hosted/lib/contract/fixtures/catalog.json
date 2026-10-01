@@ -46,7 +46,7 @@
       },
       "estimatedClipUsd": 0.5,
       "supports": {
-        "endFrame": false,
+        "endFrame": true,
         "seeds": true,
         "sizes": [
           "1280x720",
@@ -65,7 +65,7 @@
       "billingAcknowledged": true,
       "fit": {
         "ok": true,
-        "reason": "Cannot hold the last frame in place, so the child may walk into your text."
+        "reason": "Not yet tested on your slides; automatic checks may be less reliable."
       }
     },
     {

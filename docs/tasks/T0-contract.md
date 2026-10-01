@@ -314,3 +314,10 @@ always `{ error: { code, message } }`.
     `owners/{uid}/projects/{pid}/takes/{takeId}/raw.mp4` (`generated-video`); `cost_usd`/`gpu_seconds` come from the
     provider's poll. Finish and check vision jobs use a UUID derived from the take id and operation as their
     idempotency key.
+- 2026-09-30 (P3, Agent 1):
+  - Catalog: `wan2.7-i2v` now has `supports.endFrame = true`. First frame + last frame is a documented combination in
+    Alibaba's Wan 2.7 image-to-video API; a paid test call is still to be made. `wan3-i2v` stays `false` until
+    checked the same way.
+  - The Alibaba provider's `providerTaskId` is `<modelId>|<DashScope task id>`, so a poll after a worker restart
+    still prices the take. `ProviderPoll.succeeded.costUsd` = DashScope's billed seconds (`usage.duration`) ×
+    the catalog price. DashScope reports a resolution tier, not pixel sizes, so `width`/`height` stay unset.
