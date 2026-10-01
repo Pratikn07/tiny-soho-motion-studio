@@ -232,6 +232,41 @@ describe("pipeline provider jobs", () => {
     expect(job(tables).cost_usd ?? null).toBeNull(); // The earlier attempt's cost is unknown, not $0.
   });
 
+  it.each(["503", "403"])("starts no provider call when storage inspection fails with %s", async (statusCode) => {
+    const { client, tables } = world(pipelineJob());
+    const storage = client.storage.from();
+    vi.spyOn(storage, "info").mockResolvedValue({ data: null, error: { message: "Inspection failed", status: Number(statusCode), statusCode } });
+    vi.spyOn(client.storage, "from").mockReturnValue(storage);
+    const modal = fakeModal([{ state: "running" }]);
+    await runWorkerTick({ ...config, alibaba: null }, client, { "modal-ltx": modal });
+    expect(modal.inputs).toEqual([]);
+    expect(job(tables)).toMatchObject({ status: "needs_attention", error_code: "provider_submit_failed", provider_task_id: null });
+  });
+
+  it("starts no provider call when storage returns neither an object nor a not-found error", async () => {
+    const { client, tables } = world(pipelineJob());
+    const storage = client.storage.from();
+    vi.spyOn(storage, "info").mockResolvedValue({ data: null, error: null } as unknown as Awaited<ReturnType<typeof storage.info>>);
+    vi.spyOn(client.storage, "from").mockReturnValue(storage);
+    const modal = fakeModal([{ state: "running" }]);
+    await runWorkerTick({ ...config, alibaba: null }, client, { "modal-ltx": modal });
+    expect(modal.inputs).toEqual([]);
+    expect(job(tables)).toMatchObject({ status: "needs_attention", provider_task_id: null });
+  });
+
+  it.each([
+    ["image/png", video],
+    ["video/mp4", Buffer.alloc(0)],
+  ])("starts no provider call and records no raw asset for an invalid existing %s object", async (contentType, bytes) => {
+    const { client, tables, objects } = world(pipelineJob());
+    objects.set(rawPath, { bytes, contentType });
+    const modal = fakeModal([{ state: "running" }]);
+    await runWorkerTick({ ...config, alibaba: null }, client, { "modal-ltx": modal });
+    expect(modal.inputs).toEqual([]);
+    expect(job(tables)).toMatchObject({ status: "needs_attention", output_asset_id: null });
+    expect(tables.creative_studio_assets.filter((asset) => asset.object_path === rawPath)).toEqual([]);
+  });
+
   it("ingests a provider's result URL into the take's folder", async () => {
     const { client, tables } = world(pipelineJob({ status: "submitted", provider_task_id: "task-1", provider: "alibaba", model_id: "wan2.7-i2v" }));
     dashscope(["SUCCEEDED"]);
