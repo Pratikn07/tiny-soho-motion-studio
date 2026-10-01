@@ -217,6 +217,21 @@ describe("pipeline provider jobs", () => {
     expect(events(tables)).toEqual(["submitting", "submitted", "running", "downloading", "completed"]);
   });
 
+  it("starts no provider call when the take's raw.mp4 is already in storage, and records that clip", async () => {
+    const { client, tables, objects, fastForward } = world(pipelineJob());
+    objects.set(rawPath, { bytes: video, contentType: "video/mp4" }); // An earlier attempt uploaded it, then the worker crashed.
+    const modal = fakeModal([{ state: "succeeded", uploaded: true, gpuSeconds: 40, costUsd: 0.04 }]);
+    const registry = { "modal-ltx": modal };
+    for (let tick = 0; tick < 3; tick += 1) {
+      await runWorkerTick({ ...config, alibaba: null }, client, registry);
+      fastForward();
+    }
+    expect(modal.inputs).toEqual([]); // No GPU call.
+    const raw = tables.creative_studio_assets.find((asset) => asset.object_path === rawPath);
+    expect(job(tables)).toMatchObject({ status: "completed", output_asset_id: raw!.id, provider_task_id: `already-uploaded:${takeId}` });
+    expect(job(tables).cost_usd ?? null).toBeNull(); // The earlier attempt's cost is unknown, not $0.
+  });
+
   it("ingests a provider's result URL into the take's folder", async () => {
     const { client, tables } = world(pipelineJob({ status: "submitted", provider_task_id: "task-1", provider: "alibaba", model_id: "wan2.7-i2v" }));
     dashscope(["SUCCEEDED"]);
