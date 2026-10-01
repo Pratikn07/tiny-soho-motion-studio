@@ -27,8 +27,8 @@ Scope: Finish U4, U3 and O1 budget UI against the approved task contracts, verif
 - [x] G5: Desktop and phone screenshots inspected; original aspect ratio, reduced motion and controls work.
   EVIDENCE: Native Chrome preview inspected for U4, U3 (draft #58) and O1. U4 verified original aspect ratio, reduced-motion final frame/explicit Play and timing warning. U3 synthetic videos synchronized within 0.002 seconds; chosen carousel advanced and played its next slide. O1 details/refresh work at desktop 1440px and phones 390px/320px with no overflow or page errors. Screenshots: /Users/pratik.nandoskar/.codex/visualizations/2026/10/01/01a0f5be-e4fe-71a2-a65d-11e80d01deab/tiny-soho-{u4,u3,budget}-{desktop,phone}.png. Mock data and CPU synthetic media; no provider calls or database writes.
 
-- [ ] G6: Task PRs published with scope, gate evidence and explicit live-integration limits.
-  EVIDENCE: pending
+- [x] G6: Task PRs published with scope, gate evidence and explicit live-integration limits.
+  EVIDENCE: U4 #57 merged as 5fb508a; U3 #58 published as a draft with green CI and its live gate explicitly unmet; O1 UI #59 published against main with local verification and backend/provider limits in its description. All three PRs attached to this chat.
 
 - [ ] G7: Real authenticated ten-slide creator workflow survives closing/reopening with chosen downloads.
   EVIDENCE: unmet; mock ten-slide workflow and native browser preview pass on draft #58. Requires authenticated owner/provider execution. P1 #48 is merged; P2 #43 remains draft pending GPU validation. CLAUDE.md forbids shared-database writes without the owner's explicit yes in chat.
