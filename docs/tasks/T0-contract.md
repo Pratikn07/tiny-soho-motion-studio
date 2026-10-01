@@ -321,3 +321,15 @@ always `{ error: { code, message } }`.
   - The Alibaba provider's `providerTaskId` is `<modelId>|<DashScope task id>`, so a poll after a worker restart
     still prices the take. `ProviderPoll.succeeded.costUsd` = DashScope's billed seconds (`usage.duration`) ×
     the catalog price. DashScope reports a resolution tier, not pixel sizes, so `width`/`height` stay unset.
+- 2026-09-30 (O1, Agent 1):
+  - New migration `20261001010000_budget_reservations.sql`: table `creative_studio_budget_reservations`
+    (`reservation_key` unique, `usd`, `status open | converted | released`, `run_id`) and two service-role RPCs.
+    `reserve_creative_studio_budget(owner, key, run, usd, cap)` takes a per-owner advisory lock and returns false
+    when month-to-date spend (UTC) + open reservations + usd would pass the cap; it is idempotent per key and adds to
+    `pipeline_runs.budget_reserved_usd`. `settle_creative_studio_job_spend(job)` writes the ledger row once from the
+    job's measured `cost_usd` and converts the take's reservation, or releases it when the job failed or was
+    canceled (a `needs_attention` job keeps it open).
+  - Reservation key = `<run id>:<attempt>`. The cap is `TINY_SOHO_MONTHLY_CAP_USD` (default 50) in both the worker
+    and the hosted app. Start and retry also check the remaining budget up front (400 `budget_exceeded`); the
+    worker's locked reservation stays the real gate.
+  - `GET /api/budget` returns `BudgetResponse`; `byProvider[].clips` counts video provider jobs only.

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { createClient } from "@supabase/supabase-js";
 
+import { budgetReserver, monthlyCapUsd, settleJobSpend } from "./budget.js";
 import { hasClaimedId } from "./claim.js";
 import type { ProviderId, ProviderPoll } from "./contract.js";
 import { runDirectorWorkerTick } from "./director.js";
@@ -13,7 +14,6 @@ import {
   takeRawPath,
   taskStatus,
 } from "./pipeline/provider-jobs.js";
-import type { PipelineDependencies } from "./pipeline/steps.js";
 import { supabasePipeline } from "./pipeline/store.js";
 import { runPipelineTick } from "./pipeline/tick.js";
 import type { ProviderRegistry } from "./providers/index.js";
@@ -40,6 +40,7 @@ export type WorkerConfig = {
   supabaseUrl: string;
   serviceRoleKey: string;
   alibaba: AlibabaConfig | null;
+  monthlyCapUsd: number;
 };
 
 export type WorkerClient = {
@@ -84,6 +85,7 @@ export function workerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig
     supabaseUrl,
     serviceRoleKey,
     alibaba: apiKey && workspaceId ? { apiKey, workspaceId, directorModel: env.CREATIVE_DIRECTOR_MODEL } : null,
+    monthlyCapUsd: monthlyCapUsd(env),
   };
 }
 
@@ -280,26 +282,28 @@ export const createWorkerClient = (config: WorkerConfig): WorkerClient => create
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-/** Pipeline steps against Supabase. Budget reservation allows everything until O1 provides the ledger. */
-export function pipelineDependencies(
-  client: WorkerClient,
-  registry: ProviderRegistry,
-  reserveBudget: PipelineDependencies["reserveBudget"] = async () => true,
-) {
+/** Pipeline steps against Supabase, with the monthly budget cap reserved before every paid take. */
+export function pipelineDependencies(client: WorkerClient, registry: ProviderRegistry, capUsd: number) {
   return supabasePipeline(client, {
     providerReady: (modelId) => {
       const provider = MODEL_PROVIDERS[modelId];
       return Boolean(provider && registry[provider]);
     },
     fallback: (run) => fallbackModel({ modelId: run.model_id, allowFallback: run.allow_fallback }),
-    reserveBudget,
+    reserveBudget: budgetReserver(client, capUsd),
+    settleSpend: async (jobId) => {
+      await settleJobSpend(client, jobId);
+    },
   });
 }
+
+const TERMINAL_JOB = ["completed", "failed", "canceled"];
 
 async function runPipelineJob(client: WorkerClient, job: WorkerJob & { input_assets?: unknown }, registry: ProviderRegistry) {
   const store = jobStore(client, job);
   const provider = job.provider ? registry[job.provider] : undefined;
   let lastPoll: ProviderPoll | null = null;
+  let finalStatus: JobUpdateStatus | null = null;
   const ingest = storageIngest(client, job.owner_user_id);
   try {
     if (!provider) {
@@ -341,11 +345,18 @@ async function runPipelineJob(client: WorkerClient, job: WorkerJob & { input_ass
         if (poll?.state === "succeeded") await store.recordCost(poll.costUsd ?? null, poll.gpuSeconds ?? null);
         return result;
       },
-      update: store.update,
+      update: async (status, patch) => {
+        await store.update(status, patch);
+        finalStatus = status;
+      },
     });
   } catch (error) {
     if (error instanceof LeaseLostError) return true;
     throw error;
+  }
+  if (finalStatus && TERMINAL_JOB.includes(finalStatus)) {
+    // The pipeline settles again when it sees the job end, so a failure here is only logged.
+    await settleJobSpend(client, job.id).catch(() => console.warn(`budget_settle_deferred job=${job.id}`));
   }
   return true;
 }
@@ -357,7 +368,7 @@ export async function runWorkerTick(
 ) {
   if (config.alibaba && await runDirectorWorkerTick(client, config.alibaba)) return true;
   if (await runWorkflowWorkerTick(client)) return true;
-  if (await runPipelineTick(client, pipelineDependencies(client, registry))) return true;
+  if (await runPipelineTick(client, pipelineDependencies(client, registry, config.monthlyCapUsd))) return true;
   const providers = configuredProviders(config, registry);
   if (!providers.length) return false;
   const claimed = await client.rpc("claim_creative_studio_provider_job", { allowed_providers: providers });

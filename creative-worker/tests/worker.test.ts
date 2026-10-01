@@ -14,6 +14,7 @@ const config: WorkerConfig = {
   supabaseUrl: "https://example.supabase.co",
   serviceRoleKey: "service-role",
   alibaba: { apiKey: "dashscope", workspaceId: "workspace" },
+  monthlyCapUsd: 50,
 };
 
 const queuedJob = (overrides: Record<string, unknown> = {}) => ({

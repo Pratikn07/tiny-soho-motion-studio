@@ -40,6 +40,7 @@ function world(run: PipelineRunRow, options: { ready?: boolean; budget?: boolean
     jobs: new Map<string, { status: string; outputAssetId: string | null; errorCode: string | null }>(),
     vision: new Map<string, { status: string; outputAssetIds: string[]; result: unknown; errorCode: string | null }>(),
     reservations: [] as string[],
+    settled: [] as string[],
     statuses: [] as string[],
     failNextJobCreate: false,
   };
@@ -100,6 +101,9 @@ function world(run: PipelineRunRow, options: { ready?: boolean; budget?: boolean
       state.reservations.push(key);
       return options.budget ?? true;
     },
+    async settleSpend(jobId) {
+      state.settled.push(jobId);
+    },
     newSeed: () => 1234,
   };
   const step = () => advanceRun({ ...state.run }, deps);
@@ -145,6 +149,7 @@ describe("pipeline run", () => {
     expect(w.state.run).toMatchObject({ status: "completed", attempt_count: 1, reasons: [] });
     expect(w.state.takes[0]).toMatchObject({ stage: "done", verdict: "accepted" });
     expect(w.state.reservations).toEqual(["run-1:1"]);
+    expect(w.state.settled).toEqual(["job-take-1"]);
   });
 
   it("retries a rejected take with the next seed and completes on seed 2", async () => {
