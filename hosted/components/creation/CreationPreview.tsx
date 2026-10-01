@@ -3,6 +3,8 @@
 import { useMemo } from "react";
 
 import { createMockCreationApi } from "./mock-api";
+import "./motion/mock-routes";
+import "./model/mock-routes";
 import { CreationShell } from "./CreationShell";
 
 /** Development-only preview on T0's sample data. Files stay in this browser tab; nothing is uploaded. */

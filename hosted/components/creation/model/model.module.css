@@ -1,0 +1,41 @@
+/* Model panel inside the slide inspector. Tokens come from the creation shell (.app). */
+.panel { display: grid; gap: 12px; }
+.title { font-family: StudioDidot, Georgia, serif; font-size: 20px; font-weight: 400; line-height: 1.2; }
+.muted { color: var(--muted, #6e7069); font-size: 12px; }
+.secondary, .primary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; padding: 0 14px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+.secondary { color: var(--sage-deep, #272e25); background: #fff; border: 1px solid #b9c4b5; }
+.secondary:hover:not(:disabled) { background: var(--sage-wash, #edf2e9); }
+.primary { color: #fff; background: var(--sage-deep, #272e25); border: 1px solid var(--sage-deep, #272e25); }
+.failed { display: grid; gap: 8px; justify-items: start; padding: 12px 14px; color: #6d675a; background: var(--note, #f4f1e7); border: 1px solid #e7dccb; border-radius: 4px; font-size: 12px; }
+
+.models { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.model { background: #fff; border: 1px solid var(--line, #e2e2d9); border-radius: 4px; }
+.model label { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 11px 12px; cursor: pointer; }
+.model input { margin: 3px 0 0; accent-color: var(--sage, #486452); width: 16px; height: 16px; }
+.modelSelected { border-color: #9fb19f; background: var(--sage-wash, #edf2e9); box-shadow: 0 0 0 1px #9fb19f; }
+.modelBlocked { background: #f7f6f1; }
+.modelBlocked label { cursor: not-allowed; }
+.modelBlocked .modelName strong, .modelBlocked .modelDetail { color: #9a9b92; }
+.modelText { display: grid; gap: 3px; min-width: 0; }
+.modelName { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.modelName strong { font-size: 13px; font-weight: 600; }
+.badge { padding: 1px 7px; color: var(--sage, #486452); background: var(--sage-wash, #edf2e9); border-radius: 20px; font-size: 10px; font-weight: 600; }
+.price { margin-left: auto; color: var(--muted, #6e7069); font-size: 11px; font-variant-numeric: tabular-nums; }
+.modelDetail { display: grid; gap: 4px; color: #4c4f48; font-size: 12px; line-height: 1.5; }
+.fitNote { color: #8a6416; font-size: 11px; }
+.fitBlocked { color: var(--clay, #a14c2d); font-size: 11px; }
+.override { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 12px; cursor: pointer; }
+.override input { accent-color: var(--sage, #486452); width: 16px; height: 16px; }
+
+.ack { display: grid; gap: 8px; justify-items: start; padding: 12px 14px; background: #fbf6ea; border: 1px solid #ecdcb9; border-radius: 4px; font-size: 12px; line-height: 1.6; }
+.ack h3 { font-size: 12px; font-weight: 600; }
+.cost { display: grid; gap: 2px; padding: 10px 0; border-top: 1px solid var(--line, #e2e2d9); font-size: 13px; font-variant-numeric: tabular-nums; }
+.remaining { color: var(--muted, #6e7069); font-size: 11px; }
+.actions { display: grid; gap: 8px; }
+.ok { padding: 10px 12px; color: #3e5a46; background: var(--sage-wash, #edf2e9); border-radius: 4px; font-size: 12px; }
+.error { color: var(--clay, #a14c2d); font-size: 12px; }
+
+@media (max-width: 740px) {
+  .secondary, .primary, .override { min-height: 44px; }
+  .price { margin-left: 0; width: 100%; }
+}

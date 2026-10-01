@@ -3,6 +3,8 @@ import type { ComponentType } from "react";
 import type { CreationView, SlideV2 } from "@/lib/contract";
 import type { CreationApi } from "./api";
 import type { DocumentEdit } from "./useCreation";
+import { ModelPanel } from "./model/ModelPanel";
+import { MotionPanel } from "./motion/MotionPanel";
 
 /**
  * Slots in the creation page. Each later task adds its panel with one line here and keeps its code in its own
@@ -23,7 +25,10 @@ export type SlidePanelProps = {
 export type SlidePanel = { id: string; title: string; Component: ComponentType<SlidePanelProps> };
 
 /** Panels in the slide inspector, top to bottom. */
-export const SLIDE_PANELS: SlidePanel[] = [];
+export const SLIDE_PANELS: SlidePanel[] = [
+  { id: "motion", title: "Motion", Component: MotionPanel }, // U2
+  { id: "model", title: "Video model", Component: ModelPanel }, // U2
+];
 
 export type ToolbarItemProps = { api: CreationApi; creation: CreationView | null };
 

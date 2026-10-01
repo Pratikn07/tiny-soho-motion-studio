@@ -24,6 +24,11 @@ export interface CreationApi {
   finaliseLayers(id: string, slideId: string, request: LayerFinaliseRequest): Promise<LayerFinaliseResponse>;
   /** A signed URL (300 s) for an asset this owner holds. */
   assetUrl(assetId: string): Promise<string>;
+  /**
+   * Any other owner-only JSON endpoint (review, catalog, budget, runs), with the same sign-in and errors.
+   * Panels parse the reply with the T0 schema for that endpoint.
+   */
+  fetchJson(path: string, init?: { method?: "GET" | "POST" | "PUT"; body?: unknown }): Promise<unknown>;
 }
 
 export class CreationApiError extends Error {
@@ -104,6 +109,9 @@ export function createCreationApi(options: {
     uploadFile: options.upload ?? xhrUpload,
     async finaliseLayers(id, slideId, finalise) {
       return layerFinaliseResponseSchema.parse(await request(slidePath(id, slideId), json("PUT", finalise)));
+    },
+    fetchJson(path, init = {}) {
+      return request(path, init.body === undefined ? { method: init.method ?? "GET" } : json(init.method ?? "POST", init.body));
     },
     async assetUrl(assetId) {
       const body = await request(`/api/assets/${assetId}/download`) as { signedUrl?: unknown };

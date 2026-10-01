@@ -73,7 +73,7 @@ describe("creation page and layered upload", () => {
     const title = screen.getByRole("textbox", { name: "Creation name" });
     fireEvent.change(title, { target: { value: "Potty week" } });
     fireEvent.blur(title);
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved"), { timeout: 3000 });
+    await screen.findByText("Saved", {}, { timeout: 3000 });
     expect(save).toHaveBeenCalled();
 
     first.unmount();
@@ -107,7 +107,7 @@ describe("creation page and layered upload", () => {
     await waitFor(() => expect(cards()).toEqual(["Slide 1: potty, Upload stopped"]), { timeout: 3000 });
     expect(screen.getByText("The connection dropped while uploading. Try again.")).toBeInTheDocument();
     fail = false;
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    fireEvent.click(within(screen.getByRole("list", { name: "Slides in carousel order" })).getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(cards()).toEqual(["Slide 1: potty, Ready"]), { timeout: 3000 });
     // The potty fixture's warnings explain the automatic fixes.
     expect(screen.getByRole("region", { name: "Fixed automatically" })).toHaveTextContent("they will be made solid");
@@ -124,7 +124,7 @@ describe("creation page and layered upload", () => {
     const title = screen.getByRole("textbox", { name: "Creation name" });
     fireEvent.change(title, { target: { value: "Renamed here" } });
     fireEvent.blur(title);
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved"), { timeout: 3000 });
+    await screen.findByText("Saved", {}, { timeout: 3000 });
     const saved = await api.getCreation(id);
     expect(saved.document.name).toBe("Renamed here");
     expect(saved.document.defaults.motionStyle).toBe("lively");
