@@ -34,6 +34,14 @@ Only the two `NEXT_PUBLIC_` variables are exposed in the browser. All other valu
 
 Production activation on 1 October 2026: deployment `dpl_8j4vRP9r77gDgPuBUkk6TUrrDrS1` from main `f1c121a` is Ready at [tiny-soho-creative-studio.vercel.app](https://tiny-soho-creative-studio.vercel.app), with the creation flag enabled. Health and signed-out authorization checks passed; authenticated creator acceptance remains pending. See the release checklist for receipts and rollback.
 
+## Modal workspace billing
+
+Set server-only `CREATIVE_WORKER_BILLING_URL` to the creative-worker HTTPS origin after deploying the worker's billing endpoint. The owner-only budget route signs read requests with the existing shared `SUPABASE_SERVICE_ROLE_KEY`; neither that key nor Modal tokens are sent to the browser. Modal tokens stay in the worker's Railway Variables.
+
+The budget popover displays the current UTC billing month's reported usage before credits, credits applied, billed amount, and last successful update. This includes the whole Modal workspace, including activity outside Tiny Soho. The $50 studio cap, spend ledger and reservations remain independent. Free-storage and other non-credit adjustments are already reflected in the displayed usage; raw metered cost would overstate it.
+
+Modal's summary API does not report a remaining credit balance. The popover links to Modal's Usage & Billing settings for the exact balance rather than estimating it. Reads are cached for one minute in the worker; the page refreshes every 30 seconds and on focus. Failed refreshes show retained values as stale; values never carry into a new billing month. If the endpoint is unconfigured or unavailable, the studio budget remains usable and Modal is labeled unavailable. Provider collection delays can still apply.
+
 ## Local commands
 
 ```bash

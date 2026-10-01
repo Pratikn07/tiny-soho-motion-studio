@@ -98,6 +98,25 @@ export function BudgetCard({ api, creation }: ToolbarItemProps) {
                 </li>
               ))}
             </ul>
+            <section className={c.modal} aria-label="Modal workspace billing">
+              <strong>Modal workspace billing</strong>
+              {budget.modalBilling && budget.modalBilling.status !== "unavailable" ? (
+                <>
+                  <p>{money(budget.modalBilling.usageUsd)} usage before credits</p>
+                  <p>{money(budget.modalBilling.creditsAppliedUsd)} credits applied · {money(budget.modalBilling.billedUsd)} billed</p>
+                  <p className={c.note}>
+                    Updated <time dateTime={budget.modalBilling.updatedAt} title={budget.modalBilling.updatedAt}>
+                      {new Date(budget.modalBilling.updatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    </time>
+                  </p>
+                  {(failed || budget.modalBilling.status === "stale") && (
+                    <p role="status">Modal refresh failed. Showing last reported figures.</p>
+                  )}
+                </>
+              ) : <p role="status">Modal billing is unavailable.</p>}
+              <p className={c.note}>Includes all Modal workspace usage, including runs outside this studio.</p>
+              <a href="https://modal.com/settings/usage" target="_blank" rel="noopener noreferrer">View exact credit balance on Modal</a>
+            </section>
             {budget.notes.map((note) => (
               <p className={c.note} key={note}>
                 {note}
