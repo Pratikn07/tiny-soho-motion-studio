@@ -139,7 +139,7 @@ describe("layered upload", () => {
     }), params(creation.id, slideId));
     expect(finalised.status).toBe(200);
     const body = layerFinaliseResponseSchema.parse(await finalised.json());
-    expect(body.checks).toEqual({ ok: true, items: [] });
+    expect(body.checks).toMatchObject({ ok: true, items: [], textLayer: { lines: 1 } });
     expect(body.creation.revision).toBe(creation.revision + 1);
     expect(body.creation.document.slides[0]).toMatchObject({
       width: 40, height: 50, layers: { backgroundAssetId: background, textAssetId: text }, checks: { ok: true },
