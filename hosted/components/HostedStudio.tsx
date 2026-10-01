@@ -7,8 +7,10 @@ import { createStudioApi } from "@/lib/api";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import { Login } from "@/components/Login";
 import { StudioShell } from "@/components/StudioShell";
+import { CreationShell } from "@/components/creation/CreationShell";
+import { createCreationApi } from "@/components/creation/api";
 
-export function HostedStudio() {
+export function HostedStudio({ creation = false }: { creation?: boolean }) {
   const [client, setClient] = useState<ReturnType<typeof createBrowserSupabaseClient> | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +36,9 @@ export function HostedStudio() {
   }, []);
 
   const api = useMemo(() => client ? createStudioApi(client) : null, [client]);
+  const creationApi = useMemo(() => client ? createCreationApi({
+    getAccessToken: async () => (await client.auth.getSession()).data.session?.access_token ?? null,
+  }) : null, [client]);
   useEffect(() => {
     if (!api || !session) return;
     let current = true;
@@ -75,5 +80,7 @@ export function HostedStudio() {
       {authError && <p role="alert">{authError}</p>}
     </main></div>;
   }
-  return <>{authError && <p role="alert">{authError}</p>}<StudioShell key={session.user.id} api={api} onSignOut={() => void signOut()} /></>;
+  return <>{authError && <p role="alert">{authError}</p>}{creation && creationApi
+    ? <CreationShell key={session.user.id} api={creationApi} onSignOut={() => void signOut()} />
+    : <StudioShell key={session.user.id} api={api} onSignOut={() => void signOut()} />}</>;
 }

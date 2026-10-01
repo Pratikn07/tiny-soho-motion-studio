@@ -8,7 +8,8 @@ const contentSecurityPolicy = [
   "img-src 'self' blob: data: https://kukpvpklizsvedcmybhn.supabase.co",
   "media-src 'self' blob: https://kukpvpklizsvedcmybhn.supabase.co",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
+  // Development only: Next's hot reload evaluates code. Production keeps the strict policy.
+  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

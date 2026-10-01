@@ -1,0 +1,127 @@
+/* Creation shell: the Editorial Worktable from DESIGN.md. The history sidebar keeps its own styles
+   (components/carousel/creation.module.css): fixed at 232px from 1301px up, a drawer below. */
+@font-face {
+  font-family: StudioDidot;
+  src: url("/fonts/GFSDidot-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.app {
+  --ink: #242622;
+  --muted: #6e7069;
+  --line: #e2e2d9;
+  --paper: #f5f5ef;
+  --surface: #fdfdf9;
+  --sage: #486452;
+  --sage-deep: #272e25;
+  --sage-wash: #edf2e9;
+  --clay: #a14c2d;
+  --note: #f4f1e7;
+  --bar: 64px;
+  min-height: 100svh;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.app *, .app *::before, .app *::after { box-sizing: border-box; }
+.app button, .app input, .app select, .app textarea { font-family: inherit; letter-spacing: normal; }
+.app button { cursor: pointer; touch-action: manipulation; transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
+.app button:disabled { cursor: not-allowed; opacity: .4; }
+.app :is(button, a, input, select, textarea):focus-visible { outline: 2px solid var(--sage); outline-offset: 4px; }
+.app h1, .app h2, .app h3, .app p, .app figure { margin: 0; }
+.app img { display: block; }
+.pageDrop { box-shadow: inset 0 0 0 3px #9cb19f; }
+.visuallyHidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; height: 78px; padding: 0 34px; background: #fff; border-bottom: 1px solid var(--line); }
+.wordmark { display: flex; align-items: center; gap: 17px; font-family: StudioDidot, Georgia, serif; font-size: 29px; line-height: 1; letter-spacing: -1px; color: var(--ink); text-decoration: none; white-space: nowrap; }
+.wordmark span { padding: 8px 0 8px 18px; border-left: 1px solid #cfcfc6; font-family: "Avenir Next", sans-serif; font-size: 9px; font-weight: 600; letter-spacing: 3px; line-height: 1.1; }
+.textButton { min-height: 44px; padding: 0 4px; color: var(--sage-deep); background: none; border: 0; border-bottom: 1px solid transparent; font-size: 12px; font-weight: 600; }
+.textButton:hover { border-bottom-color: #9cad9b; }
+
+/* Desktop: a fixed-height editor; the rail, stage and inspector scroll on their own. */
+.content { margin-left: 232px; min-width: 0; display: flex; flex-direction: column; height: calc(100svh - 78px); overflow: hidden; }
+.creationBar { display: flex; align-items: center; justify-content: space-between; gap: 18px; height: var(--bar); padding: 0 34px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.titleField { flex: 1; min-width: 0; }
+.titleField input, .titlePlaceholder { width: 100%; padding: 2px 0; font-family: StudioDidot, Georgia, serif; font-size: 26px; font-weight: 400; line-height: 1.2; letter-spacing: -.5px; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid transparent; }
+.titleField input:hover { border-bottom-color: var(--line); }
+.titleField input:focus-visible { outline: none; border-bottom-color: var(--sage); }
+.titlePlaceholder { color: var(--muted); }
+.barEnd { display: flex; align-items: center; gap: 18px; flex: none; }
+.saveState { display: inline-flex; align-items: center; gap: 5px; min-width: 64px; justify-content: flex-end; color: var(--muted); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.saveError { color: var(--clay); }
+.notice { margin: 12px 34px 0; padding: 10px 14px; color: #6d3a26; background: var(--note); border: 1px solid #e7dccb; border-radius: 4px; font-size: 12px; }
+.loading { padding: 60px 34px; color: var(--muted); }
+
+.main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.emptyLayout { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 24px; align-content: start; padding: 0 0 40px; }
+
+.workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: 176px minmax(350px, 1fr) 344px; grid-template-rows: minmax(0, 1fr); }
+.stage { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; background: var(--paper); border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+/* The canvas is a size container, so the artwork fits both its width and height at the slide's own ratio. */
+.canvas { flex: 1; min-height: 360px; display: grid; place-items: center; padding: 34px; container-type: size; }
+.artwork { --ratio: .8; position: relative; width: min(100%, 500px, calc(100cqh * var(--ratio))); aspect-ratio: var(--ratio); background: #f1eee7; box-shadow: 0 12px 30px #33332212, 0 2px 6px #3333220b; }
+.artwork img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.artwork .textLayer { pointer-events: none; }
+.artworkEmpty { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; color: var(--muted); font-size: 12px; text-align: center; }
+
+.inspector { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
+.inspectorBody { flex: 1; overflow-y: auto; padding: 28px 24px 18px; display: grid; gap: 18px; align-content: start; }
+.eyebrow { color: #9b735f; font-size: 10px; font-weight: 700; letter-spacing: 2.4px; }
+.slideName input { width: 100%; padding: 0 0 4px; font-family: StudioDidot, Georgia, serif; font-size: 30px; line-height: 1.2; letter-spacing: -.6px; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid transparent; }
+.slideName input:hover { border-bottom-color: var(--line); }
+.slideName input:focus-visible { outline: none; border-bottom-color: var(--sage); }
+.facts { display: grid; gap: 0; margin: 0; border-top: 1px solid var(--line); }
+.facts div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.facts dt { color: var(--muted); font-size: 11px; font-weight: 500; }
+.facts dd { margin: 0; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.hint { color: var(--muted); font-size: 12px; }
+.panel { padding-top: 18px; border-top: 1px solid var(--line); }
+.inspectorFoot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 14px 24px; border-top: 1px solid var(--line); background: #fff; }
+.secondary, .quiet, .danger { display: inline-flex; align-items: center; gap: 7px; min-height: 42px; padding: 0 12px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+.secondary { color: var(--sage-deep); background: transparent; border: 1px solid #b9c4b5; }
+.secondary:hover { background: var(--sage-wash); }
+.quiet { color: var(--muted); background: none; border: 0; padding: 0 6px; }
+.quiet:hover { color: var(--ink); }
+.danger { color: #fff; background: var(--clay); border: 1px solid var(--clay); }
+.confirm { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; }
+
+@media (min-width: 1600px) {
+  .workspace { grid-template-columns: 200px minmax(350px, 1fr) 380px; }
+}
+@media (max-width: 1300px) {
+  .content { margin-left: 0; }
+  /* Room for the "Creations" drawer button the sidebar places at the bar's left. */
+  .creationBar { padding-left: 150px; }
+}
+@media (max-width: 1150px) {
+  .workspace { grid-template-columns: 150px minmax(350px, 1fr) 300px; }
+}
+@media (max-width: 900px) {
+  .workspace { grid-template-columns: 132px minmax(300px, 1fr) 280px; }
+  .canvas { padding: 22px; }
+}
+@media (max-width: 740px) {
+  .topbar { height: 63px; padding: 0 18px; }
+  .wordmark { font-size: 24px; gap: 12px; }
+  .wordmark span { padding-left: 12px; }
+  .content { height: auto; min-height: calc(100svh - 63px); overflow: visible; }
+  .emptyLayout { overflow: visible; }
+  .creationBar { height: auto; min-height: var(--bar); padding: 10px 18px 10px 132px; flex-wrap: wrap; gap: 6px 12px; }
+  .titleField input, .titlePlaceholder { font-size: 22px; }
+  .notice { margin: 10px 18px 0; }
+  .workspace { display: flex; flex-direction: column; }
+  .stage { border: 0; border-bottom: 1px solid var(--line); overflow: visible; }
+  .canvas { min-height: auto; padding: 18px; container-type: normal; }
+  .artwork { width: min(100%, 500px, calc(60svh * var(--ratio))); }
+  .inspectorBody { padding: 22px 18px; overflow: visible; }
+  .inspectorFoot { position: sticky; bottom: 0; padding: 12px 18px; }
+  .secondary, .quiet, .danger { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app button { transition: none; }
+}
