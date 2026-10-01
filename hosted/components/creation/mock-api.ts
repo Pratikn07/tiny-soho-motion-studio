@@ -171,6 +171,8 @@ export function createMockCreationApi(options: {
           }));
         }
       }
+      // The toolbar is present even when an isolated upload test doesn't load U2's model routes.
+      if (method === "GET" && url.pathname === "/api/budget") return structuredClone(contractFixtures.budget);
       throw new CreationApiError(404, "not_found", `The mock has no route for ${method} ${url.pathname}.`);
     },
     async assetUrl(assetId) {
