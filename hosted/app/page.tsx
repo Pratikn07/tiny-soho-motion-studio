@@ -1,5 +1,5 @@
-import { HostedStudio } from "@/components/HostedStudio";
+import { StudioEntry } from "@/components/creation/StudioEntry";
 
 export default function Home() {
-  return <HostedStudio />;
+  return <StudioEntry />;
 }
