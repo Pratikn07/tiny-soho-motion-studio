@@ -55,3 +55,23 @@ export const catalogResponseSchema = z
     "Exactly one model is the default and it matches defaultModelId.",
   );
 export type CatalogResponse = z.infer<typeof catalogResponseSchema>;
+
+/** `GET /api/catalog` query. A slide is addressed by its creation, so both ids are needed for `fit`. */
+export const catalogQuerySchema = z
+  .object({
+    creationId: z.string().uuid().optional(),
+    slideId: z.string().uuid().optional(),
+  })
+  .refine((query) => (query.creationId === undefined) === (query.slideId === undefined), "Pass creationId and slideId together.");
+export type CatalogQuery = z.infer<typeof catalogQuerySchema>;
+
+/** `POST /api/catalog/acknowledgements`: the creator accepts one provider's billing once per price version. */
+export const billingAcknowledgementRequestSchema = z.object({ provider: providerIdSchema });
+export type BillingAcknowledgementRequest = z.infer<typeof billingAcknowledgementRequestSchema>;
+
+export const billingAcknowledgementResponseSchema = z.object({
+  provider: providerIdSchema,
+  version: z.string().trim().min(1).max(80),
+  acknowledgedAt: z.string().datetime({ offset: true }),
+});
+export type BillingAcknowledgementResponse = z.infer<typeof billingAcknowledgementResponseSchema>;
