@@ -1,6 +1,7 @@
 import {
   DEFAULT_MODEL_ID,
   catalogResponseSchema,
+  type CatalogModel,
   type CatalogResponse,
   type SlideV2,
 } from "@/lib/contract";
@@ -20,6 +21,10 @@ const legacyAlibabaKeys = Object.values(ALIBABA_CONTRACT_IDS).flatMap((contractI
   return contract ? [acknowledgementKey(contract.id, contract.contractVersion)] : [];
 });
 
+export function isBillingAcknowledged(model: CatalogModel, acknowledgements: readonly StoredModelAcknowledgement[]) {
+  return !model.requiresBillingAck || hasProviderAcknowledgement(acknowledgements, model.provider, legacyAlibabaKeys);
+}
+
 /** `GET /api/catalog`: enabled models, the owner's acknowledgements and, with a slide, each model's fit. */
 export function catalogView(input: {
   acknowledgements: readonly StoredModelAcknowledgement[];
@@ -30,8 +35,7 @@ export function catalogView(input: {
     models: CATALOG_MODELS.filter((model) => model.enabled).map((model) => ({
       ...model,
       isDefault: model.id === DEFAULT_MODEL_ID,
-      billingAcknowledged: !model.requiresBillingAck
-        || hasProviderAcknowledgement(input.acknowledgements, model.provider, legacyAlibabaKeys),
+      billingAcknowledged: isBillingAcknowledged(model, input.acknowledgements),
       ...(input.slide ? { fit: fitForSlide(model, input.slide) } : {}),
     })),
   });

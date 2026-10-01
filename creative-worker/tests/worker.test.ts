@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { JOB_EVENT_TYPES } from "../src/contract.js";
+import { JOB_EVENT_TYPES, type GenerationInput, type ProviderPoll, type VideoProvider } from "../src/contract.js";
 import { JOB_UPDATE_STATUSES } from "../src/process-job.js";
 import { generatedVideoPath, jobLeasePatch, runWorkerTick, skippedWork, workerConfig, type WorkerConfig } from "../src/worker.js";
 import { fakeSupabase } from "./fake-supabase.js";
@@ -103,7 +103,7 @@ describe("worker configuration", () => {
     const { client, tables, calls } = world();
     const fetchSpy = dashscope(["RUNNING"]);
     expect(await runWorkerTick({ ...config, alibaba: null }, client)).toBe(false);
-    expect(calls.rpc).toEqual(["claim_creative_studio_workflow_run"]);
+    expect(calls.rpc).toEqual(["claim_creative_studio_workflow_run", "claim_creative_studio_pipeline_run"]);
     expect(job(tables).status).toBe("queued");
     expect(fetchSpy.submit).toBe(0);
   });
@@ -161,6 +161,79 @@ describe("job lifecycle", () => {
 
     expect(job(tables).status).toBe("submitted");
     expect(tables.creative_studio_job_events).toEqual([]);
+  });
+});
+
+describe("pipeline provider jobs", () => {
+  const takeId = "c0ad6b4d-c2ef-4e15-9fd1-8d02f1e0dfcc";
+  const rawPath = `owners/${owner}/projects/${project}/takes/${takeId}/raw.mp4`;
+  const pipelineJob = (overrides: Record<string, unknown> = {}) => queuedJob({
+    provider: "modal-ltx",
+    model_id: "ltx-2.5-distilled",
+    seed: 7,
+    input_assets: [{ assetId: "a1", role: "first_frame", ordinal: 1 }, { assetId: "a1", role: "last_frame", ordinal: 1 }],
+    options: { takeId, width: 768, height: 960, frames: 121, fps: 24, endFrameStrength: 0.6 },
+    ...overrides,
+  });
+  const fakeModal = (polls: ProviderPoll[], onSubmit?: (input: GenerationInput) => void): VideoProvider & { inputs: GenerationInput[] } => {
+    const inputs: GenerationInput[] = [];
+    let polled = 0;
+    return {
+      id: "modal-ltx",
+      inputs,
+      async submit(input) {
+        inputs.push(input);
+        onSubmit?.(input);
+        return { providerTaskId: "fc-123" };
+      },
+      async poll() {
+        return polls[Math.min(polled++, polls.length - 1)];
+      },
+    };
+  };
+
+  it("sends the take's generation input, records the uploaded raw clip and its GPU cost", async () => {
+    const { client, tables, objects, fastForward } = world(pipelineJob());
+    const modal = fakeModal(
+      [{ state: "running" }, { state: "succeeded", uploaded: true, gpuSeconds: 35.8, costUsd: 0.0301 }],
+      () => objects.set(rawPath, { bytes: video, contentType: "video/mp4" }),
+    );
+    const registry = { "modal-ltx": modal };
+    await runWorkerTick({ ...config, alibaba: null }, client, registry);
+    expect(modal.inputs[0]).toMatchObject({
+      idempotencyKey: takeId, modelId: "ltx-2.5-distilled", seed: 7, width: 768, height: 960, frames: 121, fps: 24,
+      endFrame: { strength: 0.6 }, backgroundUrl: "https://signed.example/owners/x/slide.png",
+      outputUploadUrl: `https://signed.example/upload/${rawPath}`,
+    });
+    fastForward();
+    await runWorkerTick({ ...config, alibaba: null }, client, registry);
+    fastForward();
+    await runWorkerTick({ ...config, alibaba: null }, client, registry);
+
+    const raw = tables.creative_studio_assets.find((asset) => asset.object_path === rawPath);
+    expect(raw).toMatchObject({ kind: "generated-video", byte_size: video.byteLength });
+    expect(job(tables)).toMatchObject({ status: "completed", output_asset_id: raw!.id, cost_usd: 0.0301, gpu_seconds: 35.8 });
+    expect(events(tables)).toEqual(["submitting", "submitted", "running", "downloading", "completed"]);
+  });
+
+  it("ingests a provider's result URL into the take's folder", async () => {
+    const { client, tables } = world(pipelineJob({ status: "submitted", provider_task_id: "task-1", provider: "alibaba", model_id: "wan2.7-i2v" }));
+    dashscope(["SUCCEEDED"]);
+    const alibaba: VideoProvider = {
+      id: "alibaba",
+      submit: async () => ({ providerTaskId: "task-1" }),
+      poll: async () => ({ state: "succeeded", resultUrl: "https://result.example/video.mp4", costUsd: 0.5 }),
+    };
+    await runWorkerTick(config, client, { alibaba });
+    expect(tables.creative_studio_assets.find((asset) => asset.object_path === rawPath)).toBeDefined();
+    expect(job(tables)).toMatchObject({ status: "completed", cost_usd: 0.5 });
+  });
+
+  it("flags a pipeline job whose provider is not configured on this worker", async () => {
+    const { client, tables } = world(pipelineJob({ provider: "alibaba", model_id: "wan2.7-i2v" }));
+    dashscope(["RUNNING"]);
+    await runWorkerTick(config, client, {});
+    expect(job(tables)).toMatchObject({ status: "needs_attention", error_code: "provider_not_configured" });
   });
 });
 

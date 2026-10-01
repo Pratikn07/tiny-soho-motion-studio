@@ -1,9 +1,43 @@
 type Row = Record<string, any>;
 
-const uniqueColumns: Record<string, string[]> = {
-  creative_studio_assets: ["id", "object_path"],
-  creative_studio_projects: ["id"],
+const ACTIVE_RUN = ["queued", "generating", "finishing", "checking"];
+
+/** Unique keys the fake enforces, including the partial "one active run per slide" index. */
+const uniqueKeys: Record<string, Array<{ columns: string[]; where?: (row: Row) => boolean }>> = {
+  creative_studio_assets: [{ columns: ["id"] }, { columns: ["object_path"] }],
+  creative_studio_projects: [{ columns: ["id"] }],
+  creative_studio_pipeline_runs: [
+    { columns: ["id"] },
+    { columns: ["project_id", "idempotency_key"] },
+    { columns: ["project_id", "slide_id"], where: (row) => ACTIVE_RUN.includes(row.status) },
+  ],
+  creative_studio_takes: [{ columns: ["id"] }, { columns: ["run_id", "attempt"] }],
+  creative_studio_jobs: [{ columns: ["id"] }, { columns: ["project_id", "idempotency_key"] }],
+  creative_studio_vision_jobs: [{ columns: ["id"] }, { columns: ["project_id", "idempotency_key"] }],
 };
+
+/** Column defaults from the migrations, applied on insert like Postgres does. */
+const columnDefaults: Record<string, () => Row> = {
+  creative_studio_pipeline_runs: () => ({
+    status: "queued", attempt_count: 0, budget_reserved_usd: 0, worker_lease_id: null, worker_lease_expires_at: null,
+    next_step_at: new Date().toISOString(), error_code: null, reasons: [], allow_fallback: false, max_attempts: 3,
+  }),
+  creative_studio_takes: () => ({
+    job_id: null, raw_asset_id: null, final_asset_id: null, cover_asset_id: null, finish_job_id: null,
+    check_job_id: null, stage: "generating", checks: null, verdict: "pending",
+  }),
+  creative_studio_jobs: () => ({
+    provider_task_id: null, output_asset_id: null, error_code: null, cost_usd: null, gpu_seconds: null,
+    submit_attempt_id: null, provider: "alibaba", seed: null,
+  }),
+  creative_studio_vision_jobs: () => ({ output_asset_ids: [], result: null, error_code: null, attempt_count: 0 }),
+};
+
+const violates = (name: string, rows: Row[], candidate: Row) => (uniqueKeys[name] ?? []).some(({ columns, where }) => (
+  (!where || where(candidate)) && rows.some((row) => (
+    row !== candidate && (!where || where(row)) && columns.every((column) => row[column] === candidate[column])
+  ))
+));
 
 const readColumn = (row: Row, column: string) => {
   const [base, key] = column.split("->>");
@@ -33,6 +67,7 @@ export function creationsFakeSupabase() {
     insert(rows: Row | Row[]) {
       this.operation = "insert";
       this.rows = (Array.isArray(rows) ? rows : [rows]).map((row) => ({
+        ...(columnDefaults[this.name]?.() ?? {}),
         id: row.id ?? crypto.randomUUID(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -78,17 +113,20 @@ export function creationsFakeSupabase() {
     private run() {
       if (this.operation === "insert") {
         for (const row of this.rows) {
-          for (const column of uniqueColumns[this.name] ?? []) {
-            if (table(this.name).some((existing) => existing[column] === row[column])) {
-              return { data: null, error: { code: "23505", message: "duplicate key" } };
-            }
-          }
+          if (violates(this.name, table(this.name), row)) return { data: null, error: { code: "23505", message: "duplicate key" } };
         }
         table(this.name).push(...this.rows.map((row) => structuredClone(row)));
         return this.shape(this.rows);
       }
       const matched = table(this.name).filter((row) => this.filters.every((filter) => filter(row)));
-      if (this.operation === "update") for (const row of matched) Object.assign(row, structuredClone(this.patch));
+      if (this.operation === "update") {
+        const before = matched.map((row) => structuredClone(row));
+        for (const row of matched) Object.assign(row, structuredClone(this.patch));
+        if (matched.some((row) => violates(this.name, table(this.name), row))) {
+          matched.forEach((row, index) => Object.assign(row, before[index]));
+          return { data: null, error: { code: "23505", message: "duplicate key" } };
+        }
+      }
       return this.shape(matched);
     }
   }
@@ -97,6 +135,10 @@ export function creationsFakeSupabase() {
     from: (name: string) => new Query(name),
     storage: {
       from: () => ({
+        createSignedUrl: async (path: string, seconds: number) => ({
+          data: { signedUrl: `https://storage.test/sign/${path}?expires=${seconds}` },
+          error: null,
+        }),
         createSignedUploadUrl: async (path: string) => ({
           data: { signedUrl: `https://storage.test/upload/${path}?token=t`, path, token: "t" },
           error: null,

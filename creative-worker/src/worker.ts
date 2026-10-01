@@ -3,8 +3,21 @@ import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
 import { hasClaimedId } from "./claim.js";
-import type { ProviderId } from "./contract.js";
+import type { ProviderId, ProviderPoll } from "./contract.js";
 import { runDirectorWorkerTick } from "./director.js";
+import {
+  UPLOADED_RESULT,
+  generationInput,
+  isPipelineJob,
+  recordUploadedResult,
+  takeRawPath,
+  taskStatus,
+} from "./pipeline/provider-jobs.js";
+import type { PipelineDependencies } from "./pipeline/steps.js";
+import { supabasePipeline } from "./pipeline/store.js";
+import { runPipelineTick } from "./pipeline/tick.js";
+import type { ProviderRegistry } from "./providers/index.js";
+import { MODEL_PROVIDERS, fallbackModel } from "./router.js";
 import {
   LeaseLostError,
   processClaimedJob,
@@ -73,8 +86,11 @@ export function workerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig
   };
 }
 
-export function configuredProviders(config: WorkerConfig): ProviderId[] {
-  return config.alibaba ? ["alibaba"] : [];
+/** Providers whose jobs this worker may claim: registered `VideoProvider`s plus the legacy Alibaba path. */
+export function configuredProviders(config: WorkerConfig, registry: ProviderRegistry = {}): ProviderId[] {
+  const ids = new Set(Object.keys(registry) as ProviderId[]);
+  if (config.alibaba) ids.add("alibaba");
+  return [...ids];
 }
 
 /** Plain reasons for work this worker leaves queued, logged once at start-up. */
@@ -189,6 +205,16 @@ export function jobStore(client: WorkerClient, job: Pick<WorkerJob, "id" | "owne
       }
       await event("submitted", {});
     },
+    async recordCost(costUsd: number | null, gpuSeconds: number | null) {
+      const result = await client
+        .from("creative_studio_jobs")
+        .update({ cost_usd: costUsd, gpu_seconds: gpuSeconds, updated_at: new Date().toISOString() })
+        .eq("id", job.id)
+        .eq("worker_lease_id", job.worker_lease_id)
+        .select("id");
+      if (result.error) throw new Error("creative_job_update_failed");
+      if (!result.data?.length) throw new LeaseLostError();
+    },
   };
 }
 
@@ -207,11 +233,11 @@ export type IngestDependencies = {
 
 /** Idempotent: one fixed path per job, and an asset already recorded there (or a complete file) counts as done. */
 export async function ingestProviderResult(
-  job: Pick<WorkerJob, "id" | "owner_user_id" | "project_id" | "provider_task_id">,
+  job: Pick<WorkerJob, "id" | "owner_user_id" | "project_id" | "provider_task_id" | "provider">,
   resultUrl: string,
   dependencies: IngestDependencies,
+  objectPath = generatedVideoPath(job),
 ) {
-  const objectPath = generatedVideoPath(job);
   const recorded = await dependencies.findAssetIdByPath(objectPath);
   if (recorded) return { outputAssetId: recorded };
 
@@ -242,7 +268,7 @@ export async function ingestProviderResult(
     height: null,
     duration_seconds: null,
     sha256: createHash("sha256").update(bytes).digest("hex"),
-    provenance: { provider: "alibaba", providerTaskId: job.provider_task_id },
+    provenance: { provider: job.provider ?? "alibaba", providerTaskId: job.provider_task_id },
   });
   if (created) return { outputAssetId: assetId };
   const concurrent = await dependencies.findAssetIdByPath(objectPath);
@@ -285,16 +311,100 @@ export const createWorkerClient = (config: WorkerConfig): WorkerClient => create
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-export async function runWorkerTick(config: WorkerConfig, client: WorkerClient = createWorkerClient(config)) {
+/** Pipeline steps against Supabase. Budget reservation allows everything until O1 provides the ledger. */
+export function pipelineDependencies(
+  client: WorkerClient,
+  registry: ProviderRegistry,
+  reserveBudget: PipelineDependencies["reserveBudget"] = async () => true,
+) {
+  return supabasePipeline(client, {
+    providerReady: (modelId) => {
+      const provider = MODEL_PROVIDERS[modelId];
+      return Boolean(provider && registry[provider]);
+    },
+    fallback: (run) => fallbackModel({ modelId: run.model_id, allowFallback: run.allow_fallback }),
+    reserveBudget,
+  });
+}
+
+async function runPipelineJob(client: WorkerClient, job: WorkerJob & { input_assets?: unknown }, registry: ProviderRegistry) {
+  const store = jobStore(client, job);
+  const provider = job.provider ? registry[job.provider] : undefined;
+  let lastPoll: ProviderPoll | null = null;
+  const ingest = storageIngest(client, job.owner_user_id);
+  try {
+    if (!provider) {
+      await store.update("needs_attention", { errorCode: "provider_not_configured" });
+      return true;
+    }
+    await processClaimedJob(job, {
+      submit: async () => {
+        const media = Array.isArray(job.input_assets) ? job.input_assets as Array<{ assetId: string; role: string }> : [];
+        const backgroundId = media.find((item) => item.role === "first_frame")?.assetId;
+        const background = backgroundId ? await client.from("creative_studio_assets").select("object_path")
+          .eq("id", backgroundId).eq("owner_user_id", job.owner_user_id).maybeSingle() : null;
+        if (!background?.data) throw new Error("creative_job_asset_read_failed");
+        const download = await client.storage.from(bucket).createSignedUrl(background.data.object_path, 300);
+        const upload = await client.storage.from(bucket).createSignedUploadUrl(takeRawPath(job), { upsert: true });
+        if (download.error || !download.data?.signedUrl || upload.error || !upload.data?.signedUrl) {
+          throw new Error("creative_job_asset_sign_failed");
+        }
+        const input = generationInput(job, { backgroundUrl: download.data.signedUrl, outputUploadUrl: upload.data.signedUrl });
+        return (await provider.submit(input)).providerTaskId;
+      },
+      recordSubmitted: store.recordSubmitted,
+      poll: async (taskId) => {
+        lastPoll = await provider.poll(taskId);
+        return taskStatus(lastPoll);
+      },
+      ingest: async (resultUrl) => {
+        const result = resultUrl === UPLOADED_RESULT
+          ? await recordUploadedResult(job, {
+            findAssetIdByPath: ingest.findAssetIdByPath,
+            insertAsset: ingest.insertAsset,
+            download: async (objectPath) => {
+              const file = await client.storage.from(bucket).download(objectPath);
+              return file.error || !file.data ? null : Buffer.from(await file.data.arrayBuffer());
+            },
+          })
+          : await ingestProviderResult(job, resultUrl, ingest, takeRawPath(job));
+        const poll = lastPoll as ProviderPoll | null;
+        if (poll?.state === "succeeded") await store.recordCost(poll.costUsd ?? null, poll.gpuSeconds ?? null);
+        return result;
+      },
+      update: store.update,
+    });
+  } catch (error) {
+    if (error instanceof LeaseLostError) return true;
+    throw error;
+  }
+  return true;
+}
+
+export async function runWorkerTick(
+  config: WorkerConfig,
+  client: WorkerClient = createWorkerClient(config),
+  registry: ProviderRegistry = {},
+) {
   if (config.alibaba && await runDirectorWorkerTick(client, config.alibaba)) return true;
   if (await runWorkflowWorkerTick(client)) return true;
-  const alibaba = config.alibaba;
-  const providers = configuredProviders(config);
-  if (!alibaba || !providers.length) return false;
+  if (await runPipelineTick(client, pipelineDependencies(client, registry))) return true;
+  const providers = configuredProviders(config, registry);
+  if (!providers.length) return false;
   const claimed = await client.rpc("claim_creative_studio_provider_job", { allowed_providers: providers });
   if (claimed.error) throw new Error("creative_job_claim_failed");
   if (!hasClaimedId(claimed.data)) return false;
   const job = claimed.data as unknown as WorkerJob;
+  if (isPipelineJob(job)) return runPipelineJob(client, job, registry);
+  const alibaba = config.alibaba;
+  if (!alibaba) {
+    try {
+      await jobStore(client, job).update("needs_attention", { errorCode: "provider_not_configured" });
+    } catch (error) {
+      if (!(error instanceof LeaseLostError)) throw error;
+    }
+    return true;
+  }
   const mediaRows = await client
     .from("creative_studio_job_media")
     .select("asset_id,role,ordinal")

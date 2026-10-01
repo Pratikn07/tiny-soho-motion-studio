@@ -1,7 +1,8 @@
 import { createServer } from "node:http";
 
 import { healthPayload } from "./health.js";
-import { runWorkerTick, skippedWork, workerConfig } from "./worker.js";
+import { createProviderRegistry } from "./providers/index.js";
+import { createWorkerClient, runWorkerTick, skippedWork, workerConfig } from "./worker.js";
 
 const port = Number(process.env.PORT ?? "8080");
 const config = workerConfig();
@@ -9,11 +10,14 @@ let ticking = false;
 
 if (config) {
   for (const reason of skippedWork(config)) console.warn(`creative-worker: ${reason}`);
+  const client = createWorkerClient(config);
+  const registry = createProviderRegistry();
+  console.info(`creative-worker: video providers ${Object.keys(registry).join(", ") || "none"} registered.`);
   const tick = async () => {
     if (ticking) return;
     ticking = true;
     try {
-      await runWorkerTick(config);
+      await runWorkerTick(config, client, registry);
     } catch {
       // Failures are retained on the job by the processing path where possible.
     } finally {
