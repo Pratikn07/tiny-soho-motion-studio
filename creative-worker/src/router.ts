@@ -10,6 +10,13 @@ export const MODEL_PROVIDERS: Readonly<Record<string, ProviderId>> = {
   "wan3-i2v": "alibaba",
 };
 
+/** Catalog `estimatedClipUsd` per model, reserved against the budget before each paid take; same hosted test. */
+export const MODEL_CLIP_USD: Readonly<Record<string, number>> = {
+  "ltx-2.5-distilled": 0.03,
+  "wan2.7-i2v": 0.5,
+  "wan3-i2v": 0.5,
+};
+
 /** The model tried when a run allows falling back to the other provider. */
 const FALLBACK_MODEL: Readonly<Record<ProviderId, string>> = {
   "modal-ltx": "wan2.7-i2v",

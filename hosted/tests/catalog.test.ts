@@ -15,7 +15,7 @@ import {
 import { contractFixtures } from "@/lib/contract/fixtures";
 import catalogFixture from "@/lib/contract/fixtures/catalog.json";
 import { getVideoModelContract } from "@/lib/video-catalog";
-import { MODEL_PROVIDERS } from "../../creative-worker/src/router";
+import { MODEL_CLIP_USD, MODEL_PROVIDERS } from "../../creative-worker/src/router";
 
 const repo = vi.hoisted(() => ({
   getProject: vi.fn(),
@@ -63,6 +63,7 @@ describe("catalog entries", () => {
 
   it("routes each model to the same provider in the worker", () => {
     expect(MODEL_PROVIDERS).toEqual(Object.fromEntries(CATALOG_MODELS.map((model) => [model.id, model.provider])));
+    expect(MODEL_CLIP_USD).toEqual(Object.fromEntries(CATALOG_MODELS.map((model) => [model.id, model.estimatedClipUsd])));
   });
 
   it("keeps the UI fixture equal to the real catalog", () => {

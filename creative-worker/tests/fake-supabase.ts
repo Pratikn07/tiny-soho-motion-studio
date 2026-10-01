@@ -114,6 +114,11 @@ export function fakeSupabase(tables: Record<string, Row[]>) {
     storage: {
       from: () => ({
         createSignedUrl: async (path: string) => ({ data: { signedUrl: `https://signed.example/${path}` }, error: null }),
+        createSignedUploadUrl: async (path: string) => ({ data: { signedUrl: `https://signed.example/upload/${path}`, path }, error: null }),
+        download: async (path: string) => {
+          const object = objects.get(path);
+          return object ? { data: new Blob([new Uint8Array(object.bytes)]), error: null } : { data: null, error: { message: "Object not found" } };
+        },
         info: async (path: string) => {
           const object = objects.get(path);
           return object

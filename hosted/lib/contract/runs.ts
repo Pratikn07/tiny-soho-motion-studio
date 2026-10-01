@@ -43,6 +43,20 @@ export const JOB_STATUSES = [
 /** Every job status is a valid `creative_studio_job_events.event_type`, plus the worker's own events. */
 export const JOB_EVENT_TYPES = [...JOB_STATUSES, "claimed", "polled"] as const;
 
+/** `RunView.errorCode` when a run stops for attention; `reasons` carries the plain-language explanation. */
+export const RUN_ERROR_CODES = [
+  "takes_rejected",
+  "calmer_motion",
+  "finish_problem",
+  "uncalibrated_model",
+  "attempts_used",
+  "budget_exceeded",
+  "provider_not_configured",
+  "provider_failed",
+  "finish_failed",
+  "check_failed",
+] as const;
+
 export const DEFAULT_SEEDS_PLANNED = 2;
 export const DEFAULT_MAX_ATTEMPTS = 3;
 

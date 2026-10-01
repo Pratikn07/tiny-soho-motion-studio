@@ -297,3 +297,20 @@ always `{ error: { code, message } }`.
     `creative_studio_model_acknowledgements` table as `model_id = 'provider:<id>'`, `contract_version` = the billing
     version (`modal-billing-v1`, `alibaba-billing-v1`), so no migration is needed. Existing per-model Alibaba
     acknowledgements still count for Alibaba.
+- 2026-09-30 (B3, Agent 1):
+  - `RUN_ERROR_CODES` (in `runs.ts`) lists the `RunView.errorCode` values when a run stops for attention:
+    `takes_rejected`, `calmer_motion` (the child moved behind the text twice: offer a calmer suggestion),
+    `finish_problem` (text drift; a new seed cannot fix it), `uncalibrated_model` (verdict shown, not retried),
+    `attempts_used`, `budget_exceeded`, `provider_not_configured`, `provider_failed`, `finish_failed`, `check_failed`.
+    A provider or vision job's own error code (for example `provider_task_failed`, `finish_inputs_invalid`) may also
+    appear. The UI shows `reasons`, which are always plain language.
+  - New route errors: `billing_acknowledgement_required` (start), `idempotency_conflict` (same key, different
+    request), `run_not_found`, `attempts_limit` (retry past 10 attempts), `take_not_found` / `take_not_ready` (choose).
+  - Start answers 201 with a new run and 200 on a replay of the same key. Retry is for a stopped run (409
+    `run_in_progress` while active): one more attempt, status back to `queued`. Cancel is idempotent.
+  - Provider jobs made by the pipeline: `creative_studio_jobs.idempotency_key` = take id, `seed` set,
+    `options` = `{ takeId, width, height, frames, fps, endFrameStrength | null }` (generation size), media
+    `first_frame` (and `last_frame` when pinned) = the background layer. The raw clip is stored at
+    `owners/{uid}/projects/{pid}/takes/{takeId}/raw.mp4` (`generated-video`); `cost_usd`/`gpu_seconds` come from the
+    provider's poll. Finish and check vision jobs use a UUID derived from the take id and operation as their
+    idempotency key.
