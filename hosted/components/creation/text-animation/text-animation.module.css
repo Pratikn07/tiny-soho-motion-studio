@@ -1,0 +1,11 @@
+.panel { display: grid; gap: 12px; }
+.title { font: 400 20px/1.2 StudioDidot, Georgia, serif; }
+.muted { color: var(--muted, #6e7069); font-size: 12px; }
+.field { display: grid; gap: 6px; font-size: 12px; }
+.field select { width: 100%; min-height: 42px; padding: 8px; border: 1px solid var(--line, #e2e2d9); border-radius: 4px; background: #fff; color: inherit; }
+.override { display: flex; gap: 8px; align-items: center; min-height: 36px; font-size: 12px; }
+.override input { width: 16px; height: 16px; accent-color: var(--sage, #486452); }
+.preview { display: grid; gap: 8px; font-size: 12px; }
+.preview canvas { width: 100%; height: auto; background: #f4f1e7; border: 1px solid var(--line, #e2e2d9); }
+.secondary { min-height: 42px; padding: 8px 14px; background: #fff; border: 1px solid #b9c4b5; border-radius: 4px; color: var(--sage-deep, #272e25); font-size: 12px; font-weight: 600; }
+@media (max-width: 740px) { .field select, .secondary, .override { min-height: 44px; } }

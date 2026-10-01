@@ -238,8 +238,10 @@ def render_final(raw: bytes, background: Image.Image, layer: Image.Image | None,
                         "-an", "-t", str(DURATION), "-r", str(FPS), "-c:v", "libx264", "-crf", str(CRF),
                         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out_path)],
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=TIMEOUT_SECONDS)
-        cover = apply_gains(video_frame(raw_path, (width, height), last=True, ffmpeg=ffmpeg), gains).convert("RGBA")
-        if layer is not None:
+        last_cover = animation.coverFrame == "last"
+        cover = apply_gains(video_frame(raw_path, (width, height), last=last_cover, ffmpeg=ffmpeg), gains).convert("RGBA")
+        # Animated text is invisible at t=0; style none has the complete layer from the first frame.
+        if layer is not None and (last_cover or animation.style == "none"):
             cover.alpha_composite(layer)
         buffer = BytesIO()
         cover.convert("RGB").save(buffer, format="PNG")
