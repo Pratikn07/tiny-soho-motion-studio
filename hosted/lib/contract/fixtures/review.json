@@ -1,0 +1,120 @@
+{
+  "pottyReviewRun": {
+    "reviewRun": {
+      "id": "9d1a9e7a-9fbc-4be2-8cae-5adfcebdac98",
+      "projectId": "3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01",
+      "slideId": "0b9e7c52-1d3a-4f6b-8a2c-7e5d4c3b2a10",
+      "status": "completed",
+      "reviewerProvider": "nvidia",
+      "reviewerModel": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "result": {
+        "slide": "potty",
+        "subject": "toddler girl holding floral underwear beside a step stool and potty, right side of frame",
+        "message": "Potty words should feel familiar, with no pressure.",
+        "text_zones": [{ "label": "headline and list", "x": 5, "y": 3, "width": 71, "height": 94 }],
+        "clearance_percent": 1,
+        "risks": [
+          {
+            "type": "subject_close_to_text",
+            "detail": "Her hair bun ends at 'Start with the basics:'. Any lean to the left puts hair behind the letters.",
+            "severity": "high"
+          },
+          {
+            "type": "dark_on_dark",
+            "detail": "Brown hair next to brown lettering makes the words hard to read if she moves.",
+            "severity": "medium"
+          },
+          {
+            "type": "room_to_walk_toward_text",
+            "detail": "Open wall and floor on the left invite her to walk into the text.",
+            "severity": "high"
+          },
+          {
+            "type": "text_layer_problems",
+            "detail": "Letters are 82–99% opaque with a faint haze; the pipeline will clean this.",
+            "severity": "low"
+          }
+        ],
+        "suggestions": [
+          {
+            "title": "Curious look, calm smile",
+            "story": "She lifts the little underwear, looks at the potty, and smiles calmly.",
+            "risk": "safe",
+            "end_strength": 0.6,
+            "prompt": "A toddler girl with curly brown hair tied up with a small cream scrunchie, wearing a cream cotton top and trousers, stands barefoot on a soft woven rug in a bright, warm bathroom beside a small wooden step stool, a white potty and a sink, on the right side of the frame. The left side of the frame is an empty cream wall with soft window shadows. She lifts the little floral underwear off the step stool with both hands. She looks at the potty beside her and gives a small, calm smile. She places the underwear back on the stool. At the end she is still standing on the rug beside the stool, smiling. The camera remains static throughout, with no zoom, no pan and no cut."
+          },
+          {
+            "title": "Holds it up with a proud smile",
+            "story": "She holds the underwear up in front of her and breaks into a proud smile.",
+            "risk": "some risk: may lean toward 'Start with the basics:'",
+            "end_strength": 0.6,
+            "prompt": "A toddler girl with curly brown hair tied up with a small cream scrunchie, wearing a cream cotton top and trousers, stands barefoot on a soft woven rug in a bright, warm bathroom beside a small wooden step stool, a white potty and a sink, on the right side of the frame. The left side of the frame is an empty cream wall with soft window shadows. She lifts the little floral underwear and holds it up in front of her chest. She looks at it, then breaks into a proud, happy smile. At the end she is still standing on the rug beside the stool, holding the underwear and smiling. The camera remains static throughout, with no zoom, no pan and no cut."
+          },
+          {
+            "title": "Places it on the stool and pats it",
+            "story": "She places the underwear on the stool and pats it gently.",
+            "risk": "safe",
+            "end_strength": 0.6,
+            "prompt": "A toddler girl with curly brown hair tied up with a small cream scrunchie, wearing a cream cotton top and trousers, stands barefoot on a soft woven rug in a bright, warm bathroom beside a small wooden step stool, a white potty and a sink, on the right side of the frame. The left side of the frame is an empty cream wall with soft window shadows. She smooths the little floral underwear flat on the step stool and pats it twice with her right hand. She looks up with a soft smile. At the end she is still standing on the rug beside the stool. The camera remains static throughout, with no zoom, no pan and no cut."
+          }
+        ],
+        "design_advice": "Optional: move the girl about 4% to the right, or shorten 'Start with the basics:', to allow livelier motion.",
+        "creator_idea_review": null
+      },
+      "creatorIdea": null,
+      "creatorIdeaResult": null,
+      "errorCode": null,
+      "createdAt": "2026-09-30T22:12:40.000Z",
+      "updatedAt": "2026-09-30T22:13:02.000Z"
+    }
+  },
+  "reviewRunning": {
+    "reviewRun": {
+      "id": "ae0b8f6b-a0cd-4cf3-9dbf-6be0dfcebda9",
+      "projectId": "3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01",
+      "slideId": "1c8f6d43-2e4b-4a7c-9b3d-8f6e5d4c3b21",
+      "status": "running",
+      "reviewerProvider": "nvidia",
+      "reviewerModel": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "result": null,
+      "creatorIdea": null,
+      "creatorIdeaResult": null,
+      "errorCode": null,
+      "createdAt": "2026-09-30T22:14:10.000Z",
+      "updatedAt": "2026-09-30T22:14:10.000Z"
+    }
+  },
+  "reviewFailed": {
+    "reviewRun": {
+      "id": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+      "projectId": "3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01",
+      "slideId": "1c8f6d43-2e4b-4a7c-9b3d-8f6e5d4c3b21",
+      "status": "failed",
+      "reviewerProvider": "nvidia",
+      "reviewerModel": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "result": null,
+      "creatorIdea": null,
+      "creatorIdeaResult": null,
+      "errorCode": "review_unavailable",
+      "createdAt": "2026-09-30T22:14:10.000Z",
+      "updatedAt": "2026-09-30T22:15:02.000Z"
+    }
+  },
+  "ideaCheckAdjust": {
+    "reviewRunId": "c2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f",
+    "result": {
+      "verdict": "adjust",
+      "reason": "Waving with her left hand will cross 'Start with the basics:'.",
+      "suggestedIdea": "She waves at the camera with her right hand, then smiles.",
+      "prompt": "A toddler girl with curly brown hair tied up with a small cream scrunchie, wearing a cream cotton top and trousers, stands barefoot on a soft woven rug in a bright, warm bathroom beside a small wooden step stool, a white potty and a sink, on the right side of the frame. The left side of the frame is an empty cream wall with soft window shadows. She raises her right hand and waves twice toward the camera, then lowers it and smiles. At the end she is still standing on the rug beside the stool, smiling. The camera remains static throughout, with no zoom, no pan and no cut."
+    }
+  },
+  "ideaCheckOk": {
+    "reviewRunId": "d3e4f5a6-b7c8-4d9e-8f1a-2b3c4d5e6f70",
+    "result": {
+      "verdict": "ok",
+      "reason": "Looking down at the underwear keeps her in her own space.",
+      "prompt": "A toddler girl with curly brown hair tied up with a small cream scrunchie, wearing a cream cotton top and trousers, stands barefoot on a soft woven rug in a bright, warm bathroom beside a small wooden step stool, a white potty and a sink, on the right side of the frame. The left side of the frame is an empty cream wall with soft window shadows. She looks down at the floral underwear in her hands, then looks up with a shy smile. At the end she is still standing on the rug beside the stool. The camera remains static throughout, with no zoom, no pan and no cut."
+    }
+  }
+}

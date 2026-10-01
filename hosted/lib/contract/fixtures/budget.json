@@ -1,0 +1,22 @@
+{
+  "budget": {
+    "month": "2026-09",
+    "capUsd": 50,
+    "spentUsd": 6.4,
+    "reservedUsd": 0.06,
+    "remainingUsd": 43.54,
+    "byProvider": [
+      { "provider": "modal-ltx", "usd": 5.9, "gpuSeconds": 7007.1, "clips": 196 },
+      { "provider": "alibaba", "usd": 0.5, "gpuSeconds": null, "clips": 1 }
+    ],
+    "clipsAccepted": 188,
+    "costPerAcceptedClipUsd": 0.034,
+    "notes": ["Modal's $30 monthly credit is not guaranteed and is not counted here."]
+  },
+  "exceeded": {
+    "error": {
+      "code": "budget_exceeded",
+      "message": "This would go over this month's $50 budget. Nothing was charged."
+    }
+  }
+}

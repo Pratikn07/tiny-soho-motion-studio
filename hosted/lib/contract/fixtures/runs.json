@@ -1,0 +1,240 @@
+{
+  "createRequest": {
+    "idempotencyKey": "a8b7c6d5-e4f3-4a2b-9c1d-0e9f8a7b6c5d",
+    "modelId": "ltx-2.5-distilled",
+    "motion": {
+      "source": "suggestion",
+      "suggestionIndex": 0,
+      "story": "She lifts the little underwear, looks at the potty, and smiles calmly.",
+      "prompt": "A toddler girl with curly brown hair tied up with a small cream scrunchie, wearing a cream cotton top and trousers, stands barefoot on a soft woven rug in a bright, warm bathroom beside a small wooden step stool, a white potty and a sink, on the right side of the frame. The left side of the frame is an empty cream wall with soft window shadows. She lifts the little floral underwear off the step stool with both hands. She looks at the potty beside her and gives a small, calm smile. She places the underwear back on the stool. At the end she is still standing on the rug beside the stool, smiling. The camera remains static throughout, with no zoom, no pan and no cut.",
+      "motionStyle": "calm"
+    },
+    "seeds": 2,
+    "allowFallback": false
+  },
+  "completed": {
+    "run": {
+      "id": "bf9c7a5c-b1de-4d04-8ec0-7cf1e0dfcebb",
+      "projectId": "3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01",
+      "slideId": "0b9e7c52-1d3a-4f6b-8a2c-7e5d4c3b2a10",
+      "status": "completed",
+      "modelId": "ltx-2.5-distilled",
+      "provider": "modal-ltx",
+      "motionStyle": "calm",
+      "prompt": "A toddler girl with curly brown hair tied up with a small cream scrunchie, wearing a cream cotton top and trousers, stands barefoot on a soft woven rug in a bright, warm bathroom beside a small wooden step stool, a white potty and a sink, on the right side of the frame. The left side of the frame is an empty cream wall with soft window shadows. She lifts the little floral underwear off the step stool with both hands. She looks at the potty beside her and gives a small, calm smile. She places the underwear back on the stool. At the end she is still standing on the rug beside the stool, smiling. The camera remains static throughout, with no zoom, no pan and no cut.",
+      "allowFallback": false,
+      "seedsPlanned": [
+        42,
+        7
+      ],
+      "attemptCount": 2,
+      "maxAttempts": 3,
+      "costUsd": 0.06,
+      "errorCode": null,
+      "reasons": [],
+      "takes": [
+        {
+          "id": "c0ad6b4d-c2ef-4e15-9fd1-8d02f1e0dfcc",
+          "attempt": 1,
+          "seed": 42,
+          "modelId": "ltx-2.5-distilled",
+          "provider": "modal-ltx",
+          "stage": "done",
+          "verdict": "rejected",
+          "checks": {
+            "cameraDrift": 4.1,
+            "behindTextPercent": 10.8,
+            "behindTextLine": 3,
+            "behindTextAtSeconds": 1.0,
+            "loopDifference": 2.4,
+            "textDrift": 1.9,
+            "reasons": [
+              "The child moved behind 'Start with the basics:' at 1.0 s."
+            ]
+          },
+          "rawVideoUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/c0ad6b4d-c2ef-4e15-9fd1-8d02f1e0dfcc/raw.mp4?token=fixture",
+          "finalVideoUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/c0ad6b4d-c2ef-4e15-9fd1-8d02f1e0dfcc/final.mp4?token=fixture",
+          "coverUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/c0ad6b4d-c2ef-4e15-9fd1-8d02f1e0dfcc/cover.png?token=fixture",
+          "urlsExpireAt": "2026-09-30T22:46:05.000Z",
+          "costUsd": 0.03,
+          "gpuSeconds": 36.4,
+          "createdAt": "2026-09-30T22:31:10.000Z"
+        },
+        {
+          "id": "d1be5c3e-d3f0-4f26-80e2-9e13a2f1e0dd",
+          "attempt": 2,
+          "seed": 7,
+          "modelId": "ltx-2.5-distilled",
+          "provider": "modal-ltx",
+          "stage": "done",
+          "verdict": "accepted",
+          "checks": {
+            "cameraDrift": 3.2,
+            "behindTextPercent": 6.9,
+            "loopDifference": 2.6,
+            "textDrift": 2.1,
+            "reasons": []
+          },
+          "rawVideoUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/d1be5c3e-d3f0-4f26-80e2-9e13a2f1e0dd/raw.mp4?token=fixture",
+          "finalVideoUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/d1be5c3e-d3f0-4f26-80e2-9e13a2f1e0dd/final.mp4?token=fixture",
+          "coverUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/d1be5c3e-d3f0-4f26-80e2-9e13a2f1e0dd/cover.png?token=fixture",
+          "urlsExpireAt": "2026-09-30T22:46:05.000Z",
+          "costUsd": 0.03,
+          "gpuSeconds": 35.8,
+          "createdAt": "2026-09-30T22:33:02.000Z"
+        }
+      ],
+      "createdAt": "2026-09-30T22:31:09.000Z",
+      "updatedAt": "2026-09-30T22:36:05.000Z"
+    }
+  },
+  "generating": {
+    "run": {
+      "id": "e2cf4d2f-e4a1-4a37-91f3-af24b3a2f1ee",
+      "projectId": "3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01",
+      "slideId": "1c8f6d43-2e4b-4a7c-9b3d-8f6e5d4c3b21",
+      "status": "generating",
+      "modelId": "wan2.7-i2v",
+      "provider": "alibaba",
+      "motionStyle": "calm",
+      "prompt": "A plate of golden salmon cakes with lemon wedges and fresh dill sits on a light wooden table in soft morning light, in the lower half of the frame. The upper part of the frame is a plain cream wall. Gentle steam rises from the salmon cakes and a sprig of dill trembles slightly. At the end the plate is in the same place, with a little steam still rising. The camera remains static throughout, with no zoom, no pan and no cut.",
+      "allowFallback": false,
+      "seedsPlanned": [
+        11,
+        23
+      ],
+      "attemptCount": 1,
+      "maxAttempts": 3,
+      "costUsd": 0,
+      "errorCode": null,
+      "reasons": [],
+      "takes": [
+        {
+          "id": "f3d03e10-f5b2-4b48-a2a4-b035c4b3a2ff",
+          "attempt": 1,
+          "seed": 11,
+          "modelId": "wan2.7-i2v",
+          "provider": "alibaba",
+          "stage": "generating",
+          "verdict": "pending",
+          "checks": null,
+          "rawVideoUrl": null,
+          "finalVideoUrl": null,
+          "coverUrl": null,
+          "urlsExpireAt": null,
+          "costUsd": null,
+          "gpuSeconds": null,
+          "createdAt": "2026-09-30T22:40:12.000Z"
+        }
+      ],
+      "createdAt": "2026-09-30T22:40:11.000Z",
+      "updatedAt": "2026-09-30T22:40:40.000Z"
+    }
+  },
+  "needsAttention": {
+    "run": {
+      "id": "04e12f01-06c3-4c59-b3b5-c146d5c4b300",
+      "projectId": "3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01",
+      "slideId": "2d7a5e34-3f5c-4b8d-8c4e-9a7f6e5d4c32",
+      "status": "needs_attention",
+      "modelId": "ltx-2.5-distilled",
+      "provider": "modal-ltx",
+      "motionStyle": "lively",
+      "prompt": "A mother and a toddler sit at a kitchen counter with glass meal-prep boxes of rice, broccoli and chicken in front of them, in the lower half of the frame. The toddler picks up a piece of broccoli, looks at it and takes a small bite, then smiles. At the end they are both still sitting at the counter. The camera remains static throughout, with no zoom, no pan and no cut.",
+      "allowFallback": false,
+      "seedsPlanned": [
+        42,
+        7,
+        1234
+      ],
+      "attemptCount": 3,
+      "maxAttempts": 3,
+      "costUsd": 0.09,
+      "errorCode": "takes_rejected",
+      "reasons": [
+        "All 3 takes zoomed toward the food.",
+        "Try a calmer motion, or Calm style."
+      ],
+      "takes": [
+        {
+          "id": "15f23012-17d4-4d6a-84c6-d257e6d5c411",
+          "attempt": 1,
+          "seed": 42,
+          "modelId": "ltx-2.5-distilled",
+          "provider": "modal-ltx",
+          "stage": "done",
+          "verdict": "rejected",
+          "checks": {
+            "cameraDrift": 71.0,
+            "behindTextPercent": 0,
+            "loopDifference": 3.1,
+            "reasons": [
+              "The camera zoomed in."
+            ]
+          },
+          "rawVideoUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/15f23012-17d4-4d6a-84c6-d257e6d5c411/raw.mp4?token=fixture",
+          "finalVideoUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/15f23012-17d4-4d6a-84c6-d257e6d5c411/final.mp4?token=fixture",
+          "coverUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/15f23012-17d4-4d6a-84c6-d257e6d5c411/cover.png?token=fixture",
+          "urlsExpireAt": "2026-09-30T22:46:05.000Z",
+          "costUsd": 0.03,
+          "gpuSeconds": 37.0,
+          "createdAt": "2026-09-30T22:20:01.000Z"
+        },
+        {
+          "id": "26a34123-28e5-4e7b-95d7-e368f7e6d522",
+          "attempt": 2,
+          "seed": 7,
+          "modelId": "ltx-2.5-distilled",
+          "provider": "modal-ltx",
+          "stage": "done",
+          "verdict": "rejected",
+          "checks": {
+            "cameraDrift": 18.4,
+            "behindTextPercent": 0,
+            "loopDifference": 3.1,
+            "reasons": [
+              "The camera zoomed in."
+            ]
+          },
+          "rawVideoUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/26a34123-28e5-4e7b-95d7-e368f7e6d522/raw.mp4?token=fixture",
+          "finalVideoUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/26a34123-28e5-4e7b-95d7-e368f7e6d522/final.mp4?token=fixture",
+          "coverUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/26a34123-28e5-4e7b-95d7-e368f7e6d522/cover.png?token=fixture",
+          "urlsExpireAt": "2026-09-30T22:46:05.000Z",
+          "costUsd": 0.03,
+          "gpuSeconds": 35.2,
+          "createdAt": "2026-09-30T22:21:40.000Z"
+        },
+        {
+          "id": "37b45234-39f6-4f8c-a6e8-f479a8f7e633",
+          "attempt": 3,
+          "seed": 1234,
+          "modelId": "ltx-2.5-distilled",
+          "provider": "modal-ltx",
+          "stage": "done",
+          "verdict": "rejected",
+          "checks": {
+            "cameraDrift": 14.9,
+            "behindTextPercent": 0,
+            "loopDifference": 3.1,
+            "reasons": [
+              "The camera zoomed in."
+            ]
+          },
+          "rawVideoUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/37b45234-39f6-4f8c-a6e8-f479a8f7e633/raw.mp4?token=fixture",
+          "finalVideoUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/37b45234-39f6-4f8c-a6e8-f479a8f7e633/final.mp4?token=fixture",
+          "coverUrl": "https://example.supabase.co/storage/v1/object/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/takes/37b45234-39f6-4f8c-a6e8-f479a8f7e633/cover.png?token=fixture",
+          "urlsExpireAt": "2026-09-30T22:46:05.000Z",
+          "costUsd": 0.03,
+          "gpuSeconds": 36.1,
+          "createdAt": "2026-09-30T22:23:15.000Z"
+        }
+      ],
+      "createdAt": "2026-09-30T22:20:00.000Z",
+      "updatedAt": "2026-09-30T22:25:30.000Z"
+    }
+  },
+  "chooseRequest": {
+    "takeId": "d1be5c3e-d3f0-4f26-80e2-9e13a2f1e0dd",
+    "revision": 7
+  }
+}
