@@ -50,6 +50,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe("budget view", () => {
@@ -68,9 +69,35 @@ describe("budget view", () => {
     expect(budget.notes[0]).toContain("not guaranteed");
   });
 
+  it("shows reported Modal billing separately without reducing studio headroom", async () => {
+    vi.stubEnv("CREATIVE_WORKER_BILLING_URL", "https://worker.test");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-signing-key");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: "fresh", month: "2026-09", usageUsd: 0.35, creditsAppliedUsd: 0.35,
+      billedUsd: 0, updatedAt: now.toISOString(),
+    }))));
+    const response = await getBudget(request());
+    const body = await response.json();
+    expect(body).toMatchObject({
+      capUsd: 50, spentUsd: 0.58, reservedUsd: 0.03, remainingUsd: 49.39,
+      modalBilling: { status: "fresh", usageUsd: 0.35, creditsAppliedUsd: 0.35, billedUsd: 0 },
+    });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
   it("starts each month from zero", async () => {
     const october = await budgetView(fake.current!.client, owner, 50, new Date("2026-10-01T00:00:01.000Z"));
     expect(october).toMatchObject({ month: "2026-10", spentUsd: 0, reservedUsd: 0.03, clipsAccepted: 0, costPerAcceptedClipUsd: null });
+  });
+
+  it("never reads workspace billing for a rejected owner", async () => {
+    vi.mocked(requireOwner).mockRejectedValue(new Error("Unauthorized"));
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    vi.stubEnv("CREATIVE_WORKER_BILLING_URL", "https://worker.test");
+    const response = await getBudget(request());
+    expect(response.status).not.toBe(200);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("reads the cap from TINY_SOHO_MONTHLY_CAP_USD and serves it at GET /api/budget", async () => {

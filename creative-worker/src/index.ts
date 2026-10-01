@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 
+import { createModalBillingService, modalBillingResponse, readModalSummary } from "./modal-billing.js";
 import { healthPayload } from "./health.js";
 import { createProviderRegistry } from "./providers/index.js";
 import { createWorkerClient, runWorkerTick, skippedWork, workerConfig } from "./worker.js";
@@ -28,10 +29,18 @@ if (config) {
   setInterval(() => void tick(), 1_000);
 }
 
-createServer((request, response) => {
+const billing = createModalBillingService({ readSummary: readModalSummary });
+
+createServer(async (request, response) => {
   if (request.method === "GET" && request.url === "/health") {
     response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
     response.end(JSON.stringify(healthPayload(Boolean(config))));
+    return;
+  }
+  const bill = await modalBillingResponse(request, { key: config?.serviceRoleKey, service: billing });
+  if (bill) {
+    response.writeHead(bill.status, { "content-type": "application/json", "cache-control": "no-store" });
+    response.end(JSON.stringify(bill.body));
     return;
   }
   response.writeHead(404, { "content-type": "application/json" });

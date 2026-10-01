@@ -40,6 +40,8 @@
   z-index: 25;
   width: 300px;
   max-width: calc(100vw - 36px);
+  max-height: calc(100svh - 180px);
+  overflow-y: auto;
   box-sizing: border-box;
   padding: 16px;
   border: 1px solid var(--line);
@@ -104,4 +106,14 @@
   .card button {
     min-height: 44px;
   }
+}
+
+.modal {
+  border-top: 1px solid var(--line);
+  margin: 12px 0;
+  padding-top: 12px;
+}
+.modal a {
+  color: var(--sage);
+  text-underline-offset: 3px;
 }

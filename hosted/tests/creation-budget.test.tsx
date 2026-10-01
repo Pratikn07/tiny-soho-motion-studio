@@ -53,6 +53,36 @@ describe("creation budget", () => {
     expect(fetchJson).toHaveBeenCalledWith("/api/budget");
   });
 
+  it("shows Modal-reported usage and credits alongside the studio ledger without estimating balance", async () => {
+    setup(vi.fn().mockResolvedValue({ ...budget(), modalBilling: {
+      status: "fresh", month: budget().month, usageUsd: 0.35, creditsAppliedUsd: 0.35,
+      billedUsd: 0, updatedAt: "2026-10-01T19:00:00.000Z",
+    } }));
+    await screen.findByText("This month: $6.40 of $50");
+    expect(screen.getByText("Modal workspace billing")).toBeInTheDocument();
+    expect(screen.getByText("$0.35 usage before credits")).toBeInTheDocument();
+    expect(screen.getByText("$0.35 credits applied · $0.00 billed")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View exact credit balance on Modal" })).toHaveAttribute("href", "https://modal.com/settings/usage");
+    expect(screen.getByText(/Updated/)).toBeInTheDocument();
+    expect(screen.queryByText(/credits remaining/)).not.toBeInTheDocument();
+    expect(screen.getByText("$43.54 available")).toBeInTheDocument();
+  });
+
+  it("marks cached Modal figures stale while the studio budget stays available", async () => {
+    const fetchJson = setup(vi.fn().mockResolvedValue({ ...budget(), modalBilling: {
+      status: "stale", month: budget().month, usageUsd: 0.35, creditsAppliedUsd: 0.35,
+      billedUsd: 0, updatedAt: "2026-10-01T19:00:00.000Z",
+    } }));
+    await screen.findByText("This month: $6.40 of $50");
+    expect(screen.getByText("Modal refresh failed. Showing last reported figures.")).toBeInTheDocument();
+    expect(screen.getByText("$43.54 available")).toBeInTheDocument();
+    fetchJson.mockResolvedValue({ ...budget(), modalBilling: { status: "unavailable", month: budget().month } });
+    fireEvent.click(screen.getByRole("button", { name: "Refresh budget" }));
+    await screen.findByText("Modal billing is unavailable.");
+    expect(screen.queryByText("$0.35 usage before credits")).not.toBeInTheDocument();
+    expect(screen.getByText("$43.54 available")).toBeInTheDocument();
+  });
+
   it("recovers from an unavailable budget without showing made-up zero spend", async () => {
     const fetchJson = setup(
       vi
