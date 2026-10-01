@@ -10,7 +10,7 @@ export interface Reviewer {
 }
 
 export class ReviewerError extends Error {
-  constructor(readonly code: "not_configured" | "auth" | "rate_limited" | "rejected" | "failed" | "timeout") {
+  constructor(readonly code: "not_configured" | "auth" | "rate_limited" | "rejected" | "failed" | "timeout" | "unavailable") {
     super(`reviewer_${code}`);
     this.name = "ReviewerError";
   }
@@ -18,18 +18,38 @@ export class ReviewerError extends Error {
 
 type Env = Record<string, string | undefined>;
 type Fetch = typeof fetch;
+type Sleep = (ms: number, signal?: AbortSignal | null) => Promise<void>;
+
+/** Waits after each 503 before trying again; after the last one the review is reported unavailable. */
+export const UNAVAILABLE_RETRY_DELAYS_MS = [2_000, 4_000, 8_000];
 
 const statusError = (status: number) => new ReviewerError(
-  status === 401 || status === 403 ? "auth" : status === 429 ? "rate_limited" : status >= 400 && status < 500 ? "rejected" : "failed",
+  status === 401 || status === 403 ? "auth"
+    : status === 429 ? "rate_limited"
+      : status === 503 ? "unavailable"
+        : status >= 400 && status < 500 ? "rejected" : "failed",
 );
 
-async function send(fetcher: Fetch, url: string, init: RequestInit) {
+const sleep: Sleep = (ms, signal) => new Promise((resolve, reject) => {
+  if (signal?.aborted) return reject(new ReviewerError("timeout"));
+  const timer = setTimeout(resolve, ms);
+  signal?.addEventListener("abort", () => {
+    clearTimeout(timer);
+    reject(new ReviewerError("timeout"));
+  }, { once: true });
+});
+
+async function send(fetcher: Fetch, url: string, init: RequestInit, wait: Sleep = sleep) {
   let response: Response;
-  try {
-    response = await fetcher(url, init);
-  } catch (error) {
-    if (error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name)) throw new ReviewerError("timeout");
-    throw new ReviewerError("failed");
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      response = await fetcher(url, init);
+    } catch (error) {
+      if (error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name)) throw new ReviewerError("timeout");
+      throw new ReviewerError("failed");
+    }
+    if (response.status !== 503 || attempt >= UNAVAILABLE_RETRY_DELAYS_MS.length) break;
+    await wait(UNAVAILABLE_RETRY_DELAYS_MS[attempt], init.signal);
   }
   if (!response.ok) throw statusError(response.status);
   const raw = await response.text();
@@ -56,6 +76,7 @@ export function openAiCompatibleReviewer(options: {
   model: string;
   env?: Env;
   fetcher?: Fetch;
+  sleep?: Sleep;
 }): Reviewer {
   const nemotron = /nemotron/i.test(options.model);
   return {
@@ -87,7 +108,7 @@ export function openAiCompatibleReviewer(options: {
             },
           ],
         }),
-      });
+      }, options.sleep);
       const content = body.choices?.[0]?.message?.content;
       if (typeof content !== "string") throw new ReviewerError("failed");
       return { content, costUsd: options.provider === "nvidia" ? 0 : tokenCost(body.usage?.prompt_tokens, body.usage?.completion_tokens, options.env ?? {}) };
@@ -96,7 +117,7 @@ export function openAiCompatibleReviewer(options: {
 }
 
 /** Anthropic's Messages API. */
-export function anthropicReviewer(options: { apiKey: string; model: string; env?: Env; fetcher?: Fetch }): Reviewer {
+export function anthropicReviewer(options: { apiKey: string; model: string; env?: Env; fetcher?: Fetch; sleep?: Sleep }): Reviewer {
   return {
     provider: "anthropic",
     model: options.model,
@@ -123,7 +144,7 @@ export function anthropicReviewer(options: { apiKey: string; model: string; env?
             },
           ],
         }),
-      });
+      }, options.sleep);
       const text = Array.isArray(body.content)
         ? body.content.filter((part: { type?: string }) => part.type === "text").map((part: { text: string }) => part.text).join("")
         : null;

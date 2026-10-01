@@ -206,6 +206,35 @@ describe("reviewers", () => {
     await expect(timedOut.complete(request, AbortSignal.timeout(1000))).rejects.toMatchObject({ code: "timeout" });
   });
 
+  it("retries NVIDIA 503s after 2, 4 and 8 s, then reports the reviewer unavailable", async () => {
+    const waits: number[] = [];
+    const sleep = async (ms: number) => { waits.push(ms); };
+    const flaky = vi.fn()
+      .mockResolvedValueOnce(new Response("busy", { status: 503 }))
+      .mockResolvedValueOnce(chat("{}"));
+    const recovering = openAiCompatibleReviewer({ provider: "nvidia", baseUrl: "https://x", apiKey: "k", model: "m", fetcher: flaky, sleep });
+    expect(await recovering.complete(request, AbortSignal.timeout(1000))).toEqual({ content: "{}", costUsd: 0 });
+    expect([flaky.mock.calls.length, waits]).toEqual([2, [2000]]);
+
+    waits.length = 0;
+    const down = vi.fn(async () => new Response("busy", { status: 503 }));
+    const unavailable = openAiCompatibleReviewer({ provider: "nvidia", baseUrl: "https://x", apiKey: "k", model: "m", fetcher: down, sleep });
+    await expect(unavailable.complete(request, AbortSignal.timeout(1000))).rejects.toMatchObject({ code: "unavailable" });
+    expect([down.mock.calls.length, waits]).toEqual([4, [2000, 4000, 8000]]);
+  });
+
+  it("stops waiting for a 503 retry when the review's time runs out", async () => {
+    const controller = new AbortController();
+    const reviewer = openAiCompatibleReviewer({
+      provider: "nvidia", baseUrl: "https://x", apiKey: "k", model: "m",
+      fetcher: async () => {
+        controller.abort();
+        return new Response("busy", { status: 503 });
+      },
+    });
+    await expect(reviewer.complete(request, controller.signal)).rejects.toMatchObject({ code: "timeout" });
+  });
+
   it("prices an API model review from token usage", async () => {
     const reviewer = anthropicReviewer({
       apiKey: "k", model: "claude-test",

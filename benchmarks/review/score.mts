@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { STATIC_CAMERA_SENTENCE, type SlideReview } from "../../hosted/lib/contract";
 import { reviewImages } from "../../hosted/lib/review/images";
 import { slideReviewRequest } from "../../hosted/lib/review/prompt";
-import { reviewerFromEnv } from "../../hosted/lib/review/reviewers";
+import { reviewerFromEnv, type Reviewer } from "../../hosted/lib/review/reviewers";
 import { reviewSlide } from "../../hosted/lib/review/run";
 
 type Flag = { label: string; types: string[]; detail: string };
@@ -37,14 +37,49 @@ const suggests = (review: SlideReview, pattern: string) => review.suggestions.so
   new RegExp(pattern, "i").test(`${suggestion.title} ${suggestion.story} ${suggestion.prompt.replace(STATIC_CAMERA_SENTENCE, "")}`)
 ));
 
-const reviewer = reviewerFromEnv();
+const maxUsd = Number(argument("max-usd", "Infinity"));
+const baseReviewer = reviewerFromEnv();
+const paid = baseReviewer.provider !== "nvidia";
+if (paid && Number.isFinite(maxUsd)
+  && !(Number(process.env.REVIEW_USD_PER_MILLION_INPUT_TOKENS) && Number(process.env.REVIEW_USD_PER_MILLION_OUTPUT_TOKENS))) {
+  throw new Error("Set REVIEW_USD_PER_MILLION_INPUT_TOKENS and REVIEW_USD_PER_MILLION_OUTPUT_TOKENS so --max-usd can be enforced.");
+}
+
+/** Every reviewer call is counted; a call that could take spend past --max-usd is not made. */
+const spend = { usd: 0, calls: 0, largestCall: 0.1, stopped: false };
+const reviewer: Reviewer = {
+  ...baseReviewer,
+  async complete(request, signal) {
+    if (spend.usd + spend.largestCall > maxUsd) {
+      spend.stopped = true;
+      throw new Error("spend_cap_reached");
+    }
+    const reply = await baseReviewer.complete(request, signal);
+    spend.calls += 1;
+    if (reply.costUsd === null && paid) throw new Error("cost_unknown");
+    spend.usd += reply.costUsd ?? 0;
+    spend.largestCall = Math.max(spend.largestCall, reply.costUsd ?? 0);
+    return reply;
+  },
+};
+
+/** Results never keep image data: data URLs or long base64 runs are replaced before saving. */
+const IMAGE_DATA = /data:image\/|[A-Za-z0-9+/=]{200,}/;
+const withoutImageData = (value: unknown): unknown => {
+  if (typeof value === "string") return IMAGE_DATA.test(value) ? "[removed: image data]" : value;
+  if (Array.isArray(value)) return value.map(withoutImageData);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, withoutImageData(item)]));
+  return value;
+};
+
 const rows: Array<Record<string, unknown>> = [];
-console.log(`Reviewer ${reviewer.provider} / ${reviewer.model}, ${runs} runs per slide\n`);
+console.log(`Reviewer ${reviewer.provider} / ${reviewer.model}, ${runs} runs per slide${Number.isFinite(maxUsd) ? `, spend cap $${maxUsd}` : ""}\n`);
 
 for (const slide of slides) {
+  if (spend.stopped) break;
   const images = await reviewImages(readFileSync(slide.background), slide.text ? readFileSync(slide.text) : null);
   const request = slideReviewRequest({ images, hasText: slide.text !== null, slideName: slide.id });
-  for (let run = 1; run <= runs; run += 1) {
+  for (let run = 1; run <= runs && !spend.stopped; run += 1) {
     const started = Date.now();
     try {
       const outcome = await reviewSlide(reviewer, request, { deadline: Date.now() + 120_000 });
@@ -82,5 +117,19 @@ for (const slide of slides) {
 
 mkdirSync("benchmarks/review/results", { recursive: true });
 const file = `benchmarks/review/results/${new Date().toISOString().replace(/[:.]/g, "-")}-${reviewer.provider}.json`;
-writeFileSync(file, JSON.stringify({ provider: reviewer.provider, model: reviewer.model, runs, rows }, null, 2));
-console.log(`\nFull replies: ${file}`);
+writeFileSync(file, JSON.stringify(withoutImageData({ provider: reviewer.provider, model: reviewer.model, runs, spend, rows }), null, 2));
+
+const attempted = rows.length;
+const validRuns = rows.filter((row) => row.valid).length;
+const hits = (slideId: string, labelPart: string) => {
+  const mine = rows.filter((row) => row.slide === slideId);
+  const found = mine.filter((row) => row.valid && Object.entries(row.flags as Record<string, boolean>)
+    .some(([label, hit]) => hit && label.includes(labelPart))).length;
+  return `${found}/${mine.length}`;
+};
+console.log(`\nValid JSON: ${validRuns}/${attempted} runs (${attempted ? Math.round((validRuns / attempted) * 100) : 0}%)`);
+console.log(`Subject close to text: potty ${hits("potty", "hair bun")}, meal-prep ${hits("meal-prep", "PART 4")}, understanding ${hits("understanding", "headline")}`);
+console.log(`Room to walk toward the text (potty): ${hits("potty", "walk")}`);
+console.log(`Salmon zoom or close-up risk: ${hits("salmon-cakes", "close-up")}`);
+console.log(`Spend: $${spend.usd.toFixed(4)} over ${spend.calls} replies${spend.stopped ? " (stopped at the spend cap)" : ""}`);
+console.log(`Replies (no image data): ${file}`);
