@@ -6,7 +6,7 @@ import Icon from "./Icons";
 import c from "./creation.module.css";
 
 type Props = {
-  creations: CarouselCreationSummary[];
+  creations: Array<CarouselCreationSummary & { slidesInProgress?: number }>;
   activeId: string | null;
   busy: boolean;
   onNew: () => void;
@@ -123,6 +123,7 @@ export function CreationSidebar({
                       day: "numeric",
                     })}
                   </small>
+                  {Boolean(creation.slidesInProgress) && <small>{creation.slidesInProgress} {creation.slidesInProgress===1?'slide':'slides'} in progress</small>}
                 </span>
               </button>
             ))}

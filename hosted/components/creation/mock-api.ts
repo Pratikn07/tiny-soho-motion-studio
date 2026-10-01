@@ -43,6 +43,7 @@ export function createMockCreationApi(options: {
   uploadDelayMs?: number;
   failUploadsFor?: (fileName: string) => boolean;
   objectUrl?: (file: Blob) => string;
+  running?: () => Array<{projectId:string;slideId:string}>;
 } = {}): CreationApi & { files: Map<string, File> } {
   const measure = options.measure ?? measureInBrowser;
   const objectUrl = options.objectUrl ?? ((file: Blob) => URL.createObjectURL(file));
@@ -88,7 +89,7 @@ export function createMockCreationApi(options: {
           name: creation.document.name,
           updatedAt: creation.updatedAt,
           slideCount: creation.document.slides.length,
-          slidesInProgress: 0,
+          slidesInProgress: new Set(options.running?.().filter(run=>run.projectId===creation.id).map(run=>run.slideId)??[]).size,
           coverAssetId: creation.document.slides[0]?.layers.backgroundAssetId ?? null,
         }));
     },

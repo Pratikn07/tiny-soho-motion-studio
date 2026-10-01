@@ -1,6 +1,6 @@
 # Gates: remaining creation UI
 
-OWNS: hosted/components/creation/text-animation/**, hosted/components/creation/takes/**, hosted/components/creation/export/**, hosted/components/creation/budget/**, hosted/components/creation/panels.ts, hosted/components/creation/mock-api.ts, hosted/tests/creation-*.test.*, creative-vision/src/finish.py, creative-vision/tests/test_finish.py, GATES.md
+OWNS: hosted/components/creation/text-animation/**, hosted/components/creation/takes/**, hosted/components/creation/export/**, hosted/components/creation/budget/**, hosted/components/creation/panels.ts, hosted/components/creation/mock-api.ts, hosted/components/creation/CreationShell.tsx, hosted/components/creation/CreationPreview.tsx, hosted/components/creation/useCreation.ts, hosted/components/carousel/CreationSidebar.tsx, hosted/app/api/takes/**, hosted/tests/runs-routes.test.ts, hosted/tests/creation-*.test.*, docs/tasks/T0-contract.md, creative-vision/src/finish.py, creative-vision/tests/test_finish.py, GATES.md
 
 Scope: Finish U4, U3 and O1 budget UI against the approved task contracts, verify locally, and publish reviewable task PRs.
 
@@ -10,9 +10,9 @@ Scope: Finish U4, U3 and O1 budget UI against the approved task contracts, verif
   EVIDENCE: automatic-evidence=v1; definition-sha256=84c6ba423e893207d869dd8efbe007017bedd8eba0259388a2be0107c57769b6; exit=0; EXPECT=matched; output-sha256=3066cab4e734ba1bc8f08ba32b594623f564be3cebc50388f3e38d6a6b170a5f; output-bytes=349; shell=/bin/sh; cwd=/Users/pratik.nandoskar/.codex/worktrees/creation-ui/tiny-soho-studio; path=5c2abfba0001/29 entries
 
 - [ ] G2: Persisted runs recover after remount, polling settles, take selection and fresh signed exports work.
-  CHECK: npm --prefix hosted test -- --run tests/creation-takes.test.tsx
-  EXPECT: Test Files  1 passed
-  EVIDENCE: local U3 implementation and 21 targeted tests pass on draft PR #58; not present on this main-based O1 branch. Real creator gate G7 remains unmet.
+  CHECK: npm --prefix hosted test -- --run tests/creation-takes.test.tsx tests/runs-routes.test.ts
+  EXPECT: Test Files  2 passed
+  EVIDENCE: pending
 
 - [x] G3: Budget card displays server spend, reservations, cap and accepted-clip cost with loading/error recovery.
   CHECK: npm --prefix hosted test -- --run tests/creation-budget.test.tsx
@@ -36,8 +36,10 @@ Scope: Finish U4, U3 and O1 budget UI against the approved task contracts, verif
 Ruling: Existing docs/tasks/U4, U3 and O1 are the supplied design and implementation plans; execute them in order with native implementation and a final independent review.
 Ruling: Backend/provider tasks remain with Agent 1; do not change credentials, deploy or merge held #43. Live integration stays explicitly unmet until configured providers and owner session are available.
 Ruling: O1 UI uses task/o1-budget-card from current main; task/o1-cost-budget belongs to Agent 1. Implement G3 and verify integration without changing backend billing or writing to the shared database.
-Ruling: G2's implementation is published on draft #58, not on this O1 branch; its targeted 21 tests and mock ten-slide recovery/ordered downloads passed there. It stays unmerged until G7 passes. P2 #43 is still an open draft as verified on 2026-10-01.
+Ruling: G2's implementation is published on draft #58 and stays unmerged until G7 passes. P2 #43 is still an open draft as verified on 2026-10-01. U3 is rebased onto main including O1 UI #59 (8d37f98); verify the combined screens before pushing.
 Ruling: U4 includes the small P4 cover-frame fix exposed by review; the saved first-frame choice must affect the generated cover.
+Ruling: U3 extends the shared panel/save integration so choosing a take uses the existing write queue and cannot overwrite another open creation. Mock routes load only in the development preview or tests.
+Ruling: U3 adds owner-only GET /api/takes/:id/run and its authorization tests, so a previously chosen take survives a newer run. It adds the missing running count to the shared sidebar and refreshes that count on focus and while open.
 
 - [x] G8: First-frame covers follow animation while default covers retain the complete last frame.
   CHECK: /tmp/tiny-soho-vision-check/bin/python -m pytest creative-vision/tests/test_finish.py -q

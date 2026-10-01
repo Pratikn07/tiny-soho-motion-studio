@@ -124,6 +124,7 @@ Provider job:  existing states (hosted/lib/jobs.ts) unchanged; every state is a 
 | `GET /api/review-runs/:id` | Review status and `SlideReview` | P1 |
 | `POST /api/creations/:id/slides/:slideId/runs` | Start a pipeline run (`modelId`, `motion`, `seeds`, `idempotencyKey`) | B3 |
 | `GET /api/runs/:id` | Run state, takes, check results, signed URLs (300 s) | B3 |
+| `GET /api/takes/:id/run` | Owner-only run lookup for a chosen take, including older runs; same `RunResponse` and fresh signed URLs | U3 integration |
 | `POST /api/runs/:id/cancel`, `POST /api/runs/:id/retry` | Cancel / add one attempt | B3 |
 | `POST /api/creations/:id/slides/:slideId/choose` | Set `chosenTakeId` | B3 |
 | `GET /api/catalog` | Enabled models with capabilities and cost per clip (`?creationId=&slideId=` adds `fit`) | B5 |

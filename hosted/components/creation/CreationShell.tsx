@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { MAX_SLIDES, type CreationSummary, type SlideV2 } from "@/lib/contract";
 import { CreationSidebar } from "@/components/carousel/CreationSidebar";
 import Icon from "@/components/carousel/Icons";
-import type { CreationApi } from "./api";
+import { isConflict, type CreationApi } from "./api";
 import { SLIDE_PANELS, TOOLBAR_ITEMS } from "./panels";
 import { ordered, useCreation, withOrder, type DocumentEdit } from "./useCreation";
 import { CreationUpload, type FilePickerHandle } from "./upload/CreationUpload";
@@ -96,6 +96,12 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
   useEffect(() => {
     if (store.saveState === "saved") void refreshList();
   }, [refreshList, store.saveState]);
+
+  useEffect(() => {
+    const timer=setInterval(()=>{if(document.visibilityState!=='hidden')void refreshList()},15000);
+    const focus=()=>void refreshList();window.addEventListener('focus',focus);
+    return()=>{clearInterval(timer);window.removeEventListener('focus',focus)};
+  },[refreshList]);
 
   // Signed preview URLs for slides whose layers are on the server and not shown from local files.
   useEffect(() => {
@@ -360,6 +366,16 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
                       {SLIDE_PANELS.map(({ id, title, Component }) => (
                         <section key={id} className={c.panel} aria-label={title}>
                           <Component creation={view} slide={selected} ready={status === "ready"} api={api} edit={edit}
+                            saveServerStep={async(change)=>{
+                              const saved=store.flush();
+                              await store.step(async(latest)=>{
+                                await saved;
+                                let creation;
+                                try { creation=await change(latest); }
+                                catch(error) { if(!isConflict(error))throw error;creation=await change(await api.getCreation(latest.id)); }
+                                return {creation,value:null};
+                              });
+                            }}
                             editSlide={(change) => editSlide(selected.id, change)} />
                         </section>
                       ))}

@@ -7,6 +7,7 @@ import { ModelPanel } from "./model/ModelPanel";
 import { MotionPanel } from "./motion/MotionPanel";
 import { TextAnimationPanel } from "./text-animation/TextAnimationPanel";
 import { BudgetCard } from "./budget/BudgetCard";
+import { TakesPanel } from "./takes/TakesPanel";
 
 /**
  * Slots in the creation page. Each later task adds its panel with one line here and keeps its code in its own
@@ -22,6 +23,8 @@ export type SlidePanelProps = {
   edit: (change: DocumentEdit) => void;
   /** Changes only this slide. */
   editSlide: (change: (slide: SlideV2) => SlideV2) => void;
+  /** Runs an owner-only document mutation after earlier edits, with the current revision. */
+  saveServerStep: (change: (latest: CreationView) => Promise<CreationView>) => Promise<void>;
 };
 
 export type SlidePanel = { id: string; title: string; Component: ComponentType<SlidePanelProps> };
@@ -31,6 +34,7 @@ export const SLIDE_PANELS: SlidePanel[] = [
   { id: "motion", title: "Motion", Component: MotionPanel }, // U2
   { id: "model", title: "Video model", Component: ModelPanel }, // U2
   { id: "text-animation", title: "Text animation", Component: TextAnimationPanel }, // U4
+  { id: "takes", title: "Takes and downloads", Component: TakesPanel }, // U3
 ];
 
 export type ToolbarItemProps = { api: CreationApi; creation: CreationView | null };
