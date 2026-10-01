@@ -9,6 +9,7 @@ from typing import Protocol
 
 from PIL import Image
 from .carousel import compose_carousel
+from .finish import run_finish_job
 
 from services.vision.composition import build_overlay_command, validate_overlay_dimensions, video_dimensions
 from services.vision.image_input import decode_image
@@ -16,7 +17,7 @@ from services.vision.overlay import create_typography_overlay
 from services.vision.schemas.ocr import OcrRegion
 
 
-CPU_SAFE_OPERATIONS = {"inspect", "overlay", "plate", "compose"}
+CPU_SAFE_OPERATIONS = {"inspect", "overlay", "plate", "compose", "finish"}
 OPTIONAL_OPERATIONS = {"ocr", "segment", "layers"}
 
 
@@ -41,6 +42,7 @@ class VisionResult:
     height: int | None
     error_code: str | None = None
     error_message: str | None = None
+    data: dict[str, object] | None = None  # Operation results stored on the job (finish, check).
 
 
 class VisionStorage(Protocol):
@@ -125,6 +127,8 @@ def process_vision_job(job: VisionJob, storage: VisionStorage, processor: Vision
             error_code="vision_operation_invalid",
             error_message="Vision operation is not supported by this service.",
         )
+    if job.operation == "finish":
+        return run_finish_job(job, storage, processor.ffmpeg_path)  # type: ignore[arg-type]
 
     source, source_mime, _ = storage.download_owned_source(job.owner_user_id, job.project_id, job.source_asset_id)
     if job.operation == "inspect":

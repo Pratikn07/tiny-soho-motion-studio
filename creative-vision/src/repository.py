@@ -12,6 +12,7 @@ from PIL import Image
 from io import BytesIO
 
 from .config import HostedVisionConfig
+from .finish import UUID
 from .processor import VisionJob, VisionStorage
 
 
@@ -106,13 +107,24 @@ class SupabaseVisionRepository:
             raise VisionRepositoryError("Vision input could not be downloaded.")
         return response.content, asset["mime_type"], url
 
-    def upload_derived(self, job: VisionJob, object_path: str, data: bytes, mime_type: str, kind: str) -> str:
+    def find_derived(self, job: VisionJob, object_path: str) -> str | None:
+        rows = self._request(
+            "GET",
+            "/rest/v1/creative_studio_assets",
+            params={"select": "id", "object_path": f"eq.{object_path}", "project_id": f"eq.{job.project_id}",
+                    "owner_user_id": f"eq.{job.owner_user_id}", "limit": "1"},
+        ).json()
+        return rows[0]["id"] if isinstance(rows, list) and rows else None
+
+    def upload_derived(self, job: VisionJob, object_path: str, data: bytes, mime_type: str, kind: str, *, overwrite: bool = False) -> str:
+        """Upload and record one output. `overwrite` is for fixed take paths: a crashed attempt may have left the
+        file without its asset row, and a concurrent attempt may record the row first (object_path is unique)."""
         self.extend_job_lease(job)
         uploaded = self._request(
             "POST",
             f"/storage/v1/object/creative-studio/{quote(object_path, safe='/')}",
             content=data,
-            headers={"Content-Type": mime_type, "x-upsert": "false"},
+            headers={"Content-Type": mime_type, "x-upsert": "true" if overwrite else "false"},
         )
         if uploaded.is_error:
             raise VisionRepositoryError("Vision output could not be uploaded.")
@@ -123,7 +135,20 @@ class SupabaseVisionRepository:
                 width, height = image.size
         asset_uuid = str(uuid.uuid4())
         self.extend_job_lease(job)
-        created = self._request(
+        try:
+            created = self._create_asset(job, asset_uuid, object_path, data, mime_type, kind, width, height)
+        except VisionRepositoryError:
+            existing = self.find_derived(job, object_path) if overwrite else None
+            if existing:
+                return existing
+            raise
+        if not isinstance(created, list) or len(created) != 1:
+            raise VisionRepositoryError("Vision output metadata could not be saved.")
+        return created[0]["id"]
+
+    def _create_asset(self, job: VisionJob, asset_uuid: str, object_path: str, data: bytes, mime_type: str, kind: str,
+                      width: int | None, height: int | None) -> Any:
+        return self._request(
             "POST",
             "/rest/v1/creative_studio_assets",
             headers={"Content-Type": "application/json", "Prefer": "return=representation"},
@@ -143,11 +168,8 @@ class SupabaseVisionRepository:
                 "provenance": {"source": "vision-hosted", "visionJobId": job.id, "toolVersion": self.config.service_version},
             },
         ).json()
-        if not isinstance(created, list) or len(created) != 1:
-            raise VisionRepositoryError("Vision output metadata could not be saved.")
-        return created[0]["id"]
 
-    def complete_job(self, job: VisionJob, *, status: str, asset_ids: list[str], error_code: str | None, error_message: str | None) -> None:
+    def complete_job(self, job: VisionJob, *, status: str, asset_ids: list[str], error_code: str | None, error_message: str | None, data: dict[str, object] | None = None) -> None:
         self.extend_job_lease(job)
         response = self._request(
             "PATCH",
@@ -162,6 +184,8 @@ class SupabaseVisionRepository:
                 "worker_lease_id": None,
                 "worker_lease_expires_at": None,
                 "updated_at": datetime.now(UTC).isoformat(),
+                # `result` exists only with the creation v2 migration, which is also what allows finish/check jobs.
+                **({"result": data} if data is not None else {}),
             },
         )
 
@@ -172,7 +196,7 @@ class SupabaseVisionRepository:
         now = datetime.now(UTC).isoformat()
         rows = [
             {"capability_id": operation, "service_version": self.config.service_version, "status": "available", "reason": None, "refreshed_at": now, "updated_at": now}
-            for operation in ("inspect", "overlay", "plate", "compose", "carousel_compose")
+            for operation in ("inspect", "overlay", "plate", "compose", "carousel_compose", "finish")
         ] + [
             {"capability_id": operation, "service_version": self.config.service_version, "status": "unavailable", "reason": "Not configured in the CPU-safe hosted Vision service.", "refreshed_at": now, "updated_at": now}
             for operation in ("ocr", "segment", "layers")
@@ -200,8 +224,20 @@ class JobStorage(VisionStorage):
             raise VisionRepositoryError("Vision input ownership check failed.")
         return self.repository.download_asset(self.job, asset_id)
 
-    def upload_derived(self, object_path: str, data: bytes, mime_type: str, kind: str) -> str:
-        expected_prefix = f"owners/{self.job.owner_user_id}/projects/{self.job.project_id}/vision/{self.job.id}/"
-        if not object_path.startswith(expected_prefix):
+    def _allowed(self, object_path: str) -> bool:
+        project = f"owners/{self.job.owner_user_id}/projects/{self.job.project_id}/"
+        prefixes = [f"{project}vision/{self.job.id}/"]
+        take_id = self.job.options.get("takeId")
+        if self.job.operation == "finish" and isinstance(take_id, str) and UUID.match(take_id):
+            prefixes.append(f"{project}takes/{take_id}/")
+        return ".." not in object_path and any(object_path.startswith(prefix) for prefix in prefixes)
+
+    def find_derived(self, object_path: str) -> str | None:
+        if not self._allowed(object_path):
             raise VisionRepositoryError("Vision output path is outside the current project.")
-        return self.repository.upload_derived(self.job, object_path, data, mime_type, kind)
+        return self.repository.find_derived(self.job, object_path)
+
+    def upload_derived(self, object_path: str, data: bytes, mime_type: str, kind: str, *, overwrite: bool = False) -> str:
+        if not self._allowed(object_path):
+            raise VisionRepositoryError("Vision output path is outside the current project.")
+        return self.repository.upload_derived(self.job, object_path, data, mime_type, kind, overwrite=overwrite)

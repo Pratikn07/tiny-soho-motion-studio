@@ -54,7 +54,7 @@ def claim_and_process_once(repository: SupabaseVisionRepository, processor: Visi
             return True
         repository.complete_job(
             job, status=result.status, asset_ids=result.asset_ids,
-            error_code=result.error_code, error_message=result.error_message,
+            error_code=result.error_code, error_message=result.error_message, data=result.data,
         )
         return True
     finally:
