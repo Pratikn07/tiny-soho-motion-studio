@@ -47,7 +47,7 @@ it("writes defaults, a slide override and the cover choice without altering othe
   const draw = { clearRect: vi.fn(), drawImage: vi.fn() };
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(draw as never);
   vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
-  const props = () => ({ creation, slide: creation.document.slides[0], ready: true, api, edit, editSlide });
+  const props = () => ({ creation, slide: creation.document.slides[0], ready: true, api, edit, editSlide, saveServerStep: async()=>{} });
   const ui = render(<TextAnimationPanel {...props()} />);
   fireEvent.change(screen.getByLabelText("Text style"), { target: { value: "fade" } });
   expect(creation.document.defaults.textAnimation.style).toBe("fade");

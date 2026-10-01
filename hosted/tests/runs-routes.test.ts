@@ -5,6 +5,7 @@ import { POST as startRun } from "@/app/api/creations/[id]/slides/[slideId]/runs
 import { POST as cancelRun } from "@/app/api/runs/[id]/cancel/route";
 import { POST as retryRun } from "@/app/api/runs/[id]/retry/route";
 import { GET as getRun } from "@/app/api/runs/[id]/route";
+import { GET as getTakeRun } from "@/app/api/takes/[id]/run/route";
 import { requireOwner } from "@/lib/auth";
 import { creationViewSchema, runResponseSchema, type PipelineRunRow } from "@/lib/contract";
 import { contractFixtures } from "@/lib/contract/fixtures";
@@ -174,6 +175,13 @@ describe("a run on the server", () => {
     const view = creationViewSchema.parse(await chosen.json());
     expect(view.revision).toBe(5);
     expect(view.document.slides[0]).toMatchObject({ chosenTakeId: reopened.takes[1].id, latestRunId: run.id });
+    const chosenRun=await getTakeRun(call("GET"),runParams(reopened.takes[1].id));
+    expect(chosenRun.status).toBe(200);
+    expect(chosenRun.headers.get('Cache-Control')).toBe('no-store');
+    expect(runResponseSchema.parse(await chosenRun.json()).run.id).toBe(run.id);
+    expect((await getTakeRun(call('GET',undefined,'other'),runParams(reopened.takes[1].id))).status).toBe(404);
+    expect((await getTakeRun(call('GET',undefined,'missing'),runParams(reopened.takes[1].id))).status).toBe(401);
+    expect((await getTakeRun(call('GET'),runParams(crypto.randomUUID()))).status).toBe(404);
   });
 
   it("cancels, and lets the creator try another take after it stops", async () => {

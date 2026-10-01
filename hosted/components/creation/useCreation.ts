@@ -47,6 +47,7 @@ export function useCreation(api: CreationApi) {
 
   /** Saves every unsaved edit. On a revision conflict it reloads once and applies the edits again. */
   const flush = useCallback(() => {
+    const owner = generation.current;
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     return enqueue(async (latest) => {
@@ -62,6 +63,7 @@ export function useCreation(api: CreationApi) {
           if (!isConflict(error)) throw error;
           saved = await save(await api.getCreation(latest.id));
         }
+        if (owner !== generation.current) throw new Error("This creation is no longer open.");
         editsRef.current = editsRef.current.slice(pending.length);
         setEdits(editsRef.current);
         accept(saved);
@@ -69,6 +71,7 @@ export function useCreation(api: CreationApi) {
         setSaveError("");
         return saved;
       } catch (error) {
+        if (owner !== generation.current) throw error;
         setSaveState("error");
         setSaveError(error instanceof Error ? error.message : "Your changes couldn't be saved.");
         throw error;
@@ -87,13 +90,15 @@ export function useCreation(api: CreationApi) {
   }, [flush]);
 
   /** Runs a server step (for example finalising a slide) after earlier writes, with the newest revision. */
-  const step = useCallback(<T,>(task: (latest: CreationView) => Promise<{ creation: CreationView; value: T }>) => (
-    enqueue(async (latest) => {
+  const step = useCallback(<T,>(task: (latest: CreationView) => Promise<{ creation: CreationView; value: T }>) => {
+    const owner = generation.current;
+    return enqueue(async (latest) => {
       const { creation, value } = await task(latest);
+      if (owner !== generation.current) throw new Error("This creation is no longer open.");
       accept(creation);
       return value;
-    })
-  ), [accept, enqueue]);
+    });
+  }, [accept, enqueue]);
 
   const open = useCallback((view: CreationView | null) => {
     generation.current += 1;
