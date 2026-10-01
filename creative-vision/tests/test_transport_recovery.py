@@ -59,3 +59,26 @@ def test_lost_lease_cannot_upload_or_complete():
     assert client.request.call_args.args[0] == 'PATCH'
     with pytest.raises(VisionRepositoryError):
         repo.complete_job(job,status='completed',asset_ids=['out'],error_code=None,error_message=None)
+
+def test_retried_job_reuses_its_own_partial_upload():
+    from src.processor import VisionJob
+    from src.repository import JobStorage
+    path = 'owners/owner/projects/project/vision/job/composed.mp4'
+    calls = []
+    def respond(method, url, **kwargs):
+        calls.append((method, url, kwargs.get('headers', {})))
+        if method == 'PATCH':
+            return httpx.Response(200, json=[{'id': 'job'}])
+        if '/storage/v1/object/' in url:
+            return httpx.Response(200, json={'Key': path})
+        if method == 'POST':
+            return httpx.Response(409, json={'code': '23505', 'message': 'duplicate key value'})
+        return httpx.Response(200, json=[{'id': 'asset-from-first-attempt'}])
+    client = Mock(); client.request.side_effect = respond
+    repo = SupabaseVisionRepository(HostedVisionConfig('https://storage.example', 'test-only', 1), client)
+    job = VisionJob('job', 'owner', 'project', 'source', 'compose', {}, [], worker_lease_id='lease')
+    assert JobStorage(repo, job).upload_derived(path, b'video', 'video/mp4', 'derived-video') == 'asset-from-first-attempt'
+    upload = next(call for call in calls if '/storage/v1/object/' in call[1])
+    assert upload[2]['x-upsert'] == 'true'
+    with pytest.raises(VisionRepositoryError):
+        JobStorage(repo, job).upload_derived('owners/owner/projects/project/vision/other-job/x.mp4', b'v', 'video/mp4', 'derived-video')

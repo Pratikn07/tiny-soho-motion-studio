@@ -237,7 +237,8 @@ class JobStorage(VisionStorage):
             raise VisionRepositoryError("Vision output path is outside the current project.")
         return self.repository.find_derived(self.job, object_path)
 
-    def upload_derived(self, object_path: str, data: bytes, mime_type: str, kind: str, *, overwrite: bool = False) -> str:
+    def upload_derived(self, object_path: str, data: bytes, mime_type: str, kind: str, *, overwrite: bool = True) -> str:
+        # Every allowed path belongs to this job or its take, so a retry may replace its own partial upload.
         if not self._allowed(object_path):
             raise VisionRepositoryError("Vision output path is outside the current project.")
         return self.repository.upload_derived(self.job, object_path, data, mime_type, kind, overwrite=overwrite)
