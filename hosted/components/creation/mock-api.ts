@@ -4,6 +4,20 @@ import { CreationApiError, type CreationApi } from "./api";
 
 /** In-memory creation API for tests and the development preview. Never imported by the production page. */
 
+export type MockRouteContext = {
+  getCreation: (id: string) => CreationView;
+  /** Replaces a creation's document (as the server would) and returns the new view. */
+  saveDocument: (id: string, document: CreationDocumentV2) => CreationView;
+};
+export type MockRoute = {
+  method: "GET" | "POST" | "PUT";
+  path: RegExp;
+  handle: (match: RegExpMatchArray, body: unknown, context: MockRouteContext) => unknown | Promise<unknown>;
+};
+
+/** Endpoints the panels add to the mock: each panel registers its routes with one line (see motion/, model/). */
+export const MOCK_ROUTES: MockRoute[] = [];
+
 export type MeasuredImage = { width: number; height: number };
 
 const measureInBrowser = async (file: Blob): Promise<MeasuredImage> => {
@@ -144,6 +158,20 @@ export function createMockCreationApi(options: {
         }),
       };
       return { creation: store(id, document), checks };
+    },
+    async fetchJson(path, init = {}) {
+      const method = init.method ?? (init.body === undefined ? "GET" : "POST");
+      const url = new URL(path, "https://mock.studio");
+      for (const route of MOCK_ROUTES) {
+        const match = route.method === method ? url.pathname.match(route.path) : null;
+        if (match) {
+          return structuredClone(await route.handle(match, init.body, {
+            getCreation: (id) => view(need(id)),
+            saveDocument: (id, document) => store(id, document),
+          }));
+        }
+      }
+      throw new CreationApiError(404, "not_found", `The mock has no route for ${method} ${url.pathname}.`);
     },
     async assetUrl(assetId) {
       const known = assets.get(assetId)?.file ?? files.get(assetId);
