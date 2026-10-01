@@ -123,7 +123,7 @@ export function fakeSupabase(tables: Record<string, Row[]>) {
           const object = objects.get(path);
           return object
             ? { data: { size: object.bytes.byteLength, contentType: object.contentType }, error: null }
-            : { data: null, error: { message: "Object not found" } };
+            : { data: null, error: { message: "Object not found", status: 400, statusCode: "404" } };
         },
         upload: async (path: string, bytes: Buffer, options: { contentType: string; upsert: boolean }) => {
           calls.uploads.push(path);
