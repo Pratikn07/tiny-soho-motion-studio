@@ -298,6 +298,8 @@ export function pipelineDependencies(client: WorkerClient, registry: ProviderReg
 }
 
 const TERMINAL_JOB = ["completed", "failed", "canceled"];
+/** Task id for a take whose raw.mp4 was already in storage: no provider was called for it. */
+const ALREADY_UPLOADED = "already-uploaded:";
 
 async function runPipelineJob(client: WorkerClient, job: WorkerJob & { input_assets?: unknown }, registry: ProviderRegistry) {
   const store = jobStore(client, job);
@@ -312,6 +314,21 @@ async function runPipelineJob(client: WorkerClient, job: WorkerJob & { input_ass
     }
     await processClaimedJob(job, {
       submit: async () => {
+        // An earlier attempt may have finished uploading before the worker recorded it. Use that clip and
+        // start no new provider call (a second GPU render or a second billable Alibaba task).
+        const existing = await client.storage.from(bucket).info(takeRawPath(job));
+        if (existing.error) {
+          // Storage's object-not-found response has HTTP 400 but statusCode "404".
+          // Every other failure leaves existence unknown: submitting could pay twice.
+          const error = existing.error as { statusCode?: unknown; status?: unknown };
+          if (Number(error.statusCode ?? error.status) !== 404) throw new Error("creative_job_storage_check_failed");
+        } else {
+          const size = Number(existing.data?.size ?? 0);
+          if (!existing.data || !Number.isFinite(size) || size <= 0 || size > videoMaxBytes || existing.data.contentType !== "video/mp4") {
+            throw new Error("creative_job_existing_output_invalid");
+          }
+          return `${ALREADY_UPLOADED}${String(job.options.takeId)}`;
+        }
         const media = Array.isArray(job.input_assets) ? job.input_assets as Array<{ assetId: string; role: string }> : [];
         const backgroundId = media.find((item) => item.role === "first_frame")?.assetId;
         const background = backgroundId ? await client.from("creative_studio_assets").select("object_path")
@@ -327,7 +344,8 @@ async function runPipelineJob(client: WorkerClient, job: WorkerJob & { input_ass
       },
       recordSubmitted: store.recordSubmitted,
       poll: async (taskId) => {
-        lastPoll = await provider.poll(taskId);
+        // The cost of the earlier attempt that made this clip is unknown here, so none is recorded for it.
+        lastPoll = taskId.startsWith(ALREADY_UPLOADED) ? { state: "succeeded", uploaded: true } : await provider.poll(taskId);
         return taskStatus(lastPoll);
       },
       ingest: async (resultUrl) => {
