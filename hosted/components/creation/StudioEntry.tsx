@@ -11,16 +11,19 @@ type Mode = "studio" | "creation" | "preview";
 
 /**
  * Chooses the creation page or the existing Carousel Studio. `?studio=creation` opens the new page behind the
- * normal sign-in; until O2's release flag, the existing Studio stays the default. In development only,
+ * normal sign-in. The server release flag makes creation the default; `?studio=legacy` returns to the old Studio. In development only,
  * `?studio=creation&mock=1` opens it on sample data with no sign-in and no network.
  */
-export function StudioEntry() {
-  const [mode, setMode] = useState<Mode>("studio");
+export function StudioEntry({ creationsV2Enabled = false }: { creationsV2Enabled?: boolean }) {
+  const [mode, setMode] = useState<Mode>(creationsV2Enabled ? "creation" : "studio");
   useEffect(() => {
     const params = new URL(window.location.href).searchParams;
-    if (params.get("studio") !== "creation") return;
+    if (params.get("studio") !== "creation") {
+      setMode(params.get("studio") === "legacy" ? "studio" : creationsV2Enabled ? "creation" : "studio");
+      return;
+    }
     setMode(process.env.NODE_ENV === "development" && params.get("mock") === "1" ? "preview" : "creation");
-  }, []);
+  }, [creationsV2Enabled]);
   if (mode === "preview") return <Suspense fallback={null}><CreationPreview /></Suspense>;
   return <HostedStudio creation={mode === "creation"} />;
 }

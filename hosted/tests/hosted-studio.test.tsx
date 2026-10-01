@@ -28,9 +28,16 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("hosted Carousel access", () => {
-  it("shows login without loading the workspace for signed-out visitors", async () => {
+  it("keeps the creation flow hidden when owner authorization fails", async () => {
+    harness.authorize.mockRejectedValue(new Error("Access denied"));
+    render(<HostedStudio creation />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Access denied");
+    expect(screen.queryByText("Drop the whole carousel here")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Old studio" })).toBeNull();
+  });
+  it.each([false, true])("shows login without loading a workspace for signed-out visitors (creation=%s)", async (creation) => {
     harness.getSession.mockResolvedValue({ data: { session: null } });
-    render(<HostedStudio />);
+    render(<HostedStudio creation={creation} />);
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeVisible();
     expect(harness.authorize).not.toHaveBeenCalled();
     expect(screen.queryByRole("region", { name: "Owner workspace" })).toBeNull();

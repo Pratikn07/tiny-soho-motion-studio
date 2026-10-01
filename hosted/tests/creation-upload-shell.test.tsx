@@ -49,6 +49,13 @@ afterEach(() => {
 });
 
 describe("creation page and layered upload", () => {
+  it("offers the old studio in Tools without needing a saved creation", async () => {
+    render(<CreationShell api={mockApi()} />);
+    await screen.findByText("Drop the whole carousel here");
+    const tools = screen.getByText("Tools", { selector: "summary" });
+    fireEvent.click(tools);
+    expect(screen.getByRole("link", { name: "Old studio" })).toHaveAttribute("href", "/?studio=legacy");
+  });
   it("takes 20 files in one drop, pairs them, checks each slide, and keeps order and names after a reload", async () => {
     const api = mockApi();
     const save = vi.spyOn(api, "saveCreation");
