@@ -12,7 +12,6 @@ import {
   layerFileStem,
   layerObjectPath,
   mimeTypeForLayerPath,
-  sizeOnlyChecks,
   slideFolder,
   withSlideLayers,
   type LayerImage,
@@ -22,6 +21,7 @@ import { StudioError } from "@/lib/errors";
 import { routeErrorResponse } from "@/lib/http";
 import { openCreations, type LayerAssetRow } from "@/lib/repo/creations";
 import { validateSourceImage } from "@/lib/storage";
+import { runUploadChecks } from "@/lib/upload-checks";
 
 export const maxDuration = 60;
 
@@ -64,8 +64,18 @@ export async function POST(request: Request, context: Context) {
   }
 }
 
+type FinalisedLayer = { asset: LayerAssetRow; bytes: Buffer };
+
+async function readLayer(scope: Scope, asset: LayerAssetRow): Promise<FinalisedLayer> {
+  const downloaded = await scope.client.storage.from(bucket).download(asset.object_path);
+  if (downloaded.error || !downloaded.data) {
+    throw new StudioError(502, "upload_incomplete", "The layer could not be read. Try again.");
+  }
+  return { asset, bytes: Buffer.from(await downloaded.data.arrayBuffer()) };
+}
+
 /** Reads the uploaded object, validates it and records its asset once; a retry returns the recorded asset. */
-async function finaliseLayer(scope: Scope, layer: LayerName, assetId: string): Promise<LayerAssetRow> {
+async function finaliseLayer(scope: Scope, layer: LayerName, assetId: string): Promise<FinalisedLayer> {
   const stem = layerFileStem(layer, assetId);
   const existing = await scope.repo.getAsset(assetId);
   if (existing) {
@@ -76,7 +86,7 @@ async function finaliseLayer(scope: Scope, layer: LayerName, assetId: string): P
     ) {
       throw new StudioError(409, "asset_conflict", "This layer ID belongs to another upload.");
     }
-    return existing;
+    return readLayer(scope, existing);
   }
   const storage = scope.client.storage.from(bucket);
   const listed = await storage.list(scope.folder, { search: stem, limit: 10 });
@@ -94,7 +104,7 @@ async function finaliseLayer(scope: Scope, layer: LayerName, assetId: string): P
     throw new StudioError(502, "upload_incomplete", "The layer upload is incomplete. Try again.");
   }
   const image = await validateSourceImage(new File([downloaded.data], object.name, { type: mimeType }));
-  return scope.repo.insertLayerAsset({
+  const asset = await scope.repo.insertLayerAsset({
     id: assetId,
     projectId: scope.projectId,
     kind: LAYER_ASSET_KINDS[layer],
@@ -106,6 +116,7 @@ async function finaliseLayer(scope: Scope, layer: LayerName, assetId: string): P
     height: image.height,
     sha256: image.sha256,
   });
+  return { asset, bytes: image.bytes };
 }
 
 const layerImage = (asset: LayerAssetRow): LayerImage => {
@@ -128,19 +139,19 @@ export async function PUT(request: Request, context: Context) {
       return Response.json(replay);
     }
 
-    const background = layerImage(await finaliseLayer(scope, "background", input.background.assetId));
-    let text: LayerImage | null = null;
-    if (input.text) text = layerImage(await finaliseLayer(scope, "text", input.text.assetId));
+    const background = await finaliseLayer(scope, "background", input.background.assetId);
+    let text: FinalisedLayer | null = null;
+    if (input.text) text = await finaliseLayer(scope, "text", input.text.assetId);
     else if (textAssetId) {
       const stored = await scope.repo.getAsset(textAssetId);
       if (!stored) throw new StudioError(400, "layers_invalid", "The slide's text layer is missing. Upload it again.");
-      text = layerImage(stored);
+      text = await readLayer(scope, stored);
     }
 
-    const checks = await sizeOnlyChecks(background, text);
+    const checks = await runUploadChecks(background.bytes, text?.bytes ?? null);
     const document = withSlideLayers(scope.creation.document, scope.slideId, {
-      background,
-      textAssetId: text?.assetId ?? null,
+      background: layerImage(background.asset),
+      textAssetId: text?.asset.id ?? null,
       checks,
     });
     const body: LayerFinaliseResponse = {

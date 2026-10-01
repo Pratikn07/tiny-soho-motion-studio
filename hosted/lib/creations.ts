@@ -66,22 +66,6 @@ export function mimeTypeForLayerPath(objectPath: string) {
 export type LayerImage = { assetId: string; width: number; height: number };
 
 /**
- * Upload checks until B2 lands: only the pixel sizes. The route passes the stored layers of the slide, so a
- * new background is also compared with a text layer uploaded earlier.
- */
-export async function sizeOnlyChecks(background: LayerImage, text: LayerImage | null): Promise<UploadCheckResult> {
-  if (!text || (text.width === background.width && text.height === background.height)) return { ok: true, items: [] };
-  return {
-    ok: false,
-    items: [{
-      code: "size_mismatch",
-      severity: "error",
-      message: `The text layer is ${text.width}×${text.height} but the background is ${background.width}×${background.height}. Export both at the same size.`,
-    }],
-  };
-}
-
-/**
  * Points the slide at new layers. A new background or text layer makes the slide's AI review stale, so its
  * `reviewRunId` is dropped; motion, runs and the chosen take stay for the creator to decide.
  */
