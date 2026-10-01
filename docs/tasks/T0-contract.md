@@ -126,7 +126,8 @@ Provider job:  existing states (hosted/lib/jobs.ts) unchanged; every state is a 
 | `GET /api/runs/:id` | Run state, takes, check results, signed URLs (300 s) | B3 |
 | `POST /api/runs/:id/cancel`, `POST /api/runs/:id/retry` | Cancel / add one attempt | B3 |
 | `POST /api/creations/:id/slides/:slideId/choose` | Set `chosenTakeId` | B3 |
-| `GET /api/catalog` | Enabled models with capabilities and cost per clip | B5 |
+| `GET /api/catalog` | Enabled models with capabilities and cost per clip (`?creationId=&slideId=` adds `fit`) | B5 |
+| `POST /api/catalog/acknowledgements` | Accept one provider's billing (`{ provider }`), once per price version | B5 |
 | `GET /api/budget` | Month-to-date spend, cap, remaining | O1 |
 
 Errors use the existing `hosted/lib/errors.ts` codes plus: `budget_exceeded`, `model_unsupported_for_slide`,
@@ -284,3 +285,15 @@ always `{ error: { code, message } }`.
   - New RPC `claim_creative_studio_provider_job(allowed_providers text[])` (B4: the worker claims only providers it
     has credentials for). The legacy `claim_creative_studio_job()` now claims only `alibaba` jobs, so the current
     worker can never send a Modal job to Alibaba.
+- 2026-09-30 (B5, Agent 1):
+  - `GET /api/catalog` takes `?creationId=&slideId=` together (`catalogQuerySchema`): slides live inside a creation's
+    document, so the slide id alone cannot be looked up.
+  - `fit.ok: false` greys a model out (no background yet, failed upload checks, size not checked). `fit.ok: true` with
+    a `reason` is a warning shown next to a selectable model, for example a Wan model that cannot pin the end frame
+    on a slide with text, or a model that is not calibrated. The catalog fixture is now generated from the real
+    catalog (a hosted test keeps them equal).
+  - New `POST /api/catalog/acknowledgements` `{ provider }` → `{ provider, version, acknowledgedAt }`
+    (`billingAcknowledgementRequestSchema` / `billingAcknowledgementResponseSchema`). Stored in the existing
+    `creative_studio_model_acknowledgements` table as `model_id = 'provider:<id>'`, `contract_version` = the billing
+    version (`modal-billing-v1`, `alibaba-billing-v1`), so no migration is needed. Existing per-model Alibaba
+    acknowledgements still count for Alibaba.

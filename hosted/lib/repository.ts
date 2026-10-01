@@ -9,6 +9,7 @@ import type {
 } from "@/lib/creative-suite";
 import type { DirectorApprovalJob } from "@/lib/director";
 import type { StudioJobStatus } from "@/lib/jobs";
+import { PROVIDER_BILLING_VERSIONS } from "@/lib/model-acknowledgements";
 import type { OwnedRecord, Owner } from "@/lib/types";
 import type { MediaRole, VideoTask } from "@/lib/video-catalog";
 
@@ -559,6 +560,7 @@ export class StudioRepository {
   async acknowledgeModel(input: {
     modelId: string;
     contractVersion: string;
+    textVersion?: string;
   }): Promise<StudioModelAcknowledgement> {
     const result = (await this.client
       .from("creative_studio_model_acknowledgements")
@@ -567,7 +569,7 @@ export class StudioRepository {
           owner_user_id: this.owner.userId,
           model_id: input.modelId,
           contract_version: input.contractVersion,
-          acknowledgement_text_version: "alibaba-billing-v1",
+          acknowledgement_text_version: input.textVersion ?? PROVIDER_BILLING_VERSIONS.alibaba,
           billing_acknowledged_at: new Date().toISOString(),
         },
         { onConflict: "owner_user_id,model_id,contract_version" },
