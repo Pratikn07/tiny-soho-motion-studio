@@ -74,17 +74,21 @@ export const REVIEW_RUN_STATUSES = ["queued", "running", "completed", "failed"] 
 export const reviewRunStatusSchema = z.enum(REVIEW_RUN_STATUSES);
 export type ReviewRunStatus = z.infer<typeof reviewRunStatusSchema>;
 
-/** `POST .../idea-check` result. Her idea is never replaced unless she accepts `suggestedIdea`. */
+/**
+ * `POST .../idea-check` result. Her idea is never replaced unless she accepts `suggestedIdea`: `prompt` is always
+ * for her idea as written ("Keep mine"), `suggestedPrompt` for the suggested change ("Use suggestion").
+ */
 export const ideaCheckResultSchema = z
   .object({
     verdict: z.enum(["ok", "adjust"]),
     reason: z.string().trim().min(1).max(1000),
     suggestedIdea: z.string().trim().min(1).max(1000).optional(),
     prompt: z.string().trim().min(1).max(5000),
+    suggestedPrompt: z.string().trim().min(1).max(5000).optional(),
   })
   .refine(
-    (result) => result.verdict === "ok" || result.suggestedIdea !== undefined,
-    "An adjust verdict offers the smallest change as suggestedIdea.",
+    (result) => result.verdict === "ok" || (result.suggestedIdea !== undefined && result.suggestedPrompt !== undefined),
+    "An adjust verdict offers the smallest change as suggestedIdea with its suggestedPrompt.",
   );
 export type IdeaCheckResult = z.infer<typeof ideaCheckResultSchema>;
 

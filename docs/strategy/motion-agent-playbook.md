@@ -55,8 +55,9 @@ Offer three options, ordered safest first. Each is one small story that fits fiv
 - **Natural speed.** No slow motion.
 - **No camera movement** and no new objects appearing.
 
-For each option give: a one-line description for the creator, a risk label (safe, some risk, risky) with the
-reason, and the setting it needs (step 5).
+For each option give: a one-line description for the creator (`story`), a risk label (safe, some risk, risky) with the
+reason, and the setting it needs (step 5). Write the risk as the label alone ("safe") or the label, a colon and the
+reason ("some risk: may lean toward 'basics:'").
 
 ## Step 4: check the creator's own idea
 
@@ -127,11 +128,13 @@ Return one JSON object per slide:
     {"type": "dark_on_dark", "detail": "Brown hair next to brown lettering", "severity": "medium"}
   ],
   "suggestions": [
-    {"title": "Curious look, calm smile", "risk": "safe", "end_strength": 0.6,
+    {"title": "Curious look, calm smile", "story": "She lifts the underwear, looks at the potty and smiles calmly.",
+     "risk": "safe", "end_strength": 0.6,
      "prompt": "…scene… She lifts the little floral underwear… At the end she is still standing on the rug beside the stool, smiling. … The camera remains static throughout, with no zoom, no pan and no cut."},
-    {"title": "Holds it up with a proud smile", "risk": "some risk: may lean toward 'basics:'", "end_strength": 0.6,
-     "prompt": "…"},
-    {"title": "Places it on the stool and pats it", "risk": "safe", "end_strength": 0.6, "prompt": "…"}
+    {"title": "Holds it up with a proud smile", "story": "She holds the underwear up and breaks into a proud smile.",
+     "risk": "some risk: may lean toward 'basics:'", "end_strength": 0.6, "prompt": "…"},
+    {"title": "Places it on the stool and pats it", "story": "She places the underwear on the stool and pats it.",
+     "risk": "safe", "end_strength": 0.6, "prompt": "…"}
   ],
   "design_advice": "Optional: move the girl ~4% right or shorten 'Start with the basics:' to allow livelier motion.",
   "creator_idea_review": null
