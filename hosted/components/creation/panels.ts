@@ -6,6 +6,7 @@ import type { DocumentEdit } from "./useCreation";
 import { ModelPanel } from "./model/ModelPanel";
 import { MotionPanel } from "./motion/MotionPanel";
 import { TextAnimationPanel } from "./text-animation/TextAnimationPanel";
+import { BudgetCard } from "./budget/BudgetCard";
 
 /**
  * Slots in the creation page. Each later task adds its panel with one line here and keeps its code in its own
@@ -35,4 +36,6 @@ export const SLIDE_PANELS: SlidePanel[] = [
 export type ToolbarItemProps = { api: CreationApi; creation: CreationView | null };
 
 /** Small items in the creation bar, next to the save state (for example O1's budget). */
-export const TOOLBAR_ITEMS: Array<{ id: string; Component: ComponentType<ToolbarItemProps> }> = [];
+export const TOOLBAR_ITEMS: Array<{ id: string; Component: ComponentType<ToolbarItemProps> }> = [
+  { id: "budget", Component: BudgetCard }, // O1
+];
