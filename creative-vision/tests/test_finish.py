@@ -154,6 +154,16 @@ def test_style_none_places_all_text_from_the_first_frame(tmp_path):
     assert all(close(first.getpixel(centre(box)), ink) for box, ink in zip(BARS, INKS))
 
 
+@pytest.mark.parametrize("style", ["fade-rise", "none"])
+def test_first_frame_cover_obeys_the_text_animation(tmp_path, style):
+    out = render_final(raw_clip(tmp_path), background(), clean_text_layer(text_layer()),
+                       TextAnimation(style=style, coverFrame="first"))
+    cover = Image.open(BytesIO(out.cover)).convert("RGB")
+    first = frame_at(out.video, tmp_path, 0)
+    assert cover.size == background().size
+    assert all(close(cover.getpixel(centre(box)), first.getpixel(centre(box))) for box in BARS)
+
+
 def test_odd_slide_is_doubled_and_short_clips_are_held_to_five_seconds(tmp_path):
     size = (121, 151)
     layer = Image.new("RGBA", size, (0, 0, 0, 0))

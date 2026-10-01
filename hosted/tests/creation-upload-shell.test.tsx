@@ -97,7 +97,7 @@ describe("creation page and layered upload", () => {
     await settled(1);
     expect(cards()).toEqual(["Slide 1: lonely, Ready"]);
     expect(screen.getByRole("region", { name: "1 file needs a partner" })).toHaveTextContent("cover.png");
-    expect(screen.getByText("None")).toBeInTheDocument(); // No text layer.
+    expect(screen.getByText("None", { selector: "dd" })).toBeInTheDocument(); // No text layer.
   });
 
   it("shows a failed upload on its slide and retries just that slide", async () => {
