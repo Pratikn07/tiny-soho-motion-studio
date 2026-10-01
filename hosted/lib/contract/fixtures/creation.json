@@ -1,0 +1,113 @@
+{
+  "id": "3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01",
+  "revision": 7,
+  "document": {
+    "version": 2,
+    "name": "Potty words, meal prep",
+    "defaults": {
+      "modelId": "ltx-2.5-distilled",
+      "motionStyle": "calm",
+      "textAnimation": {
+        "style": "fade-rise",
+        "firstAt": 0.2,
+        "step": 0.14,
+        "fade": 0.35,
+        "rise": 18,
+        "coverFrame": "last"
+      }
+    },
+    "slides": [
+      {
+        "id": "0b9e7c52-1d3a-4f6b-8a2c-7e5d4c3b2a10",
+        "name": "potty",
+        "order": 0,
+        "width": 1122,
+        "height": 1402,
+        "layers": {
+          "backgroundAssetId": "4e6b4f25-4a6d-4c9e-9d5f-0b8a7f6e5d43",
+          "textAssetId": "5f5c3a16-5b7e-4dae-8e6a-1c9b8a7f6e54"
+        },
+        "checks": {
+          "ok": true,
+          "items": [
+            {
+              "code": "text_not_solid",
+              "severity": "warning",
+              "message": "Letters look slightly see-through; they will be made solid."
+            },
+            {
+              "code": "text_haze",
+              "severity": "warning",
+              "message": "A faint haze around the text will be removed."
+            }
+          ],
+          "textLayer": { "solidPercent": 71.4, "partialPercent": 26.9, "hazePercent": 2.7, "lines": 14 },
+          "generationSize": { "width": 768, "height": 960 }
+        },
+        "reviewRunId": "9d1a9e7a-9fbc-4be2-8cae-5adfcebdac98",
+        "motion": {
+          "source": "suggestion",
+          "suggestionIndex": 0,
+          "story": "She lifts the little underwear, looks at the potty, and smiles calmly.",
+          "prompt": "A toddler girl with curly brown hair tied up with a small cream scrunchie, wearing a cream cotton top and trousers, stands barefoot on a soft woven rug in a bright, warm bathroom beside a small wooden step stool, a white potty and a sink, on the right side of the frame. The left side of the frame is an empty cream wall with soft window shadows. She lifts the little floral underwear off the step stool with both hands. She looks at the potty beside her and gives a small, calm smile. She places the underwear back on the stool. At the end she is still standing on the rug beside the stool, smiling. The camera remains static throughout, with no zoom, no pan and no cut.",
+          "motionStyle": "calm"
+        },
+        "latestRunId": "bf9c7a5c-b1de-4d04-8ec0-7cf1e0dfcebb",
+        "chosenTakeId": "d1be5c3e-d3f0-4f26-80e2-9e13a2f1e0dd"
+      },
+      {
+        "id": "1c8f6d43-2e4b-4a7c-9b3d-8f6e5d4c3b21",
+        "name": "salmon-cakes",
+        "order": 1,
+        "width": 1080,
+        "height": 1350,
+        "layers": {
+          "backgroundAssetId": "6a4d2b07-6c8f-4ebf-9f7b-2dac9b8a7f65",
+          "textAssetId": "7b3e1c98-7d9a-4fc0-8a8c-3ebdac9b8a76"
+        },
+        "checks": {
+          "ok": true,
+          "items": [],
+          "textLayer": { "solidPercent": 98.2, "partialPercent": 1.8, "hazePercent": 0, "lines": 6 },
+          "generationSize": { "width": 768, "height": 960 }
+        },
+        "reviewRunId": "ae0b8f6b-a0cd-4cf3-9dbf-6be0dfcebda9",
+        "modelId": "wan2.7-i2v",
+        "textAnimation": {
+          "style": "fade",
+          "firstAt": 0.2,
+          "step": 0.2,
+          "fade": 0.5,
+          "rise": 0,
+          "coverFrame": "last"
+        },
+        "latestRunId": "e2cf4d2f-e4a1-4a37-91f3-af24b3a2f1ee"
+      },
+      {
+        "id": "2d7a5e34-3f5c-4b8d-8c4e-9a7f6e5d4c32",
+        "name": "meal-prep",
+        "order": 2,
+        "width": 1080,
+        "height": 1920,
+        "layers": {
+          "backgroundAssetId": "8c2f0d89-8eab-4ad1-9b9d-4fcebdac9b87",
+          "textAssetId": null
+        },
+        "checks": {
+          "ok": true,
+          "items": [],
+          "generationSize": { "width": 640, "height": 1152 }
+        },
+        "latestRunId": "04e12f01-06c3-4c59-b3b5-c146d5c4b300"
+      },
+      {
+        "id": "3e6b4f25-4a6d-4c9e-8d5f-0a8b9c0d1e43",
+        "name": "understanding",
+        "order": 3,
+        "width": null,
+        "height": null,
+        "layers": { "backgroundAssetId": null, "textAssetId": null }
+      }
+    ]
+  }
+}

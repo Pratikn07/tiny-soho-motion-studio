@@ -1,0 +1,33 @@
+{
+  "uploadRequest": {
+    "background": {
+      "assetId": "4e6b4f25-4a6d-4c9e-9d5f-0b8a7f6e5d43",
+      "fileName": "potty-background.webp",
+      "mime": "image/webp",
+      "size": 412883
+    },
+    "text": {
+      "assetId": "5f5c3a16-5b7e-4dae-8e6a-1c9b8a7f6e54",
+      "fileName": "potty-text.png",
+      "mime": "image/png",
+      "size": 198204
+    }
+  },
+  "uploadResponse": {
+    "uploads": {
+      "background": {
+        "assetId": "4e6b4f25-4a6d-4c9e-9d5f-0b8a7f6e5d43",
+        "signedUrl": "https://example.supabase.co/storage/v1/object/upload/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/slides/0b9e7c52-1d3a-4f6b-8a2c-7e5d4c3b2a10/background-4e6b4f25-4a6d-4c9e-9d5f-0b8a7f6e5d43.webp?token=fixture"
+      },
+      "text": {
+        "assetId": "5f5c3a16-5b7e-4dae-8e6a-1c9b8a7f6e54",
+        "signedUrl": "https://example.supabase.co/storage/v1/object/upload/sign/creative-studio/owners/00000000-0000-4000-8000-000000000001/projects/3f1c2a4e-8b7d-4c1a-9e2f-5a6b7c8d9e01/slides/0b9e7c52-1d3a-4f6b-8a2c-7e5d4c3b2a10/text-5f5c3a16-5b7e-4dae-8e6a-1c9b8a7f6e54.png?token=fixture"
+      }
+    }
+  },
+  "finaliseRequest": {
+    "revision": 6,
+    "background": { "assetId": "4e6b4f25-4a6d-4c9e-9d5f-0b8a7f6e5d43" },
+    "text": { "assetId": "5f5c3a16-5b7e-4dae-8e6a-1c9b8a7f6e54" }
+  }
+}
