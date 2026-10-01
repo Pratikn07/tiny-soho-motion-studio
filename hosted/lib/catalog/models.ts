@@ -37,7 +37,8 @@ export const CATALOG_MODELS: readonly CatalogModel[] = [
       checkedAt: "2026-09-30",
     },
     estimatedClipUsd: 0.5,
-    supports: { endFrame: false, seeds: true, sizes: ["1280x720", "720x1280", "960x960"], durationsSeconds: [5] },
+    // First + last frame is a documented Wan 2.7 image-to-video combination (Model Studio API reference, 2026-09-30).
+    supports: { endFrame: true, seeds: true, sizes: ["1280x720", "720x1280", "960x960"], durationsSeconds: [5] },
     promptProfile: "wan",
     calibrated: false,
     enabled: true,

@@ -15,6 +15,10 @@ import {
 import { contractFixtures } from "@/lib/contract/fixtures";
 import catalogFixture from "@/lib/contract/fixtures/catalog.json";
 import { getVideoModelContract } from "@/lib/video-catalog";
+import {
+  ALIBABA_CONTRACT_IDS as WORKER_ALIBABA_CONTRACT_IDS,
+  ALIBABA_USD_PER_VIDEO_SECOND,
+} from "../../creative-worker/src/providers/alibaba";
 import { MODEL_CLIP_USD, MODEL_PROVIDERS } from "../../creative-worker/src/router";
 
 const repo = vi.hoisted(() => ({
@@ -61,6 +65,13 @@ describe("catalog entries", () => {
     }
   });
 
+  it("gives the worker's Alibaba provider the catalog's contracts and prices", () => {
+    const alibaba = CATALOG_MODELS.filter((model) => model.provider === "alibaba");
+    expect(WORKER_ALIBABA_CONTRACT_IDS).toEqual(ALIBABA_CONTRACT_IDS);
+    expect(ALIBABA_USD_PER_VIDEO_SECOND).toEqual(Object.fromEntries(alibaba.map((model) => [model.id, model.pricing.usd])));
+    expect(alibaba.every((model) => model.pricing.unit === "video_second")).toBe(true);
+  });
+
   it("routes each model to the same provider in the worker", () => {
     expect(MODEL_PROVIDERS).toEqual(Object.fromEntries(CATALOG_MODELS.map((model) => [model.id, model.provider])));
     expect(MODEL_CLIP_USD).toEqual(Object.fromEntries(CATALOG_MODELS.map((model) => [model.id, model.estimatedClipUsd])));
@@ -89,7 +100,8 @@ describe("GET /api/catalog", () => {
   it("says how each model fits a slide", async () => {
     const body = catalogResponseSchema.parse(await (await get(`?creationId=${creation.id}&slideId=${potty.id}`)).json());
     expect(body.models[0].fit).toEqual({ ok: true });
-    expect(body.models[1].fit).toEqual({ ok: true, reason: expect.stringContaining("walk into your text") });
+    expect(body.models[1].fit).toEqual({ ok: true, reason: expect.stringContaining("Not yet tested") });
+    expect(body.models[2].fit).toEqual({ ok: true, reason: expect.stringContaining("walk into your text") });
   });
 
   it("needs both ids and an existing slide", async () => {
@@ -139,7 +151,7 @@ describe("POST /api/catalog/acknowledgements", () => {
 describe("fit for a slide", () => {
   const slide = (overrides: Partial<SlideV2>): SlideV2 => ({ ...potty, ...overrides });
   const ltx = getCatalogModel("ltx-2.5-distilled")!;
-  const wan = getCatalogModel("wan2.7-i2v")!;
+  const wan = getCatalogModel("wan3-i2v")!;
 
   it("greys every model out until the background is uploaded and passes its checks", () => {
     const empty = slide({ width: null, height: null, layers: { backgroundAssetId: null, textAssetId: null }, checks: undefined });

@@ -1,4 +1,5 @@
 import type { ProviderId, VideoProvider } from "../contract.js";
+import { alibabaProviderFromEnv } from "./alibaba.js";
 
 /** Builds a provider from the worker's environment, or returns null when its credentials are missing. */
 export type ProviderFactory = (env: NodeJS.ProcessEnv) => VideoProvider | null;
@@ -6,7 +7,9 @@ export type ProviderFactory = (env: NodeJS.ProcessEnv) => VideoProvider | null;
 export type ProviderRegistry = Partial<Record<ProviderId, VideoProvider>>;
 
 /** One registration line per provider: modal-ltx (P2) and alibaba (P3). */
-export const PROVIDER_FACTORIES: Partial<Record<ProviderId, ProviderFactory>> = {};
+export const PROVIDER_FACTORIES: Partial<Record<ProviderId, ProviderFactory>> = {
+  alibaba: alibabaProviderFromEnv,
+};
 
 export function createProviderRegistry(
   env: NodeJS.ProcessEnv = process.env,
