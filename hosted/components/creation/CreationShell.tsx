@@ -266,7 +266,15 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
     <div className={`${c.app} ${pageDrop ? c.pageDrop : ""}`} {...pageDropProps}>
       <header className={c.topbar}>
         <a href="#creation-main" className={c.wordmark} aria-label="Tiny Soho Studio">tiny soho<span>STUDIO</span></a>
-        {onSignOut && <button className={c.textButton} onClick={onSignOut}>Sign out</button>}
+        <div className={c.topbarActions}>
+          <details className={c.tools}>
+            <summary className={c.textButton}>Tools</summary>
+            <nav className={c.toolsMenu} aria-label="Studio tools">
+              <a href="/?studio=legacy">Old studio</a>
+            </nav>
+          </details>
+          {onSignOut && <button className={c.textButton} onClick={onSignOut}>Sign out</button>}
+        </div>
       </header>
       <CreationSidebar
         creations={creations}

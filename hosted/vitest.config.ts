@@ -9,6 +9,8 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     environment: "node",
+    // Bound jsdom contention on high-core development machines; retain the tests' existing timeouts.
+    maxWorkers: 4,
   },
   resolve: {
     alias: {

@@ -42,6 +42,13 @@
 .wordmark span { padding: 8px 0 8px 18px; border-left: 1px solid #cfcfc6; font-family: "Avenir Next", sans-serif; font-size: 9px; font-weight: 600; letter-spacing: 3px; line-height: 1.1; }
 .textButton { min-height: 44px; padding: 0 4px; color: var(--sage-deep); background: none; border: 0; border-bottom: 1px solid transparent; font-size: 12px; font-weight: 600; }
 .textButton:hover { border-bottom-color: #9cad9b; }
+.topbarActions { display: flex; align-items: center; gap: 18px; }
+.tools { position: relative; }
+.tools summary { display: flex; align-items: center; cursor: pointer; list-style: none; }
+.tools summary::-webkit-details-marker { display: none; }
+.toolsMenu { position: absolute; top: 100%; right: 0; z-index: 30; min-width: 144px; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 6px 20px #24262214; }
+.toolsMenu a { display: block; padding: 10px; color: var(--ink); text-decoration: none; white-space: nowrap; }
+.toolsMenu a:hover { background: var(--sage-wash); }
 
 /* Desktop: a fixed-height editor; the rail, stage and inspector scroll on their own. */
 .content { margin-left: 232px; min-width: 0; display: flex; flex-direction: column; height: calc(100svh - 78px); overflow: hidden; }
