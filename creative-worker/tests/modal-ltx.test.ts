@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createModalLtxProvider, ModalLtxInputError, type GenerationInput, type ModalLtxClient } from "../src/providers/modal-ltx.js";
+import { createModalLtxProvider, ModalLtxInputError, modalLtxProviderFromEnv, type GenerationInput, type ModalLtxClient } from "../src/providers/modal-ltx.js";
 
 const input: GenerationInput = {
   idempotencyKey: "66666666-6666-4666-8666-666666666666",
@@ -62,6 +62,16 @@ describe("Modal LTX provider", () => {
   it("lets transport errors through so the worker polls again instead of failing the take", async () => {
     const client: ModalLtxClient = { spawn: vi.fn(), result: vi.fn(async () => { throw new Error("UNAVAILABLE"); }) };
     await expect(createModalLtxProvider({ client }).poll("fc-01ABC")).rejects.toThrow("UNAVAILABLE");
+  });
+
+  it("is registered only when the worker has a Modal token, and connects lazily", async () => {
+    const { createProviderRegistry } = await import("../src/providers/index.js");
+    expect(modalLtxProviderFromEnv({})).toBeNull();
+    expect(modalLtxProviderFromEnv({ MODAL_TOKEN_ID: "ak-test" })).toBeNull();
+    expect(createProviderRegistry({})["modal-ltx"]).toBeUndefined();
+    const provider = createProviderRegistry({ MODAL_TOKEN_ID: "ak-test", MODAL_TOKEN_SECRET: "as-test" })["modal-ltx"];
+    expect(provider?.id).toBe("modal-ltx"); // Built without contacting Modal.
+    await expect(provider!.poll("existing:66666666-6666-4666-8666-666666666666")).resolves.toMatchObject({ state: "succeeded" });
   });
 
   it("refuses sizes LTX cannot render and inputs without an upload URL before spawning", async () => {

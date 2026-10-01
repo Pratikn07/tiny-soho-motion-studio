@@ -34,9 +34,10 @@ for 2 minutes after the last call (so a 10-slide carousel loads once). Then it s
 
 ## Worker configuration
 
-`MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` (a Modal service token) go in the worker's environment only.
-`modalSdkClient()` needs the `modal` npm package (0.11.0) in `creative-worker`; B5 adds it when it registers the
-provider.
+`MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` (a Modal service token) go in the worker's environment only. Without
+them `modal-ltx` is not registered (`creative-worker/src/providers/index.ts`) and the router reports it as not
+configured. Optional: `MODAL_ENVIRONMENT`, and `MODAL_LTX_USD_PER_GPU_SECOND` (default 0.000842). The worker
+connects to Modal on the first submit or poll.
 
 ## Results and cost
 

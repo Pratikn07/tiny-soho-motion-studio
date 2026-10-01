@@ -73,7 +73,28 @@ export function createModalLtxProvider(options: {
   };
 }
 
-/** Modal's JS SDK (`modal` on npm). Loaded lazily so the rest of the worker does not depend on it. */
+/** Registry factory (providers/index.ts): null without a Modal token, so the router reports modal-ltx as not configured.
+ * The Modal client connects on the first submit or poll, not at worker start. */
+export function modalLtxProviderFromEnv(env: NodeJS.ProcessEnv): VideoProvider | null {
+  const tokenId = env.MODAL_TOKEN_ID?.trim();
+  const tokenSecret = env.MODAL_TOKEN_SECRET?.trim();
+  if (!tokenId || !tokenSecret) return null;
+  let client: Promise<ModalLtxClient> | undefined;
+  const connect = () => {
+    client ??= modalSdkClient({ tokenId, tokenSecret, environment: env.MODAL_ENVIRONMENT?.trim() || undefined }).catch((error) => {
+      client = undefined; // Try again on the next call instead of caching a failed connection.
+      throw error;
+    });
+    return client;
+  };
+  const price = Number(env.MODAL_LTX_USD_PER_GPU_SECOND);
+  return createModalLtxProvider({
+    client: { spawn: async (input) => (await connect()).spawn(input), result: async (id) => (await connect()).result(id) },
+    ...(Number.isFinite(price) && price > 0 ? { usdPerGpuSecond: price } : {}),
+  });
+}
+
+/** Modal's JS SDK (`modal` on npm), imported on first use so the worker starts without loading gRPC. */
 export async function modalSdkClient(options: {
   tokenId: string;
   tokenSecret: string;
@@ -81,15 +102,14 @@ export async function modalSdkClient(options: {
   appName?: string;
   className?: string;
 }): Promise<ModalLtxClient> {
-  const sdk = "modal"; // Not a static import: B5 adds the dependency when it registers this provider.
-  const { ModalClient, FunctionTimeoutError, RemoteError, InternalFailure, NotFoundError } = await import(sdk);
+  const { ModalClient, FunctionTimeoutError, RemoteError, InternalFailure, NotFoundError } = await import("modal");
   const modal = new ModalClient({ tokenId: options.tokenId, tokenSecret: options.tokenSecret, environment: options.environment });
   const ltx = await modal.cls.fromName(options.appName ?? "tiny-soho-ltx", options.className ?? "Ltx");
   const generate = (await ltx.instance()).method("generate");
   return {
     async spawn(input) {
       const call = await generate.spawn([input]);
-      return call.functionCallId as string;
+      return call.functionCallId;
     },
     async result(callId) {
       try {
@@ -99,7 +119,7 @@ export async function modalSdkClient(options: {
         // get({timeoutMs: 0}) throws "Timeout exceeded" while the call is still running; "Timeout:" means the
         // function itself hit its time limit.
         if (error instanceof FunctionTimeoutError) {
-          return String((error as Error).message).startsWith("Timeout exceeded") ? { state: "running" } : { state: "error", kind: "timeout" };
+          return error.message.startsWith("Timeout exceeded") ? { state: "running" } : { state: "error", kind: "timeout" };
         }
         if (error instanceof InternalFailure) return { state: "error", kind: "internal" };
         if (error instanceof RemoteError) return { state: "error", kind: "remote" };
