@@ -112,7 +112,7 @@ async function workerStep() {
   if (!row) return;
   row.worker_lease_id = "lease";
   const deps = supabasePipeline(fake.current!.client as never, {
-    providerReady: () => true, fallback: () => null, reserveBudget: async () => true,
+    providerReady: () => true, fallback: () => null, reserveBudget: async () => true, settleSpend: async () => {},
   });
   await advanceRun(structuredClone(row) as PipelineRunRow, deps);
   for (const job of tables().creative_studio_jobs ?? []) {

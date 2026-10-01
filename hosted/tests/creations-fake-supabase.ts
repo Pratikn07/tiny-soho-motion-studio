@@ -14,6 +14,10 @@ const uniqueKeys: Record<string, Array<{ columns: string[]; where?: (row: Row) =
   creative_studio_takes: [{ columns: ["id"] }, { columns: ["run_id", "attempt"] }],
   creative_studio_jobs: [{ columns: ["id"] }, { columns: ["project_id", "idempotency_key"] }],
   creative_studio_vision_jobs: [{ columns: ["id"] }, { columns: ["project_id", "idempotency_key"] }],
+  creative_studio_spend: [
+    { columns: ["job_id"], where: (row) => row.job_id != null },
+    { columns: ["review_run_id"], where: (row) => row.review_run_id != null },
+  ],
 };
 
 /** Column defaults from the migrations, applied on insert like Postgres does. */
@@ -82,6 +86,10 @@ export function creationsFakeSupabase() {
     }
     eq(column: string, value: unknown) {
       this.filters.push((row) => readColumn(row, column) === value);
+      return this;
+    }
+    gte(column: string, value: string) {
+      this.filters.push((row) => String(readColumn(row, column)) >= value);
       return this;
     }
     in(column: string, values: unknown[]) {

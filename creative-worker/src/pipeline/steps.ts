@@ -35,6 +35,8 @@ export type PipelineDependencies = {
   fallback(run: PipelineRunRow): RoutedModel | null;
   /** Reserves the estimated cost of one take before any provider call (O1); idempotent per key. */
   reserveBudget(run: PipelineRunRow, key: string, modelId: string): Promise<boolean>;
+  /** Records a finished provider job's cost in the ledger and settles its reservation; idempotent. */
+  settleSpend(jobId: string): Promise<void>;
   newSeed(): number;
 };
 
@@ -91,6 +93,7 @@ async function stepGenerating(run: PipelineRunRow, take: TakeRow, deps: Pipeline
   }
   const job = await deps.jobs.get(take.job_id);
   if (ACTIVE_JOB.includes(job.status)) return update(deps, run, { status: "generating", delayMs: POLL_MS });
+  await deps.settleSpend(take.job_id);
   if (job.status === "completed" && job.outputAssetId) {
     await deps.takes.update(take, { raw_asset_id: job.outputAssetId, stage: "finishing" });
     const finishJobId = await deps.vision.createFinish(run, { ...take, raw_asset_id: job.outputAssetId });

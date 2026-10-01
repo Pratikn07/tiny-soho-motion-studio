@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { assertBudgetFor } from "@/lib/budget";
+import { getCatalogModel } from "@/lib/catalog/models";
 import { createRunRequestSchema, type RunResponse } from "@/lib/contract";
 import { findSlide } from "@/lib/creations";
 import { routeErrorResponse } from "@/lib/http";
@@ -26,6 +28,8 @@ export async function POST(request: Request, context: Context) {
       acknowledgements: await new StudioRepository(client, owner).listModelAcknowledgements(),
     });
     const runs = new RunsRepository(client, owner);
+    const replay = await runs.findByKey(projectId, plan.idempotency_key);
+    if (!replay) await assertBudgetFor(client, owner, getCatalogModel(plan.model_id)!.estimatedClipUsd);
     const { run, created } = await runs.create(plan);
     const body: RunResponse = { run: await runs.view(run) };
     return Response.json(body, { status: created ? 201 : 200 });

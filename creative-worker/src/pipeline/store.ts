@@ -24,6 +24,7 @@ export type PipelineStoreOptions = {
   providerReady: PipelineDependencies["providerReady"];
   fallback: PipelineDependencies["fallback"];
   reserveBudget: PipelineDependencies["reserveBudget"];
+  settleSpend: PipelineDependencies["settleSpend"];
   now?: () => number;
 };
 
@@ -209,6 +210,7 @@ export function supabasePipeline(client: WorkerClient, options: PipelineStoreOpt
     providerReady: options.providerReady,
     fallback: options.fallback,
     reserveBudget: options.reserveBudget,
+    settleSpend: options.settleSpend,
     newSeed: () => randomInt(0, 2_147_483_647),
   };
 }

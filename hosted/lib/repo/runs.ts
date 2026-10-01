@@ -104,7 +104,7 @@ export class RunsRepository {
     private readonly owner: Owner,
   ) {}
 
-  private async findByKey(projectId: string, idempotencyKey: string) {
+  async findByKey(projectId: string, idempotencyKey: string) {
     return value(await this.client.from("creative_studio_pipeline_runs").select("*")
       .eq("owner_user_id", this.owner.userId).eq("project_id", projectId).eq("idempotency_key", idempotencyKey)
       .maybeSingle() as Result<PipelineRunRow>);
