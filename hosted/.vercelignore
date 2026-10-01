@@ -1,0 +1,13 @@
+# Repository CI runs and typechecks these mirror tests against the worker.
+# A standalone hosted deployment has no sibling worker source.
+tests/
+vitest.config.ts
+
+# Keep local credentials and generated artifacts out of uploads.
+.env*
+.next/
+node_modules/
+.vercel/
+.git/
+.DS_Store
+*.tsbuildinfo
