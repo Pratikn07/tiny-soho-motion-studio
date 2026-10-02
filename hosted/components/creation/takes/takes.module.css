@@ -19,15 +19,108 @@
 }
 .progress {
   display: grid;
-  gap: 5px;
-  padding: 12px;
-  background: var(--sage-wash, #edf2e9);
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line, #e2e2d9);
+  background: var(--surface, #fdfdf9);
   border-radius: 4px;
   font-size: 12px;
 }
-.progress strong {
-  font-size: 14px;
-  font-weight: 600;
+.progressHeading {
+  display: grid;
+  gap: 5px;
+}
+.progressHeading strong {
+  font: 400 24px/1.15 StudioDidot, Georgia, serif;
+  color: var(--sage, #486452);
+}
+.progressHeading > span,
+.progressMeta,
+.progressHint {
+  color: #62665d;
+}
+.takeProgress,
+.stageTrack {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.takeProgress { gap: 16px; }
+.takeTrack { min-width: 0; }
+.takeHeading,
+.progressMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+}
+.takeHeading { margin-bottom: 7px; }
+.takeHeading > :first-child { font-weight: 600; }
+.takeHeading > :last-child { color: #62665d; }
+.stageTrack {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  font-size: 10px;
+  color: #62665d;
+}
+.stageTrack li { display: grid; gap: 5px; }
+.stageLine {
+  position: relative;
+  display: block;
+  height: 5px;
+  background: var(--line, #e2e2d9);
+  border-radius: 2px;
+  transition: background-color 200ms ease-out;
+}
+.stageTrack [data-state="done"] .stageLine { background: var(--sage, #486452); }
+.stageTrack [data-state="current"] { color: var(--sage, #486452); font-weight: 600; }
+.stageTrack [data-state="current"] .stageLine {
+  background: #d6e1d0;
+  box-shadow: inset 0 0 0 1px #95ad92;
+}
+.stageTrack [data-state="current"] .stageLine::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 6px;
+  background: var(--sage, #486452);
+  border-radius: 2px;
+}
+.progress[data-active="true"] .stageTrack [aria-current="step"] .stageLine::after {
+  animation: stageBreath 2.4s ease-in-out infinite;
+}
+.progressMeta {
+  border-top: 1px solid var(--line, #e2e2d9);
+  padding-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.progressHint,
+.progressReason { margin: 0; line-height: 1.5; }
+.progressHint { font-size: 11px; }
+.progress[data-attention="true"] .progressHeading strong,
+.takeTrack[data-attention="true"] .takeHeading > :last-child,
+.progressReason { color: var(--clay, #a14c2d); }
+.takeTrack[data-attention="true"] .stageTrack [data-state="done"] .stageLine { background: #9b755f; }
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+@keyframes stageBreath {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress .stageLine { transition: none; }
+  .progress[data-active="true"] .stageTrack [aria-current="step"] .stageLine::after { animation: none; }
 }
 .actions {
   display: grid;

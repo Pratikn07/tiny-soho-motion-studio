@@ -8,6 +8,7 @@ import {
   renderHook,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { contractFixtures } from "@/lib/contract/fixtures";
@@ -35,7 +36,7 @@ const apiFor = (reply: unknown = { run: completed() }) => ({
 });
 
 it.each([
-  ["queued", "Waiting for the GPU"],
+  ["queued", "Waiting to start"],
   ["generating", "Animating"],
   ["finishing", "Adding your text"],
   ["checking", "Checking"],
@@ -53,10 +54,65 @@ it.each([
       }}
     />,
   );
-  expect(screen.getByText(label, { exact: true })).toBeInTheDocument();
-  expect(screen.getByText(/Take 2 of 3/)).toHaveTextContent("$0.06");
+  expect(within(screen.getByRole("status")).getByText(label, { exact: true })).toBeInTheDocument();
+  expect(screen.getByText("2 of 2 takes processed · 1 ready")).toBeInTheDocument();
+  expect(screen.getByText("$0.06 so far")).toBeInTheDocument();
   if (status === "needs_attention")
     expect(screen.getByText("Try a calmer motion.")).toBeInTheDocument();
+});
+
+it("tracks mixed take stages without resetting a finished take or inventing a percentage", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-01T12:02:00Z"));
+  const run = completed();
+  run.status = "finishing";
+  run.createdAt = "2026-10-01T12:00:30Z";
+  run.takes[1] = { ...run.takes[1], stage: "finishing", verdict: "pending", checks: null };
+  render(<RunProgress run={run} />);
+  expect(screen.getByText("1 of 2 takes processed")).toBeInTheDocument();
+  expect(screen.getByText("Elapsed: 1m 30s")).toBeInTheDocument();
+  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(within(screen.getByRole("list", { name: "Take 1 stages" })).getAllByText(/complete/)).toHaveLength(3);
+  const second = screen.getByRole("list", { name: "Take 2 stages" });
+  expect(second.querySelector('[aria-current="step"]')).toHaveTextContent("Add text — in progress");
+  expect(within(second).getByText(/pending/)).toHaveTextContent("pending");
+  expect(screen.getByText("Needs a look", { exact: true })).toBeInTheDocument();
+});
+
+it("shows planned waiting takes and labels an actual retry without using the retry limit as progress", () => {
+  const run = completed();
+  run.status = "queued";
+  run.attemptCount = 0;
+  run.takes = [];
+  const view = render(<RunProgress run={run} />);
+  expect(screen.getByText("0 of 2 takes processed")).toBeInTheDocument();
+  expect(screen.getAllByText("Waiting", { exact: true })).toHaveLength(2);
+  expect(screen.queryByText(/Take 3/)).not.toBeInTheDocument();
+  run.status = "checking";
+  run.attemptCount = 3;
+  run.takes = [...completed().takes, { ...completed().takes[1], id: crypto.randomUUID(), attempt: 3, stage: "checking", verdict: "pending", checks: null }];
+  view.rerender(<RunProgress run={run} />);
+  expect(screen.getByText("Take 3 · Extra take")).toBeInTheDocument();
+  expect(screen.getByText("2 of 3 takes processed · 1 ready")).toBeInTheDocument();
+});
+
+it("freezes interrupted progress, keeps error reasons and never marks a failed take as ready", () => {
+  const run = structuredClone(contractFixtures.runGenerating.run);
+  run.status = "canceled";
+  const view = render(<RunProgress run={run} />);
+  expect(screen.getByText("Last reported: Animating")).toBeInTheDocument();
+  expect(screen.getByText("Not started")).toBeInTheDocument();
+  expect(document.querySelector('[aria-current="step"]')).toBeNull();
+  expect(screen.getByText(/A take already running may still finish/)).toBeInTheDocument();
+  expect(screen.getByText("Duration: 29s")).toBeInTheDocument();
+  run.status = "failed";
+  run.takes[0].stage = "failed";
+  run.reasons = ["The video service could not finish this take."];
+  view.rerender(<RunProgress run={run} />);
+  expect(screen.getByText("Failed", { exact: true })).toBeInTheDocument();
+  expect(screen.queryByText("Ready", { exact: true })).not.toBeInTheDocument();
+  expect(screen.getByText(run.reasons[0])).toBeInTheDocument();
+  expect(document.querySelectorAll('[data-state="done"]')).toHaveLength(0);
 });
 
 it("recovers persisted runs, polls at four seconds, stops on terminal status and refreshes on focus", async () => {
@@ -202,7 +258,7 @@ it("reopens a ten-slide creation, chooses every take without losing an edit, and
   });
   render(<CreationShell api={api} />);
   await screen.findByRole("region", { name: "Takes and downloads" });
-  await panel().findByText("Ready", { exact: true });
+  expect(within(await panel().findByRole("status")).getByText("Ready", { exact: true })).toBeInTheDocument();
   fireEvent.change(screen.getByRole("textbox", { name: "Creation name" }), {
     target: { value: "Saved with choices" },
   });
