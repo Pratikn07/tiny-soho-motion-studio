@@ -11,7 +11,9 @@ This is a standalone, owner-only Vercel application using Node.js `24.x`. The ex
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `TINY_SOHO_STUDIO_ADMIN_EMAILS`
 
-Server-side vision analysis also uses `NVIDIA_API_KEY` and `NVIDIA_VISION_MODEL`. These are already configured in the existing production project; health configuration alone does not prove a provider request succeeded.
+Creation motion review is explicitly selected with server-only `REVIEW_PROVIDER` and `REVIEW_MODEL`. Production currently uses `REVIEW_PROVIDER=gemini` and `REVIEW_MODEL=gemini-3.5-flash-lite`, with `GEMINI_API_KEY` stored as a server secret. The same reviewer handles suggestions and creator-idea checks; Gemini requires an explicit model. See [.env.example](.env.example) for configuration without secret values.
+
+The legacy NVIDIA analysis path uses `NVIDIA_API_KEY` and `NVIDIA_VISION_MODEL`. Creating a key or passing health checks does not prove a provider request succeeds. Gemini suggestions and creator-idea checks have been verified in the authenticated production UI; the four-design quality benchmark remains outstanding.
 
 ## Creation release flag
 
@@ -32,7 +34,13 @@ Only the two `NEXT_PUBLIC_` variables are exposed in the browser. All other valu
 
 `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `DASHSCOPE_API_KEY` and `ALIBABA_WORKSPACE_ID` belong only to the separately deployed Creative Worker. They must not be configured in Vercel.
 
-Production activation on 1 October 2026: deployment `dpl_8j4vRP9r77gDgPuBUkk6TUrrDrS1` from main `f1c121a` is Ready at [tiny-soho-creative-studio.vercel.app](https://tiny-soho-creative-studio.vercel.app), with the creation flag enabled. Health and signed-out authorization checks passed; authenticated creator acceptance remains pending. See the release checklist for receipts and rollback.
+Production was activated on 1 October 2026. Subsequent releases added Gemini (#65, `fd51136`) and per-take progress (#66, `4b90fb2`). The #66 release verified deployment `dpl_DsCC7gapqZRQbsPorfFJZn1Jgu4a` as Ready at [tiny-soho-creative-studio.vercel.app](https://tiny-soho-creative-studio.vercel.app). Production health was checked again on 2 October, and the owner's first real LTX take completed and was accepted. The ten-slide creator acceptance gate remains open. See the release checklist for dated receipts, exact evidence limits and rollback.
+
+## Creation workflow and progress
+
+Upload a background and transparent text layer per slide, choose a suggested or checked custom motion, then generate using LTX by default or an explicitly selected alternative. Creative Worker drives generation; creative-vision finishes the video and checks it. Under **Takes and downloads**, each take follows **Animate → Add text → Check**, with processed/ready counts, elapsed time and recorded cost. The existing run reads poll about every four seconds while active, pause when the page is hidden, and refresh on return. The display does not estimate a percentage. Accepted takes can be chosen for carousel preview and downloads.
+
+The 2 October production verification found one accepted take with raw, final and cover files in storage, 59.1 GPU seconds and $0.0498 recorded spend. A saved choice, downloaded-video visual acceptance, close/reopen recovery during a real run and the full ten-slide flow remain unverified.
 
 ## Modal workspace billing
 
