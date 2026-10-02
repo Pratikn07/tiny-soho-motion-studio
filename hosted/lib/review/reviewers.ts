@@ -157,7 +157,7 @@ export function anthropicReviewer(options: { apiKey: string; model: string; env?
 /**
  * `REVIEW_PROVIDER` picks the reviewer: `nvidia` (default; NVIDIA_API_KEY, REVIEW_MODEL or NVIDIA_VISION_MODEL),
  * `openai` (OPENAI_API_KEY, REVIEW_MODEL, optional REVIEW_BASE_URL for another OpenAI-compatible API) or
- * `anthropic` (ANTHROPIC_API_KEY, REVIEW_MODEL). Keys stay server-side.
+ * `gemini` (GEMINI_API_KEY, REVIEW_MODEL) or `anthropic` (ANTHROPIC_API_KEY, REVIEW_MODEL). Keys stay server-side.
  */
 export function reviewerFromEnv(env: Env = process.env, fetcher?: Fetch): Reviewer {
   const provider = env.REVIEW_PROVIDER?.trim() || "nvidia";
@@ -171,6 +171,12 @@ export function reviewerFromEnv(env: Env = process.env, fetcher?: Fetch): Review
   if (provider === "openai" && env.OPENAI_API_KEY && model) {
     const baseUrl = env.REVIEW_BASE_URL?.trim() || "https://api.openai.com/v1";
     return openAiCompatibleReviewer({ provider, baseUrl, apiKey: env.OPENAI_API_KEY, model, env, fetcher });
+  }
+  if (provider === "gemini" && env.GEMINI_API_KEY && model) {
+    return openAiCompatibleReviewer({
+      provider, baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      apiKey: env.GEMINI_API_KEY, model, env, fetcher,
+    });
   }
   if (provider === "anthropic" && env.ANTHROPIC_API_KEY && model) {
     return anthropicReviewer({ apiKey: env.ANTHROPIC_API_KEY, model, env, fetcher });

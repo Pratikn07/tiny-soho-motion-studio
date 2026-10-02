@@ -249,6 +249,31 @@ describe("reviewers", () => {
     expect(() => reviewerFromEnv({ REVIEW_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "k" })).toThrow(ReviewerError);
     expect(reviewerFromEnv({ REVIEW_PROVIDER: "openai", OPENAI_API_KEY: "k", REVIEW_MODEL: "gpt-test" }).provider).toBe("openai");
   });
+
+  it("routes Gemini review images to Google with only the Gemini key and records its provider", async () => {
+    const fetcher = vi.fn(async () => chat("{}"));
+    const reviewer = reviewerFromEnv({
+      REVIEW_PROVIDER: "gemini", GEMINI_API_KEY: "gemini-test-key", REVIEW_MODEL: "gemini-3.5-flash-lite",
+      NVIDIA_API_KEY: "nvidia-test-key", OPENAI_API_KEY: "openai-test-key",
+    }, fetcher);
+    expect([reviewer.provider, reviewer.model]).toEqual(["gemini", "gemini-3.5-flash-lite"]);
+    expect(await reviewer.complete(request, AbortSignal.timeout(1000))).toEqual({ content: "{}", costUsd: null });
+    const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+    expect(init.headers).toMatchObject({ Authorization: "Bearer gemini-test-key" });
+    const body = JSON.parse(init.body as string);
+    expect(body.model).toBe("gemini-3.5-flash-lite");
+    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.messages[1].content[0].image_url.url).toBe("data:image/jpeg;base64,AAAA");
+    expect(body.chat_template_kwargs).toBeUndefined();
+  });
+
+  it("does not substitute another provider's key when Gemini is unconfigured", () => {
+    expect(() => reviewerFromEnv({
+      REVIEW_PROVIDER: "gemini", REVIEW_MODEL: "gemini-3.5-flash-lite", NVIDIA_API_KEY: "nvidia-test-key",
+    })).toThrow(ReviewerError);
+    expect(() => reviewerFromEnv({ REVIEW_PROVIDER: "gemini", GEMINI_API_KEY: "gemini-test-key" })).toThrow(ReviewerError);
+  });
 });
 
 describe("review images", () => {
