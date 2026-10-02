@@ -38,7 +38,7 @@ Production was activated on 1 October 2026. Subsequent releases added Gemini (#6
 
 ## Creation workflow and progress
 
-Upload a background and transparent text layer per slide, choose a suggested or checked custom motion, then generate using LTX by default or an explicitly selected alternative. Creative Worker drives generation; creative-vision finishes the video and checks it. Under **Takes and downloads**, each take follows **Animate → Add text → Check**, with processed/ready counts, elapsed time and recorded cost. The existing run reads poll about every four seconds while active, pause when the page is hidden, and refresh on return. The display does not estimate a percentage. Accepted takes can be chosen for carousel preview and downloads.
+Upload a background and transparent text layer per slide, choose a suggested or checked custom motion, then generate using LTX by default or an explicitly selected alternative. Creative Worker drives generation; creative-vision finishes the video and checks it. Under **Takes and downloads**, each take follows **Animate → Add text → Check**, with processed/ready counts, elapsed time and recorded cost. While a run is active, the UI polls its saved status about every four seconds, pauses when the page is hidden, and refreshes on return. The display does not estimate a percentage. Accepted takes can be chosen for carousel preview and downloads.
 
 The 2 October production verification found one accepted take with raw, final and cover files in storage, 59.1 GPU seconds and $0.0498 recorded spend. A saved choice, downloaded-video visual acceptance, close/reopen recovery during a real run and the full ten-slide flow remain unverified.
 
