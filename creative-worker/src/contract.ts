@@ -86,7 +86,7 @@ export interface VideoProvider {
 export type MotionStyle = "calm" | "lively";
 
 export type TextAnimation = {
-  style: "none" | "fade" | "fade-rise";
+  style: "none" | "fade" | "fade-rise" | "soft-zoom" | "slide-in";
   firstAt: number;
   step: number;
   fade: number;
@@ -131,7 +131,7 @@ export type FinishJobResult = {
   textInBy: number;
   step: number;
   colourGains: [number, number, number];
-  style: "none" | "fade" | "fade-rise";
+  style: "none" | "fade" | "fade-rise" | "soft-zoom" | "slide-in";
   coverFrame: "first" | "last";
 };
 

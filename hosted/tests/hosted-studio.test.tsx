@@ -48,6 +48,7 @@ describe("hosted Carousel access", () => {
     render(<HostedStudio />);
     await screen.findByText("Checking Studio access…");
     expect(screen.queryByRole("region", { name: "Owner workspace" })).toBeNull();
+    await waitFor(() => expect(allow).toBeTypeOf("function"));
     await act(async () => allow());
     expect(await screen.findByRole("region", { name: "Owner workspace" })).toBeVisible();
   });

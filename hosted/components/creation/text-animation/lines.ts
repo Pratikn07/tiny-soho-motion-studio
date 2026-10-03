@@ -44,3 +44,16 @@ export function scheduleText(animation: TextAnimation, count: number) {
   return { starts, fade, rise: animation.style === "fade-rise" ? animation.rise : 0,
     textInBy: Math.round((starts[count - 1] + fade) * 100) / 100, step: Math.round(step * 10000) / 10000 };
 }
+
+/** Destination rectangle for one line; the final rectangle always equals the uploaded pixels. */
+export function textTransform(style: TextAnimation["style"], fraction: number, [left, top, right, bottom]: Box, distance: number): Box {
+  const progress = Math.max(0, Math.min(1, fraction));
+  const width = right - left, height = bottom - top;
+  if (style === "soft-zoom") {
+    const scale = 0.94 + 0.06 * progress;
+    const w = Math.max(1, Math.trunc(width * scale)), h = Math.max(1, Math.trunc(height * scale));
+    return [Math.trunc(left + (width - w) / 2), Math.trunc(top + (height - h) / 2), w, h];
+  }
+  return [style === "slide-in" ? Math.trunc(left - distance * (1 - progress)) : left,
+    style === "fade-rise" ? Math.trunc(top + distance * (1 - progress)) : top, width, height];
+}

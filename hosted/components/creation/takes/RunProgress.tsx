@@ -11,7 +11,7 @@ const labels = {
   checking: "Checking",
   completed: "Ready",
   needs_attention: "Needs a look",
-  failed: "Needs a look",
+  failed: "Generation failed",
   canceled: "Canceled",
 };
 const stages = [
@@ -93,7 +93,7 @@ export function RunProgress({ run }: { run: RunView }) {
                     <li key={stage.id} data-state={done ? "done" : current === step ? "current" : "waiting"} aria-current={isCurrent ? "step" : undefined}>
                       <span className={s.stageLine} aria-hidden="true" />
                       <span>{stage.label}</span>
-                      <span className={s.srOnly}> — {done ? "complete" : isCurrent ? "in progress" : interrupted && current === step ? "last reported stage" : "pending"}</span>
+                      <span className={s.srOnly}> — {done ? "complete" : isCurrent ? "in progress" : interrupted && current === step ? "last reported stage" : !active ? "not completed" : "pending"}</span>
                     </li>
                   );
                 })}

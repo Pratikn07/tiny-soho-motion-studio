@@ -6,11 +6,18 @@ import sharp from "sharp";
 import { DEFAULT_TEXT_ANIMATION } from "@/lib/contract";
 import { contractFixtures } from "@/lib/contract/fixtures";
 import { pottyLikeText } from "./fixtures/layers/synthetic";
-import { splitTextLines, scheduleText } from "@/components/creation/text-animation/lines";
+import { splitTextLines, scheduleText, textTransform } from "@/components/creation/text-animation/lines";
+import { textAnimationSchema } from "@/lib/contract";
 import { TextAnimationPanel } from "@/components/creation/text-animation/TextAnimationPanel";
 import { createMockCreationApi } from "@/components/creation/mock-api";
 
 afterEach(cleanup);
+
+it.each(["soft-zoom", "slide-in"] as const)("accepts %s and ends on the exact source rectangle", style => {
+  expect(textAnimationSchema.parse({...DEFAULT_TEXT_ANIMATION, style}).style).toBe(style);
+  expect(textTransform(style, 1, [20, 30, 180, 50], 18)).toEqual([20, 30, 160, 20]);
+  expect(textTransform(style, 0.5, [20, 30, 180, 50], 18)).not.toEqual([20, 30, 160, 20]);
+});
 
 it("splits the same synthetic potty layer as B2/P4 and matches P4's 2.37-second schedule", async () => {
   const { data, info } = await sharp(await pottyLikeText()).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -60,6 +67,12 @@ it("writes defaults, a slide override and the cover choice without altering othe
   expect(creation.document.slides[1].textAnimation).toEqual(contractFixtures.creation.document.slides[1].textAnimation);
   expect(slide.id).toBe(creation.document.slides[0].id);
   expect(screen.getByRole("button", { name: "Play text preview" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Use creation text settings" }));
+  expect(creation.document.slides[0].textAnimation).toBeUndefined();
+  ui.rerender(<TextAnimationPanel {...props()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Reset text settings" }));
+  expect(creation.document.defaults.textAnimation).toEqual(DEFAULT_TEXT_ANIMATION);
+  expect(creation.document.slides[1].textAnimation).toEqual(contractFixtures.creation.document.slides[1].textAnimation);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });

@@ -8,6 +8,7 @@
 .projectbarOffset { margin-top: 0; }
 .visuallyHidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .sidebar {
+  overflow: hidden;
   position: fixed;
   top: 78px;
   bottom: 0;
@@ -26,7 +27,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #818176;
+  color: #5d6056;
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 1.5px;
@@ -51,14 +52,14 @@
 .newButton:hover { background: #26392c; }
 .newButtonActive { box-shadow: 0 0 0 3px #e1e8de; }
 .historyLabel { margin: 38px 0 14px; }
-.creationList { display: grid; gap: 5px; max-height: calc(100svh - 325px); overflow-y: auto; }
+.creationList { flex: 1; min-height: 0; overscroll-behavior: contain; display: grid; align-content: start; gap: 5px;  overflow-y: auto; }
 .creation {
   width: 100%;
   min-height: 50px;
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 10px;
+  padding: 10px 38px 10px 10px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 3px;
@@ -70,9 +71,9 @@
 .creationMark { display: grid; place-items: center; width: 31px; height: 34px; flex: none; color: #777e6e; background: #eae9e1; border: 1px solid #ddded3; border-radius: 2px; }
 .creationDetails { min-width: 0; display: grid; gap: 2px; }
 .creationDetails strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
-.creationDetails small { color: #818176; font-size: 9px; }
+.creationDetails small { color: #5d6056; font-size: 9px; }
 .noCreations { padding: 0 12px; color: #77786f; font-size: 11px; line-height: 1.6; }
-.sidebar .sidebarFoot { margin-top: auto; padding: 16px 12px 0; border-top: 1px solid #e5e3d9; color: #88897e; font-family: StudioDidot, Georgia, serif; font-size: 13px; }
+.sidebar .sidebarFoot { margin-top: auto; padding: 16px 12px 0; border-top: 1px solid #e5e3d9; color: #62665d; font-family: StudioDidot, Georgia, serif; font-size: 13px; }
 .historyTrigger, .closeHistory, .scrim { display: none; }
 .start {
   flex: 1;
@@ -131,3 +132,21 @@
   .uploadCard button { grid-column: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
+
+.historyRow { position: relative; min-width: 0; }
+.creationMark { overflow: hidden; }
+.creationMark img { width: 100%; height: 100%; object-fit: cover; }
+.search { width: 100%; min-height: 38px; margin-bottom: 8px; padding: 8px 10px; color: #292b27; background: #fff; border: 1px solid #b9c4b5; border-radius: 3px; font: inherit; font-size: 12px; }
+.archiveToggle { display: flex; gap: 6px; align-items: center; min-height: 38px; color: #5d6056; font-size: 11px; }
+.historyOptions { position: absolute; top: 6px; right: 0; z-index: 2; }
+.historyOptions summary { cursor: pointer; list-style: none; width: 36px; min-height: 44px; display: grid; place-items: center; font-size: 20px; }
+.historyOptions summary::-webkit-details-marker { display: none; }
+.historyActions { position: relative; width: 170px; padding: 6px; background: #fff; border: 1px solid #d6ddd0; border-radius: 3px; box-shadow: 0 4px 12px #24262214; }
+.historyActions button { width: 100%; min-height: 44px; border: 0; background: transparent; text-align: left; padding: 8px; color: #292b27; }
+.historyActions button:hover { background: #edf2e9; }
+.historyActions small { display: block; padding: 6px; color: #5d6056; font-size: 11px; }
+.renameForm { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px; border: 1px solid #d6ddd0; background: #fff; }
+.renameForm input { width: 100%; min-height: 38px; padding: 6px; border: 1px solid #b9c4b5; font: inherit; }
+.renameForm button { min-height: 38px; padding: 6px; background: #fff; border: 1px solid #b9c4b5; color: #292b27; }
+.historyError { color: #a14c2d; padding: 8px; font-size: 12px; }
+.sidebar :is(input, button, summary):focus-visible { outline: 2px solid #486452; outline-offset: 2px; }

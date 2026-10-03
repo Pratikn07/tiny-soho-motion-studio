@@ -15,7 +15,7 @@ type Mode = "studio" | "creation" | "preview";
  * `?studio=creation&mock=1` opens it on sample data with no sign-in and no network.
  */
 export function StudioEntry({ creationsV2Enabled = false }: { creationsV2Enabled?: boolean }) {
-  const [mode, setMode] = useState<Mode>(creationsV2Enabled ? "creation" : "studio");
+  const [mode, setMode] = useState<Mode | null>(null);
   useEffect(() => {
     const params = new URL(window.location.href).searchParams;
     if (params.get("studio") !== "creation") {
@@ -24,6 +24,7 @@ export function StudioEntry({ creationsV2Enabled = false }: { creationsV2Enabled
     }
     setMode(process.env.NODE_ENV === "development" && params.get("mock") === "1" ? "preview" : "creation");
   }, [creationsV2Enabled]);
+  if (mode === null) return <main><h1>Tiny Soho Motion Studio</h1><p>Sign in to create typography-safe motion.</p><p role="status">Opening Studio…</p></main>;
   if (mode === "preview") return <Suspense fallback={null}><CreationPreview /></Suspense>;
   return <HostedStudio creation={mode === "creation"} />;
 }

@@ -3,30 +3,52 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CreationShell } from "@/components/creation/CreationShell";
+import { useEffect, useState } from "react";
+import { useCreation, ordered } from "@/components/creation/useCreation";
+import { ModelPanel } from "@/components/creation/model/ModelPanel";
+import { MotionPanel } from "@/components/creation/motion/MotionPanel";
+import { contractFixtures } from "@/lib/contract/fixtures";
+import type { CreationApi } from "@/components/creation/api";
+import type { CreationView } from "@/lib/contract";
 import { createMockCreationApi } from "@/components/creation/mock-api";
 import { mockModels } from "@/components/creation/model/mock-routes";
 import { mockReview } from "@/components/creation/motion/mock-routes";
 
-const file = (name: string) => new File([new Uint8Array(8)], name, { type: name.endsWith(".png") ? "image/png" : "image/jpeg" });
-
+function Harness({api, initial}: {api:CreationApi; initial:CreationView}) {
+  const store=useCreation(api), [selected,setSelected]=useState(0);
+  useEffect(()=>{store.open(initial);},[]);
+  if(!store.view)return null;
+  const slide=ordered(store.view.document)[selected];
+  const editSlide=(change:any)=>void store.edit(doc=>({...doc,slides:doc.slides.map(item=>item.id===slide.id?change(item):item)}));
+  const props={creation:store.view,slide,ready:true,api,edit:store.edit,editSlide,saveServerStep:async()=>{}};
+  return <><p>{store.saveState === "saved" ? "Saved" : ""}</p>
+    {store.view.document.slides.map((item,index)=><button key={item.id} onClick={()=>setSelected(index)}>Slide {index+1}: {item.name}</button>)}
+    <section aria-label="Motion"><MotionPanel {...props}/></section>
+    <section aria-label="Video model"><ModelPanel {...props}/></section>
+  </>;
+}
 async function open(names = ["potty"]) {
-  const api = createMockCreationApi({ measure: async () => ({ width: 1122, height: 1402 }), objectUrl: () => "blob:u" });
-  render(<CreationShell api={api} />);
-  fireEvent.change(document.querySelector('input[type="file"]')!, {
-    target: { files: names.flatMap((name) => [file(`${name}-background.jpg`), file(`${name}-text.png`)]) },
-  });
-  const motion = await screen.findByRole("region", { name: "Motion" }, { timeout: 3000 });
-  const model = screen.getByRole("region", { name: "Video model" });
-  const pick = async () => {
-    const group = await within(screen.getByRole("region", { name: "Motion" })).findByRole("radiogroup", { name: "Suggested motions" }, { timeout: 3000 });
+  const api = createMockCreationApi();
+  const initial=await api.createCreation("Test creation");
+  const creation=await api.saveCreation(initial.id,initial.revision,{...initial.document,slides:names.map((name,index)=>{
+    const slide=structuredClone(contractFixtures.creation.document.slides[0]);
+    delete slide.motion; delete slide.latestRunId; delete slide.chosenTakeId; delete slide.reviewRunId;
+    return {...slide,id:crypto.randomUUID(),name,order:index};
+  })});
+  render(<Harness api={api} initial={creation}/>);
+  const motion = await screen.findByRole("region", {name:"Motion"});
+  const model = screen.getByRole("region", {name:"Video model"});
+  await within(model).findByText("Change video model");
+  fireEvent.click(within(model).getByText("Change video model"));
+  const pick=async()=>{
+    const group=await within(motion).findByRole("radiogroup",{name:"Suggested motions"},{timeout:3000});
     fireEvent.click(within(group).getAllByRole("radio")[0]);
   };
-  const savedDocument = async () => {
-    await screen.findByText("Saved", {}, { timeout: 3000 });
-    return (await api.getCreation(new URL(window.location.href).searchParams.get("creation")!)).document;
+  const savedDocument=async()=>{
+    await screen.findByText("Saved",{},{timeout:3000});
+    return (await api.getCreation(creation.id)).document;
   };
-  return { api, motion, model, pick, savedDocument };
+  return {api,motion,model,pick,savedDocument};
 }
 
 beforeEach(() => {

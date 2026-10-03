@@ -1,4 +1,5 @@
 "use client";
+import { createPortal } from "react-dom";
 import { useState } from "react";
 import type { SlideV2 } from "@/lib/contract";
 import type { CreationApi } from "../api";
@@ -7,14 +8,16 @@ import s from "../takes/takes.module.css";
 export function ExportBar({
   api,
   slides,
+  actionHost,
 }: {
   api: CreationApi;
   slides: SlideV2[];
+  actionHost?: HTMLElement | null;
 }) {
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   const count = slides.filter((slide) => slide.chosenTakeId).length;
-  return (
+  const controls = (
     <div className={s.export}>
       <p className={s.muted}>
         {count} of {slides.length} slides have a chosen take.
@@ -48,4 +51,5 @@ export function ExportBar({
       {message && <p role="status">{message}</p>}
     </div>
   );
+  return actionHost ? createPortal(controls, actionHost) : controls;
 }

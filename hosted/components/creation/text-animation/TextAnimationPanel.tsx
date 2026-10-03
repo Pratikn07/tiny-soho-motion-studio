@@ -16,9 +16,9 @@ export function TextAnimationPanel({ creation, slide, api, edit, editSlide }: Sl
     : edit((doc) => ({ ...doc, defaults: { ...doc.defaults, textAnimation: { ...doc.defaults.textAnimation, ...change } } }));
   return <div className={s.panel}>
     <h2 className={s.title}>Text animation</h2>
-    <p className={s.muted}>{overriding ? "Only for this slide." : "For every slide in this creation."}</p>
+    <p className={s.muted}>{overriding ? "Only for this slide." : "Creation default. Slides with custom settings keep theirs."}</p>
     <label className={s.field}>Text style<select value={animation.style} onChange={(e) => update({ style: e.target.value as TextAnimation["style"] })}>
-      <option value="none">None</option><option value="fade">Fade</option><option value="fade-rise">Fade and rise</option>
+      <option value="none">None</option><option value="fade">Fade</option><option value="fade-rise">Fade and rise</option><option value="soft-zoom">Soft zoom</option><option value="slide-in">Slide in</option>
     </select></label>
     <label className={s.field}>Text speed<select value={speed} disabled={animation.style === "none"}
       onChange={(e) => update(TEXT_SPEEDS[e.target.value as keyof typeof TEXT_SPEEDS])}>
@@ -32,6 +32,12 @@ export function TextAnimationPanel({ creation, slide, api, edit, editSlide }: Sl
       const { textAnimation: previous, ...rest } = item;
       return e.target.checked ? { ...rest, textAnimation: { ...animation } } : rest;
     })} />Use different text settings for this slide</label>
+    <button className={s.secondary} onClick={() => overriding
+      ? editSlide(item => { const { textAnimation: _previous, ...rest } = item; return rest; })
+      : edit(doc => ({ ...doc, defaults: { ...doc.defaults, textAnimation: { ...DEFAULT_TEXT_ANIMATION } } }))}>
+      {overriding ? "Use creation text settings" : "Reset text settings"}
+    </button>
+    <p className={s.muted}>Changes apply to future videos. Generate again to update an existing take.</p>
     {slide.layers.textAssetId ? <TextPreview key={`${slide.id}-${retry}`} api={api} slide={slide} animation={animation} onRetry={() => setRetry((n) => n + 1)} />
       : <p className={s.muted}>Add a transparent text layer to preview its animation.</p>}
   </div>;

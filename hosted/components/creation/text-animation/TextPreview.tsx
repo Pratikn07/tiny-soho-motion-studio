@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { SlideV2, TextAnimation } from "@/lib/contract";
 import type { CreationApi } from "../api";
-import { scheduleText, splitTextLines, type Box } from "./lines";
+import { scheduleText, splitTextLines, textTransform, type Box } from "./lines";
 import s from "./text-animation.module.css";
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -58,7 +58,8 @@ export function TextPreview({ api, slide, animation, onRetry }: { api: CreationA
       layers.boxes.forEach(([left, top, right, bottom], i) => {
         const fraction = timing.fade === 0 ? 1 : Math.max(0, Math.min(1, (seconds - timing.starts[i]) / timing.fade));
         context.globalAlpha = fraction;
-        context.drawImage(layers.text, left, top, right - left, bottom - top, left, top + timing.rise * (1 - fraction), right - left, bottom - top);
+        const [x, y, width, height] = textTransform(animation.style, fraction, [left, top, right, bottom], animation.rise);
+        context.drawImage(layers.text, left, top, right - left, bottom - top, x, y, width, height);
       });
       context.globalAlpha = 1;
       if (moving && seconds < timing.textInBy + 0.1) frame = requestAnimationFrame(draw);

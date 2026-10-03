@@ -14,6 +14,10 @@ import { TakesPanel } from "./takes/TakesPanel";
  * folder: motion/ and model/ (U2), text-animation/ (U4), takes/ and export/ (U3), budget/ (O1).
  */
 export type SlidePanelProps = {
+  actionHost?: HTMLElement | null;
+  beforeGenerate?: () => Promise<void>;
+  onGenerated?: () => void;
+  onViewResults?: () => void;
   creation: CreationView;
   slide: SlideV2;
   /** Whether the slide's layers are uploaded and passed their checks. */

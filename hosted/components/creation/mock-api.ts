@@ -91,6 +91,7 @@ export function createMockCreationApi(options: {
           slideCount: creation.document.slides.length,
           slidesInProgress: new Set(options.running?.().filter(run=>run.projectId===creation.id).map(run=>run.slideId)??[]).size,
           coverAssetId: creation.document.slides[0]?.layers.backgroundAssetId ?? null,
+          archivedAt: creation.document.archivedAt ?? null,
         }));
     },
     async getCreation(id) {

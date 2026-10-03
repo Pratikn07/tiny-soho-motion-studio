@@ -66,7 +66,7 @@ export function MotionPanel({ creation, slide, ready, api, editSlide }: SlidePan
       )}
       {review && (
         <>
-          <p className={m.muted}>Pick one, safest first. Each keeps your text clear and the camera still.</p>
+          <p className={m.muted}>Pick one, safest first. Suggestions favor a steady camera and clear text. Review each overlap risk.</p>
           <ul className={m.suggestions} role="radiogroup" aria-label="Suggested motions">
             {review.suggestions.map((suggestion, index) => (
               <SuggestionCard
