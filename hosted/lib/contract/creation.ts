@@ -23,7 +23,7 @@ export const END_FRAME_STRENGTH: Readonly<Record<MotionStyle, number>> = {
   lively: 0.4,
 };
 
-export const TEXT_ANIMATION_STYLES = ["none", "fade", "fade-rise"] as const;
+export const TEXT_ANIMATION_STYLES = ["none", "fade", "fade-rise", "soft-zoom", "slide-in"] as const;
 
 export const textAnimationSchema = z.object({
   style: z.enum(TEXT_ANIMATION_STYLES),
@@ -144,6 +144,7 @@ export type SlideV2 = z.infer<typeof slideV2Schema>;
 export const creationDocumentV2Schema = z
   .object({
     version: z.literal(2),
+    archivedAt: z.string().datetime({ offset: true }).nullable().optional(),
     name: z.string().trim().min(1).max(160),
     defaults: z.object({
       modelId: z.string().trim().min(1).max(120),

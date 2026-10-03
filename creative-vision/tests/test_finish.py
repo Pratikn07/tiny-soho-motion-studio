@@ -148,6 +148,24 @@ def test_final_shows_each_line_top_to_bottom_and_ends_with_the_exact_text(tmp_pa
     assert cover.size == (240, 240) and cover.getpixel(centre(BARS[1])) == INKS[1]
 
 
+@pytest.mark.parametrize("style", ["soft-zoom", "slide-in"])
+def test_new_effects_reveal_in_order_and_return_to_exact_designed_positions(tmp_path, style):
+    animation = TextAnimation.parse({"style": style, "firstAt": 0.5, "step": 1, "fade": 0.5})
+    layer = clean_text_layer(text_layer())
+    out = render_final(raw_clip(tmp_path), background(), layer, animation)
+    assert probe(out.video, tmp_path)["frames"] == 120
+    early, during, final = (frame_at(out.video, tmp_path, t) for t in (0.3, 0.75, 4.9))
+    assert all(close(early.getpixel(centre(box)), STILL) for box in BARS)
+    assert not close(during.getpixel(centre(BARS[0])), STILL)
+    assert close(during.getpixel(centre(BARS[2])), STILL)
+    for box, ink in zip(BARS, INKS):
+        left, top, right, bottom = box
+        assert close(final.getpixel((left + 3, top + 3)), ink)
+        assert close(final.getpixel((right - 4, bottom - 4)), ink)
+        assert close(final.getpixel((left - 5, top + 5)), STILL)
+    assert Image.open(BytesIO(out.cover)).convert("RGB").getpixel(centre(BARS[0])) == INKS[0]
+
+
 def test_style_none_places_all_text_from_the_first_frame(tmp_path):
     out = render_final(raw_clip(tmp_path), background(), clean_text_layer(text_layer()), TextAnimation(style="none"))
     first = frame_at(out.video, tmp_path, 0)

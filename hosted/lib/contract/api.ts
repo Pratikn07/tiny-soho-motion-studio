@@ -31,6 +31,7 @@ export const creationSummarySchema = z.object({
   slideCount: z.number().int().min(0),
   slidesInProgress: z.number().int().min(0),
   coverAssetId: z.string().uuid().nullable(),
+  archivedAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
 export type CreationSummary = z.infer<typeof creationSummarySchema>;
 

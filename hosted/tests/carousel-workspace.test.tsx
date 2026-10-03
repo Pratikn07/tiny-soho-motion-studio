@@ -138,7 +138,7 @@ describe("saved Carousel workspace", () => {
     await waitFor(() => expect(stored().document.slides[0].story).toBe("Better idea"), { timeout: 4000 });
     expect(api.createProject).toHaveBeenCalledTimes(1);
     expect(api.uploadCarouselImage).toHaveBeenCalledTimes(1);
-    expect(result.current.workspace.dirty).toBe(false);
+    await waitFor(() => expect(result.current.workspace.dirty).toBe(false));
   });
 
   it("keeps a failed first draft and blank URL until a successful retry", async () => {

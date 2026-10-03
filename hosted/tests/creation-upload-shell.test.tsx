@@ -117,7 +117,7 @@ describe("creation page and layered upload", () => {
     fireEvent.click(within(screen.getByRole("list", { name: "Slides in carousel order" })).getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(cards()).toEqual(["Slide 1: potty, Ready"]), { timeout: 3000 });
     // The potty fixture's warnings explain the automatic fixes.
-    expect(screen.getByRole("region", { name: "Fixed automatically" })).toHaveTextContent("they will be made solid");
+    expect(screen.getByRole("region", { name: "Will be corrected during rendering" })).toHaveTextContent("they will be made solid");
   });
 
   it("reloads and reapplies the creator's edit when another tab saved first", async () => {

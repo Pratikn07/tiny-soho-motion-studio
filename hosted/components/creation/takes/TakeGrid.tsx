@@ -8,6 +8,7 @@ export function TakeGrid({
   api,
   slide,
   takes,
+  active = true,
   busy,
   onChoose,
   onDownload,
@@ -16,6 +17,7 @@ export function TakeGrid({
   api: CreationApi;
   slide: SlideV2;
   takes: TakeView[];
+  active?: boolean;
   busy: boolean;
   onChoose: (id: string) => Promise<unknown>;
   onDownload: (id: string, kind: "clip" | "cover") => Promise<unknown>;
@@ -135,7 +137,7 @@ export function TakeGrid({
           .
         </p>
       )}
-      <CheckBadges take={take} hasText={Boolean(slide.layers.textAssetId)} />
+      <CheckBadges active={active} take={take} hasText={Boolean(slide.layers.textAssetId)} />
       {take.finalVideoUrl && (
         <div className={s.actions}>
           <button

@@ -123,8 +123,8 @@ describe("creation-first entry", () => {
     render(<CarouselStudio api={api() as never} />);
     const trigger = screen.getByRole("button", { name: "Creations" });
     fireEvent.click(trigger);
-    expect(screen.getByRole("button", { name: "Close creations" })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Close creations" })).toHaveFocus());
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 });

@@ -7,7 +7,7 @@ import Icon from "@/components/carousel/Icons";
 import { readRisk } from "./client";
 import m from "./motion.module.css";
 
-const LEVEL_LABEL = { safe: "Safe", "some risk": "Some risk", risky: "Risky" } as const;
+const LEVEL_LABEL = { safe: "Lower overlap risk", "some risk": "Some risk", risky: "Risky" } as const;
 
 /** One suggested motion. The model prompt stays behind "Show details". */
 export function SuggestionCard({ suggestion, index, selected, onChoose, group }: {

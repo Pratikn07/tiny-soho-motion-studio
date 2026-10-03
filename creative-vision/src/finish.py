@@ -36,7 +36,7 @@ MAX_OUTPUT_PIXELS = 16_000_000
 MAX_LAYER_PIXELS = 40_000_000
 TIMEOUT_SECONDS = 240
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-STYLES = ("none", "fade", "fade-rise")
+STYLES = ("none", "fade", "fade-rise", "soft-zoom", "slide-in")
 
 
 @dataclass(frozen=True)
@@ -227,10 +227,20 @@ def render_final(raw: bytes, background: Image.Image, layer: Image.Image | None,
                 layer.crop((left, top, right, bottom)).save(piece)  # type: ignore[union-attr]
                 inputs += ["-loop", "1", "-framerate", str(FPS), "-i", str(piece)]
                 start = timing.starts[index - 1]
-                # Rise from `rise` px below to the designed position while fading in; exact position once visible.
-                y = f"{top}+{timing.rise}*min(1\\,max(0\\,1-(t-{start})/{timing.fade}))"
-                graph.append(f"[{index}:v]format=rgba,fade=t=in:st={start}:d={timing.fade}:alpha=1[t{index}]")
-                graph.append(f"[b{index - 1}][t{index}]overlay=x={left}:y='{y}':eval=frame:format=rgb:shortest=1[b{index}]")
+                # Preview and final use the same clamped linear progress and integer rectangles.
+                progress = f"min(1\\,max(0\\,(t-{start})/{timing.fade}))"
+                x, y = str(left), str(top)
+                transform = ""
+                if animation.style == "fade-rise":
+                    y = f"{top}+{animation.rise}*(1-{progress})"
+                elif animation.style == "slide-in":
+                    x = f"{left}-{animation.rise}*(1-{progress})"
+                elif animation.style == "soft-zoom":
+                    scale = f"(0.94+0.06*{progress})"
+                    transform = f"scale=w='max(1\\,trunc(iw*{scale}))':h='max(1\\,trunc(ih*{scale}))':eval=frame:flags=lanczos,"
+                    x, y = f"{left}+({right-left}-overlay_w)/2", f"{top}+({bottom-top}-overlay_h)/2"
+                graph.append(f"[{index}:v]format=rgba,{transform}fade=t=in:st={start}:d={timing.fade}:alpha=1[t{index}]")
+                graph.append(f"[b{index - 1}][t{index}]overlay=x='{x}':y='{y}':eval=frame:format=rgb:shortest=1[b{index}]")
             last_label = f"b{len(boxes)}"
         # Blend in RGB (above) and subsample chroma once here; yuv420 blending smears thin coloured letters.
         graph.append(f"[{last_label}]scale={out_w}:{out_h}:flags=neighbor,setsar=1,format=yuv420p[v]")

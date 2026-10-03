@@ -23,6 +23,7 @@ function TakesForSlide({
   slide,
   api,
   saveServerStep,
+  actionHost,
 }: SlidePanelProps) {
   const { run, error, reload } = useRun(api, slide.latestRunId);
   const [busy, setBusy] = useState(false),
@@ -85,6 +86,7 @@ function TakesForSlide({
       api={api}
       slide={slide}
       takes={run.takes}
+      active={isActive(run)}
       busy={busy}
       onChoose={choose}
       onDownload={download}
@@ -171,7 +173,7 @@ function TakesForSlide({
         </p>
       )}
       <CarouselPreview api={api} creation={creation} />
-      <ExportBar api={api} slides={creation.document.slides} />
+      <ExportBar actionHost={actionHost} api={api} slides={creation.document.slides} />
     </div>
   );
 }

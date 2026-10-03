@@ -18,6 +18,7 @@
   font-size: 12px;
 }
 .progress {
+  position: relative;
   display: grid;
   gap: 16px;
   min-width: 0;
@@ -65,7 +66,7 @@
   font-size: 10px;
   color: #62665d;
 }
-.stageTrack li { display: grid; gap: 5px; }
+.stageTrack li { position: relative; display: grid; gap: 5px; }
 .stageLine {
   position: relative;
   display: block;
@@ -108,7 +109,9 @@
   width: 1px;
   height: 1px;
   padding: 0;
-  margin: -1px;
+  inset: 0 auto auto 0;
+  margin: 0;
+  clip: rect(0, 0, 0, 0);
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;

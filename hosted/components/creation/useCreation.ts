@@ -2,13 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { CreationDocumentV2, CreationView, SlideV2 } from "@/lib/contract";
+import { creationViewSchema, type CreationDocumentV2, type CreationView, type SlideV2 } from "@/lib/contract";
 import { isConflict, type CreationApi } from "./api";
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
 export type DocumentEdit = (document: CreationDocumentV2) => CreationDocumentV2;
 
 const SAVE_DELAY_MS = 500;
+const draftKey = (id: string) => `tiny-soho:draft:${id}`;
+function readDraft(view: CreationView) {
+  try {
+    const raw = sessionStorage.getItem(draftKey(view.id));
+    if (!raw) return null;
+    const parsed = creationViewSchema.safeParse(JSON.parse(raw));
+    return parsed.success && parsed.data.id === view.id ? parsed.data : null;
+  } catch { return null; }
+}
+function persistDraft(view: CreationView, edits: DocumentEdit[]) {
+  try {
+    if (!edits.length) sessionStorage.removeItem(draftKey(view.id));
+    else sessionStorage.setItem(draftKey(view.id), JSON.stringify({ ...view, document: edits.reduce((doc, change) => change(doc), view.document) }));
+  } catch { /* The unload guard still protects edits when browser storage is unavailable. */ }
+}
 
 /** Renumbers `order` from 0 so the saved document always has unique, gap-free positions. */
 export const withOrder = (slides: SlideV2[]): SlideV2[] => slides.map((slide, order) => ({ ...slide, order }));
@@ -24,11 +39,13 @@ export function useCreation(api: CreationApi) {
   const [edits, setEdits] = useState<DocumentEdit[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState("");
+  const [recoveryDraft, setRecoveryDraft] = useState<CreationView | null>(null);
   const serverRef = useRef<CreationView | null>(null);
   const editsRef = useRef<DocumentEdit[]>([]);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generation = useRef(0); // Bumped when another creation opens, so late replies are dropped.
+  const restoredDraft = useRef(false);
 
   const accept = useCallback((view: CreationView) => {
     serverRef.current = view;
@@ -61,12 +78,22 @@ export function useCreation(api: CreationApi) {
           saved = await save(latest);
         } catch (error) {
           if (!isConflict(error)) throw error;
-          saved = await save(await api.getCreation(latest.id));
+          const fresh = await api.getCreation(latest.id);
+          if (owner !== generation.current) throw new Error("This creation is no longer open.");
+          if (restoredDraft.current) {
+            // Recovered drafts contain the whole document, so rebasing them would replace another tab's changes.
+            setRecoveryDraft({ ...latest, document: editsRef.current.reduce((doc, change) => change(doc), latest.document) });
+            editsRef.current = []; setEdits([]); accept(fresh); restoredDraft.current = false;
+            throw new Error("Saved settings changed in another tab. Recover or discard your draft before continuing.");
+          }
+          saved = await save(fresh);
         }
         if (owner !== generation.current) throw new Error("This creation is no longer open.");
         editsRef.current = editsRef.current.slice(pending.length);
         setEdits(editsRef.current);
         accept(saved);
+        restoredDraft.current = false;
+        persistDraft(saved, editsRef.current);
         setSaveState(editsRef.current.length ? "saving" : "saved");
         setSaveError("");
         return saved;
@@ -82,6 +109,7 @@ export function useCreation(api: CreationApi) {
   const edit = useCallback((change: DocumentEdit, options: { now?: boolean } = {}) => {
     editsRef.current = [...editsRef.current, change];
     setEdits(editsRef.current);
+    if (serverRef.current) persistDraft(serverRef.current, editsRef.current);
     setSaveState("saving");
     if (timer.current) clearTimeout(timer.current);
     if (options.now) return flush();
@@ -96,6 +124,7 @@ export function useCreation(api: CreationApi) {
       const { creation, value } = await task(latest);
       if (owner !== generation.current) throw new Error("This creation is no longer open.");
       accept(creation);
+      persistDraft(creation, editsRef.current);
       return value;
     });
   }, [accept, enqueue]);
@@ -111,7 +140,27 @@ export function useCreation(api: CreationApi) {
     setServer(view);
     setSaveState("idle");
     setSaveError("");
-  }, []);
+    setRecoveryDraft(null);
+    restoredDraft.current = false;
+    // Only inspect a draft after the owner-authorized view is loaded from the server.
+    const draft = view && readDraft(view);
+    if (draft && draft.revision === view.revision) {
+      restoredDraft.current = true;
+      editsRef.current = [() => draft.document];
+      setEdits(editsRef.current);
+      setSaveState("saving");
+      timer.current = setTimeout(() => void flush().catch(() => undefined), SAVE_DELAY_MS);
+    } else if (draft) setRecoveryDraft(draft);
+  }, [flush]);
+
+  useEffect(() => {
+    const guard = (event: BeforeUnloadEvent) => {
+      if (!editsRef.current.length && !recoveryDraft) return;
+      event.preventDefault(); event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [recoveryDraft]);
 
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
@@ -122,5 +171,8 @@ export function useCreation(api: CreationApi) {
     document: edits.reduce((doc, change) => change(doc), server.document),
   }, [edits, server]);
 
-  return { view, saveState, saveError, edit, flush, step, open, latest: () => serverRef.current };
+  return { view, saveState, saveError, edit, flush, step, open, recoveryDraft,
+    recoverDraft: () => { if (recoveryDraft) { restoredDraft.current = true; void edit(() => recoveryDraft.document); } setRecoveryDraft(null); },
+    discardDraft: () => { if (serverRef.current) persistDraft(serverRef.current, []); setRecoveryDraft(null); },
+    latest: () => serverRef.current };
 }

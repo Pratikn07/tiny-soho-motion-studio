@@ -80,6 +80,7 @@ export class CreationsRepository {
         slideCount: document.slides.length,
         slidesInProgress: inProgress.size,
         coverAssetId: first?.layers.backgroundAssetId ?? null,
+        archivedAt: document.archivedAt ?? null,
       }];
     });
   }

@@ -20,8 +20,8 @@ export function UploadChecks({ checks, compact = false }: { checks?: UploadCheck
         </section>
       )}
       {warnings.length > 0 && (
-        <section className={u.checksWarning} aria-label="Fixed automatically">
-          <h3>Fixed automatically</h3>
+        <section className={u.checksWarning} aria-label="Will be corrected during rendering">
+          <h3>Will be corrected during rendering</h3>
           <ul>{warnings.map((item) => <li key={item.code}>{item.message}</li>)}</ul>
         </section>
       )}

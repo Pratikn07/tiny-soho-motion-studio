@@ -15,6 +15,7 @@ import { contractFixtures } from "@/lib/contract/fixtures";
 import { CreationApiError, type CreationApi } from "@/components/creation/api";
 import { createMockCreationApi } from "@/components/creation/mock-api";
 import { RunProgress } from "@/components/creation/takes/RunProgress";
+import { CheckBadges } from "@/components/creation/takes/CheckBadges";
 import { useRun } from "@/components/creation/takes/useRun";
 import { TakesPanel } from "@/components/creation/takes/TakesPanel";
 import {
@@ -30,6 +31,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 const completed = () => structuredClone(contractFixtures.runCompleted.run);
+it("never claims checks are running on a failed or stopped take", () => {
+  const take = { ...completed().takes[0], stage: "failed" as const, verdict: "pending" as const };
+  const ui = render(<CheckBadges take={take} hasText active={false}/>);
+  expect(screen.getByText("Checks were not completed because generation failed.")).toBeInTheDocument();
+  ui.rerender(<CheckBadges take={{...take,stage:"generating"}} hasText active={false}/>);
+  expect(screen.getByText("Generation stopped before checks were completed.")).toBeInTheDocument();
+  expect(screen.queryByText(/checks are.*running/i)).not.toBeInTheDocument();
+});
 const apiFor = (reply: unknown = { run: completed() }) => ({
   ...createMockCreationApi(),
   fetchJson: vi.fn<CreationApi["fetchJson"]>(async () => reply),
@@ -42,7 +51,7 @@ it.each([
   ["checking", "Checking"],
   ["completed", "Ready"],
   ["needs_attention", "Needs a look"],
-  ["failed", "Needs a look"],
+  ["failed", "Generation failed"],
   ["canceled", "Canceled"],
 ] as const)("explains %s in the creator's words", (status, label) => {
   render(
@@ -289,7 +298,7 @@ it("reopens a ten-slide creation, chooses every take without losing an edit, and
     vi.fn(async () => new Response(new Uint8Array([1, 2, 3]))),
   );
   fireEvent.click(
-    panel().getByRole("button", { name: "Download all chosen clips (10)" }),
+    screen.getByRole("button", { name: "Download all chosen clips (10)" }),
   );
   await waitFor(() => expect(names).toHaveLength(10));
   expect(names).toEqual(
