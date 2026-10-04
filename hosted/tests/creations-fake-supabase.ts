@@ -14,6 +14,7 @@ const uniqueKeys: Record<string, Array<{ columns: string[]; where?: (row: Row) =
   creative_studio_takes: [{ columns: ["id"] }, { columns: ["run_id", "attempt"] }],
   creative_studio_jobs: [{ columns: ["id"] }, { columns: ["project_id", "idempotency_key"] }],
   creative_studio_vision_jobs: [{ columns: ["id"] }, { columns: ["project_id", "idempotency_key"] }],
+  creative_studio_direction_runs: [{ columns: ["id"] }, { columns: ["project_id", "idempotency_key"] }],
   creative_studio_spend: [
     { columns: ["job_id"], where: (row) => row.job_id != null },
     { columns: ["review_run_id"], where: (row) => row.review_run_id != null },
@@ -35,6 +36,10 @@ const columnDefaults: Record<string, () => Row> = {
     submit_attempt_id: null, provider: "alibaba", seed: null,
   }),
   creative_studio_vision_jobs: () => ({ output_asset_ids: [], result: null, error_code: null, attempt_count: 0 }),
+  creative_studio_direction_runs: () => ({
+    status: "queued", routine_session_id: null, routine_session_url: null, fired_at: null, completed_at: null,
+    result: null, error_code: null,
+  }),
 };
 
 const violates = (name: string, rows: Row[], candidate: Row) => (uniqueKeys[name] ?? []).some(({ columns, where }) => (
