@@ -1,11 +1,16 @@
 import {
   creationListResponseSchema,
   creationViewSchema,
+  finishedFinaliseResponseSchema,
+  finishedUploadResponseSchema,
   layerFinaliseResponseSchema,
   layerUploadResponseSchema,
   type CreationDocumentV2,
   type CreationSummary,
   type CreationView,
+  type FinishedFinaliseResponse,
+  type FinishedUploadRequest,
+  type FinishedUploadResponse,
   type LayerFinaliseRequest,
   type LayerFinaliseResponse,
   type LayerUploadRequest,
@@ -22,6 +27,9 @@ export interface CreationApi {
   requestLayerUploads(id: string, slideId: string, request: LayerUploadRequest): Promise<LayerUploadResponse>;
   uploadFile(signedUrl: string, file: File, onProgress: (fraction: number) => void): Promise<void>;
   finaliseLayers(id: string, slideId: string, request: LayerFinaliseRequest): Promise<LayerFinaliseResponse>;
+  /** A signed upload URL for a finished slide (text baked in), which the motion director will separate. */
+  requestFinishedUpload(id: string, slideId: string, request: FinishedUploadRequest): Promise<FinishedUploadResponse>;
+  finaliseFinished(id: string, slideId: string, assetId: string): Promise<FinishedFinaliseResponse>;
   /** A signed URL (300 s) for an asset this owner holds. */
   assetUrl(assetId: string): Promise<string>;
   /**
@@ -90,6 +98,7 @@ export function createCreationApi(options: {
   };
   const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
   const slidePath = (id: string, slideId: string) => `/api/creations/${id}/slides/${slideId}/layers`;
+  const finishedPath = (id: string, slideId: string) => `/api/creations/${id}/slides/${slideId}/finished`;
   return {
     async listCreations() {
       return creationListResponseSchema.parse(await request("/api/creations")).creations;
@@ -109,6 +118,12 @@ export function createCreationApi(options: {
     uploadFile: options.upload ?? xhrUpload,
     async finaliseLayers(id, slideId, finalise) {
       return layerFinaliseResponseSchema.parse(await request(slidePath(id, slideId), json("PUT", finalise)));
+    },
+    async requestFinishedUpload(id, slideId, upload) {
+      return finishedUploadResponseSchema.parse(await request(finishedPath(id, slideId), json("POST", upload)));
+    },
+    async finaliseFinished(id, slideId, assetId) {
+      return finishedFinaliseResponseSchema.parse(await request(finishedPath(id, slideId), json("PUT", { assetId })));
     },
     fetchJson(path, init = {}) {
       return request(path, init.body === undefined ? { method: init.method ?? "GET" } : json(init.method ?? "POST", init.body));

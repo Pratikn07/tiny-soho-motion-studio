@@ -81,6 +81,6 @@ export function HostedStudio({ creation = false }: { creation?: boolean }) {
     </main></div>;
   }
   return <>{authError && <p role="alert">{authError}</p>}{creation && creationApi
-    ? <CreationShell key={session.user.id} api={creationApi} onSignOut={() => void signOut()} />
+    ? <CreationShell key={session.user.id} api={creationApi} onSignOut={() => void signOut()} initialUploadMode="finished" />
     : <StudioShell key={session.user.id} api={api} onSignOut={() => void signOut()} />}</>;
 }

@@ -1,0 +1,19 @@
+/* Motion director: the finished-slide entry and its progress panel. Colours follow upload.module.css. */
+.altPath { margin-top: 18px !important; color: var(--muted, #6e7069); font-size: 12px; }
+.linkButton { margin-left: 8px; padding: 0; color: #49664e; background: none; border: 0; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.linkButton:first-child { margin-left: 0; }
+.kbd { padding: 1px 5px; font: 11px/1.4 system-ui, sans-serif; background: #f3f2ec; border: 1px solid #dcdcd2; border-radius: 3px; }
+
+.panel { margin: 18px 34px 0; padding: 14px 18px; background: #fff; border: 1px solid #e2e2d9; border-radius: 4px; }
+.run + .run { margin-top: 12px; padding-top: 12px; border-top: 1px solid #efeee8; }
+.line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: #3d4039; font-size: 13px; line-height: 1.6; }
+.line a { color: #49664e; text-underline-offset: 3px; }
+.problem { margin-top: 6px !important; color: #a14c2d; font-size: 12px; line-height: 1.5; }
+.pulse { width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #8fa591; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; opacity: 1; } }
+
+.previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin: 12px 0 0; padding: 0; list-style: none; }
+.previews li { display: grid; gap: 4px; }
+.previews video { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; background: #efece4; border-radius: 3px; }
+.previews span { color: var(--muted, #6e7069); font-size: 11px; }

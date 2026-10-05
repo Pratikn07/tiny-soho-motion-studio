@@ -20,6 +20,9 @@ export const MOCK_ROUTES: MockRoute[] = [];
 
 export type MeasuredImage = { width: number; height: number };
 
+/** Sizes of finished slides uploaded to the mock, so the mocked motion director can give its layers a size. */
+export const MOCK_ASSET_SIZES = new Map<string, MeasuredImage>();
+
 const measureInBrowser = async (file: Blob): Promise<MeasuredImage> => {
   const bitmap = await createImageBitmap(file);
   const size = { width: bitmap.width, height: bitmap.height };
@@ -160,6 +163,20 @@ export function createMockCreationApi(options: {
         }),
       };
       return { creation: store(id, document), checks };
+    },
+    async requestFinishedUpload(_id, _slideId, upload) {
+      const signedUrl = `https://mock.storage/upload/${upload.assetId}`;
+      pending.set(signedUrl, upload.assetId);
+      return { assetId: upload.assetId, signedUrl };
+    },
+    async finaliseFinished(_id, _slideId, assetId) {
+      const known = assets.get(assetId);
+      const file = known?.file ?? files.get(assetId);
+      if (!file) throw new CreationApiError(400, "finished_missing", "The slide upload is incomplete. Upload it again.");
+      const size = known?.size ?? await measure(file);
+      assets.set(assetId, { file, size });
+      MOCK_ASSET_SIZES.set(assetId, size);
+      return { assetId, ...size };
     },
     async fetchJson(path, init = {}) {
       const method = init.method ?? (init.body === undefined ? "GET" : "POST");

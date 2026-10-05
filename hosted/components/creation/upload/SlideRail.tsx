@@ -11,6 +11,8 @@ type Props = {
   slides: SlideV2[];
   selectedId: string | null;
   uploads: Record<string, SlideUpload>;
+  /** Finished slides the motion director is working on. */
+  directing?: Set<string>;
   previews: Record<string, { background: string | null; text: string | null }>;
   onSelect: (slideId: string) => void;
   /** Moves a slide to a new position in carousel order. */
@@ -20,7 +22,7 @@ type Props = {
 };
 
 /** The carousel in order. Drag a card, or press Alt + an arrow key on it, to reorder. */
-export function SlideRail({ slides, selectedId, uploads, previews, onSelect, onMove, onRetry, addControl }: Props) {
+export function SlideRail({ slides, selectedId, uploads, directing, previews, onSelect, onMove, onRetry, addControl }: Props) {
   const [dragging, setDragging] = useState<string | null>(null);
   return (
     <nav className={u.rail} aria-label="Slides">
@@ -34,6 +36,7 @@ export function SlideRail({ slides, selectedId, uploads, previews, onSelect, onM
             total={slides.length}
             selected={slide.id === selectedId}
             upload={uploads[slide.id]}
+            directing={directing?.has(slide.id)}
             preview={previews[slide.id] ?? { background: null, text: null }}
             onSelect={() => onSelect(slide.id)}
             onMove={(to) => onMove(slide.id, to)}

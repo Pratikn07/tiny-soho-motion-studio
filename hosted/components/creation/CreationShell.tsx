@@ -15,6 +15,9 @@ import { slideStatus, statusText } from "./upload/SlideCard";
 import { SlideRail } from "./upload/SlideRail";
 import { UploadChecks } from "./upload/UploadChecks";
 import { useUploads } from "./upload/useUploads";
+import { DirectionStatus } from "./direction/DirectionStatus";
+import { FinishedUpload, imageFiles } from "./direction/FinishedUpload";
+import { useDirection } from "./direction/useDirection";
 import c from "./creation.module.css";
 
 const PARAM = "creation";
@@ -32,10 +35,23 @@ function writeParam(id: string | null, mode: "push" | "replace") {
 
 const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
 
-/** The creation page: history, the slide rail, the selected slide, and an inspector whose panels later tasks fill. */
-export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?: () => void }) {
+const slideName = (file: File) => file.name.replace(/\.[^.]+$/, "").slice(0, 255) || "Slide";
+
+/**
+ * The creation page: history, the slide rail, the selected slide, and an inspector whose panels later tasks fill.
+ * A new creation starts from finished slides (the motion director separates their words) or from layers.
+ * `initialUploadMode` defaults to layers for older entry points; the production page opens on finished slides.
+ */
+export function CreationShell({ api, onSignOut, initialUploadMode = "layers", directionPollMs }: {
+  api: CreationApi;
+  onSignOut?: () => void;
+  initialUploadMode?: "finished" | "layers";
+  /** How often to check on the motion director (default 15 s). */
+  directionPollMs?: number;
+}) {
   const store = useCreation(api);
   const { view } = store;
+  const [uploadMode, setUploadMode] = useState(initialUploadMode);
   const uploads = useUploads({ api, step: store.step, creationId: () => store.latest()?.id ?? null });
   const [creations, setCreations] = useState<CreationSummary[]>([]);
   const [listBusy, setListBusy] = useState(true);
@@ -62,6 +78,19 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
     if (view) { try { sessionStorage.setItem(`tiny-soho:slide:${view.id}`, id); } catch {} }
   };
 
+  const direction = useDirection({
+    api,
+    creationId: view?.id ?? null,
+    pollMs: directionPollMs,
+    onFinished: async (id) => {
+      // The director wrote layers into the saved creation; reload it so the slides show them.
+      if (store.latest()?.id === id) {
+        await store.flush().catch(() => undefined);
+        store.open(await api.getCreation(id));
+      }
+      void refreshListRef.current();
+    },
+  });
   const slides = useMemo(() => (view ? ordered(view.document) : []), [view]);
   const selected = slides.find((slide) => slide.id === selectedId) ?? slides[0] ?? null;
 
@@ -74,6 +103,9 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
       setListBusy(false);
     }
   }, [api]);
+
+  const refreshListRef = useRef(refreshList);
+  refreshListRef.current = refreshList;
 
   const openCreation = useCallback(async (id: string | null, mode: "push" | "replace" | "none" = "push") => {
     if (navigation.current) return;
@@ -149,11 +181,14 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
 
   const previews = useMemo(() => Object.fromEntries(slides.map((slide) => {
     const local = uploads.uploads[slide.id]?.local;
+    // A finished slide shows as uploaded until the director replaces it with layers.
+    const finished = !slide.layers.backgroundAssetId ? direction.local[slide.id] : undefined;
     const remote = (id: string | null) => (id ? urls[id]?.url ?? null : null);
     return [slide.id, local
       ? { background: local.background, text: local.text }
-      : { background: remote(slide.layers.backgroundAssetId), text: remote(slide.layers.textAssetId) }];
-  })), [slides, uploads.uploads, urls]);
+      : finished ? { background: finished, text: null }
+        : { background: remote(slide.layers.backgroundAssetId), text: remote(slide.layers.textAssetId) }];
+  })), [direction.local, slides, uploads.uploads, urls]);
 
   const ensureCreation = useCallback(async (name: string) => {
     const latest = store.latest();
@@ -199,6 +234,40 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
       setNotice(error instanceof Error ? error.message : "Those slides couldn't be added. Try again.");
     }
   }, [ensureCreation, store, uploads]);
+
+  /** Finished slides: save one slide per image, upload them, and hand them to the motion director. */
+  const addFinished = useCallback(async (files: File[]) => {
+    setNotice("");
+    const images = imageFiles(files);
+    if (!images.length) {
+      setNotice("Choose PNG, JPG or WebP slides.");
+      return;
+    }
+    const room = MAX_SLIDES - (store.latest() ? ordered(store.latest()!.document).length : 0);
+    const accepted = images.slice(0, Math.max(0, room));
+    if (accepted.length < images.length) setNotice(`A carousel holds up to ${MAX_SLIDES} slides; the rest were left out.`);
+    if (!accepted.length) return;
+    try {
+      const creation = await ensureCreation(slideName(accepted[0]));
+      const entries = accepted.map((file) => ({ slideId: crypto.randomUUID(), file }));
+      await store.edit((document) => ({
+        ...document,
+        slides: withOrder([...ordered(document), ...entries.map(({ slideId, file }): SlideV2 => ({
+          id: slideId,
+          name: slideName(file),
+          order: 0,
+          width: null,
+          height: null,
+          layers: { backgroundAssetId: null, textAssetId: null },
+        }))]),
+      }), { now: true });
+      setSelectedId((current) => current ?? entries[0].slideId);
+      setAnnouncement(`Added ${entries.length} ${entries.length === 1 ? "slide" : "slides"}. Sending them to the motion director.`);
+      await direction.start(creation.id, entries);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Those slides couldn't be added. Try again.");
+    }
+  }, [direction, ensureCreation, store]);
 
   const addFiles = useCallback((files: File[]) => {
     setNotice("");
@@ -275,7 +344,8 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
       if (!event.dataTransfer.files.length) return;
       event.preventDefault();
       setPageDrop(false);
-      addFiles(Array.from(event.dataTransfer.files));
+      if (uploadMode === "finished") void addFinished(Array.from(event.dataTransfer.files));
+      else addFiles(Array.from(event.dataTransfer.files));
     },
   };
 
@@ -293,7 +363,12 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
       }))}
     />
   );
-  const status = selected ? slideStatus(selected, uploads.uploads[selected.id]) : null;
+  // Finished slides still uploading for, or waiting on, the motion director.
+  const directing = new Set([
+    ...Object.entries(direction.uploads).filter(([, upload]) => upload.status !== "error").map(([slideId]) => slideId),
+    ...direction.runs.filter((run) => run.status === "running").flatMap((run) => run.slides.map((slide) => slide.slideId)),
+  ]);
+  const status = selected ? slideStatus(selected, uploads.uploads[selected.id], directing.has(selected.id)) : null;
   const checks = selected ? uploads.uploads[selected.id]?.checks ?? selected.checks : undefined;
   const saveLabel = { idle: "", saving: "Saving…", saved: "Saved", error: "Not saved" }[store.saveState];
 
@@ -359,13 +434,23 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
           <p className={c.notice} role="alert">{notice || store.saveError}</p>
         )}
         <p className={c.visuallyHidden} aria-live="polite">{announcement}</p>
+        <DirectionStatus
+          uploads={direction.uploads}
+          runs={direction.runs}
+          error={direction.error}
+          names={Object.fromEntries(slides.map((slide) => [slide.id, slide.name]))}
+          onRetry={(run) => void direction.retry(run)}
+          onDismiss={direction.dismiss}
+        />
 
         <main id="creation-main" className={c.main} tabIndex={-1} aria-busy={opening}>
           {opening ? <p className={c.loading}>Opening your creation…</p>
             : !slides.length ? (
               <div className={c.emptyLayout}>
-                <CreationUpload variant="hero" onFiles={addFiles} />
-                {pairingTray}
+                {uploadMode === "finished"
+                  ? <FinishedUpload onFiles={(files) => void addFinished(files)} onUseLayers={() => setUploadMode("layers")} />
+                  : <CreationUpload variant="hero" onFiles={addFiles} />}
+                {uploadMode === "layers" && pairingTray}
               </div>
             ) : (
               <div className={c.workspace}>
@@ -373,11 +458,14 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
                   slides={slides}
                   selectedId={selected?.id ?? null}
                   uploads={uploads.uploads}
+                  directing={directing}
                   previews={previews}
                   onSelect={selectSlide}
                   onMove={move}
                   onRetry={(slideId) => void uploads.retry(slideId)}
-                  addControl={<CreationUpload ref={addPicker} variant="compact" onFiles={addFiles} disabled={slides.length >= MAX_SLIDES} />}
+                  addControl={<CreationUpload ref={addPicker} variant="compact"
+                    onFiles={uploadMode === "finished" ? (files) => void addFinished(files) : addFiles}
+                    disabled={slides.length >= MAX_SLIDES} />}
                 />
                 <section className={c.stage} aria-label="Selected slide">
                   {pairingTray}
@@ -421,6 +509,9 @@ export function CreationShell({ api, onSignOut }: { api: CreationApi; onSignOut?
                         <div><dt>Text layer</dt><dd>{selected.layers.textAssetId || uploads.uploads[selected.id]?.pair.text ? "Yes" : "None"}</dd></div>
                       </dl></details>
                       <UploadChecks checks={checks} />
+                      {status === "directing" && (
+                        <p className={c.hint}>The motion director is lifting this slide&rsquo;s words off the picture and setting them back with motion. It usually takes 2–4 minutes a slide.</p>
+                      )}
                       {status === "missing" && (
                         <p className={c.hint}>This slide's upload didn't finish. Choose its two files again with Replace files.</p>
                       )}

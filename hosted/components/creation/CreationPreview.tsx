@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { createMockCreationApi } from "./mock-api";
 import "./motion/mock-routes";
 import "./model/mock-routes";
+import "./direction/mock-routes";
 import { getMockRunningSlides, mockTakes } from "./takes/mock-routes";
 import { contractFixtures } from "@/lib/contract/fixtures";
 import type { RunView } from "@/lib/contract";
@@ -32,7 +33,7 @@ export default function CreationPreview() {
           setSample(status); setVersion(value => value + 1);
         }}><option value="completed">Completed</option><option value="queued">Waiting</option><option value="generating">Animating</option><option value="failed">Failed</option></select></label>
       </details>
-      <CreationShell key={version} api={api} />
+      <CreationShell key={version} api={api} initialUploadMode="finished" />
     </>
   );
 }
