@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -106,6 +107,41 @@ class SupabaseVisionRepository:
         if response.is_error or not response.content:
             raise VisionRepositoryError("Vision input could not be downloaded.")
         return response.content, asset["mime_type"], url
+
+    def download_direction_plan(self, job: VisionJob, text_asset_id: str) -> bytes | None:
+        """The motion director's plan.json saved next to a directed text layer, or None for any other text layer.
+
+        Direction outputs live at owners/<owner>/projects/<project>/direction/<run>/<slide>/; the path is rebuilt from
+        the text layer's own record in this project, never taken from job options."""
+        asset = self._owned_asset(job, text_asset_id)
+        folder = f"owners/{job.owner_user_id}/projects/{job.project_id}/direction/"
+        match = re.fullmatch(re.escape(folder) + r"([0-9a-f-]{36})/([0-9a-f-]{36})/text-layer\.png", asset["object_path"])
+        if not match or not all(UUID.match(part) for part in match.groups()):
+            return None
+        plan_path = asset["object_path"].removesuffix("text-layer.png") + "plan.json"
+        try:
+            signed = self.client.post(
+                f"{self.config.supabase_url}/storage/v1/object/sign/creative-studio/{quote(plan_path, safe='/')}",
+                headers=self.headers, json={"expiresIn": 300})
+        except httpx.RequestError:
+            raise VisionRepositoryError("Supabase Vision connection is temporarily unavailable.") from None
+        if signed.status_code in (400, 404):  # No plan saved for this slide: finish with the line reveal.
+            return None
+        if signed.is_error:
+            raise VisionRepositoryError("Supabase Vision storage is temporarily unavailable.")
+        signed_url = signed.json().get("signedURL") or signed.json().get("signedUrl")
+        if not isinstance(signed_url, str):
+            raise VisionRepositoryError("Vision input URL could not be signed.")
+        url = signed_url if signed_url.startswith("http") else f"{self.config.supabase_url}/storage/v1{signed_url}"
+        try:
+            response = self.client.get(url, timeout=httpx.Timeout(60.0))
+        except httpx.RequestError:
+            raise VisionRepositoryError("Vision input download was interrupted.") from None
+        if response.status_code == 404:
+            return None
+        if response.is_error:
+            raise VisionRepositoryError("Vision input could not be downloaded.")
+        return response.content
 
     def find_derived(self, job: VisionJob, object_path: str) -> str | None:
         rows = self._request(
@@ -223,6 +259,11 @@ class JobStorage(VisionStorage):
         if owner_user_id != self.job.owner_user_id or project_id != self.job.project_id or asset_id not in self.job.input_asset_ids:
             raise VisionRepositoryError("Vision input ownership check failed.")
         return self.repository.download_asset(self.job, asset_id)
+
+    def download_direction_plan(self, owner_user_id: str, project_id: str, text_asset_id: str) -> bytes | None:
+        if owner_user_id != self.job.owner_user_id or project_id != self.job.project_id or text_asset_id not in self.job.input_asset_ids:
+            raise VisionRepositoryError("Vision input ownership check failed.")
+        return self.repository.download_direction_plan(self.job, text_asset_id)
 
     def _allowed(self, object_path: str) -> bool:
         project = f"owners/{self.job.owner_user_id}/projects/{self.job.project_id}/"

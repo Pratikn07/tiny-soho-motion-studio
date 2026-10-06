@@ -52,3 +52,17 @@ New creative-vision operation `finish` (same claim/lease/upload flow as `compose
 ## Out of scope
 
 Checks and verdicts (P5), text animation settings UI (U4), flat-upload text protection (later).
+
+## Director motion (added after P4)
+
+Slides directed by the Claude Code motion director have a `plan.json` next to their text layer in
+`owners/{uid}/projects/{pid}/direction/{runId}/{slideId}/`. Finishing finds it from the text layer's own asset record
+(never from job options) and plays the director's word-level motion (`creative-vision/src/motion.py`, a Pillow port
+of the runtime's `tools/render.py`, with the brand fonts and logos in `creative-vision/brand/`). Once every cue has
+settled, each frame shows the text layer itself, so the checks' text drift is the same as for the line reveal.
+
+- The plan is model output, so it is validated strictly; a missing or unusable plan falls back to the line reveal and
+  the result says why in `motionPlanProblem`. A plan whose text is not all in by 4.5 s is not used.
+- `textAnimation.style: "none"` still means still text: the plan is ignored.
+- The result adds `textMotion: "lines" | "director"`; `lines` is the plan's line count, `step` is 0.
+- When the runtime's effects or layout change, change `motion.py` the same way.

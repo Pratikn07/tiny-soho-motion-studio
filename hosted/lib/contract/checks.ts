@@ -46,6 +46,10 @@ export const finishJobResultSchema = z.object({
   colourGains: z.tuple([z.number(), z.number(), z.number()]),
   style: z.enum(TEXT_ANIMATION_STYLES),
   coverFrame: z.enum(["first", "last"]),
+  /** "director" when finishing played the motion director's plan.json next to the text layer. */
+  textMotion: z.enum(["lines", "director"]).optional(),
+  /** Why a saved director plan was not used; the final then used the line reveal. */
+  motionPlanProblem: z.string().max(300).optional(),
 });
 export type FinishJobResult = z.infer<typeof finishJobResultSchema>;
 
