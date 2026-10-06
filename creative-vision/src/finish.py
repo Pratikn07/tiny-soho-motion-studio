@@ -1,9 +1,13 @@
-"""Finishing: put the creator's text layer back onto a model clip, one line at a time.
+"""Finishing: put the creator's text layer back onto a model clip, one line at a time, or with the director's motion.
 
 The model only ever animates the background. This step colour-matches the clip to the background still and
 overlays the text layer's own pixels: each line is cut straight out of the transparent PNG and only its opacity
 and a small vertical offset change over time, so the lettering on the last frame is exactly the creator's.
 Ported from benchmarks/gpu/animate_text.py (checked frame by frame on the potty slide: 14 lines, in by 2.37 s).
+
+A slide directed by the Claude Code motion director has a `plan.json` next to its text layer. Then the text plays the
+director's word-level motion instead (see motion.py), and from the moment every cue has settled the frames show the
+text layer's own pixels, exactly as in the line reveal. A missing or unusable plan falls back to the line reveal.
 """
 from __future__ import annotations
 
@@ -11,12 +15,15 @@ import math
 import re
 import subprocess
 import tempfile
+import time
 from dataclasses import asdict, dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 from PIL import Image, ImageOps, ImageStat
+
+from .motion import Director, parse_plan
 
 if TYPE_CHECKING:
     from .processor import VisionJob, VisionResult
@@ -35,6 +42,7 @@ MAX_LINES = 60  # Each line is one ffmpeg input; more than this is not a text la
 MAX_OUTPUT_PIXELS = 16_000_000
 MAX_LAYER_PIXELS = 40_000_000
 TIMEOUT_SECONDS = 240
+DIRECTED_TEXT_BY = DURATION - 0.5  # A director plan whose entrances finish later than this is not used.
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 STYLES = ("none", "fade", "fade-rise", "soft-zoom", "slide-in")
 
@@ -173,34 +181,48 @@ class FinishOutput:
     text_in_by: float
     step: float
     gains: tuple[float, float, float]
+    text_motion: str = "lines"
+
+
+def director_for(plan: bytes, layer: Image.Image) -> Director:
+    """The director's motion for this text layer. Raises ValueError when the plan can't be used as it is."""
+    director = Director.from_plan(parse_plan(plan, layer.size), layer.size)
+    if director.text_in_by > DIRECTED_TEXT_BY:
+        raise ValueError("The director's text would still be coming in when the clip ends.")
+    return director
 
 
 def finish_metadata(raw: bytes, background: Image.Image, layer: Image.Image | None, animation: TextAnimation,
-                    *, ffmpeg: str = "ffmpeg") -> dict[str, object]:
+                    *, director: Director | None = None, ffmpeg: str = "ffmpeg") -> dict[str, object]:
     """The `finish` result (T0 FinishJobResult) for these inputs, without rendering: used when the take's final
     already exists, so a retried job reports the same numbers as the run that made the file."""
-    boxes = text_lines(layer) if layer is not None else []
-    timing = schedule(animation, len(boxes))
     with tempfile.TemporaryDirectory(prefix="tiny-soho-finish-") as directory:
         raw_path = Path(directory) / "raw.mp4"
         raw_path.write_bytes(raw)
         gains = colour_gains(background, video_frame(raw_path, background.size, last=False, ffmpeg=ffmpeg))
+    if director is not None and layer is not None:
+        return result_data(director.lines, director.text_in_by, 0.0, gains, animation, "director")
+    boxes = text_lines(layer) if layer is not None else []
+    timing = schedule(animation, len(boxes))
     return result_data(len(boxes), timing.text_in_by, timing.step, gains, animation)
 
 
 def result_data(lines: int, text_in_by: float, step: float, gains: tuple[float, float, float],
-                animation: TextAnimation) -> dict[str, object]:
+                animation: TextAnimation, text_motion: str = "lines") -> dict[str, object]:
     return {"lines": lines, "textInBy": text_in_by, "step": step, "colourGains": list(gains),
-            "style": animation.style, "coverFrame": animation.coverFrame}
+            "style": animation.style, "coverFrame": animation.coverFrame, "textMotion": text_motion}
 
 
 def render_final(raw: bytes, background: Image.Image, layer: Image.Image | None, animation: TextAnimation,
-                 *, ffmpeg: str = "ffmpeg") -> FinishOutput:
-    """Colour-match the raw clip to the background and animate the text layer in, line by line."""
+                 *, director: Director | None = None, ffmpeg: str = "ffmpeg") -> FinishOutput:
+    """Colour-match the raw clip to the background and animate the text layer in: with the director's motion when
+    there is a plan, otherwise line by line."""
     width, height = background.size
     if layer is not None and layer.size != background.size:
         raise ValueError("The text layer must be the same size as the background.")
     out_w, out_h = output_size(width, height)
+    if director is not None and layer is not None:
+        return render_directed(raw, background, layer, animation, director, ffmpeg=ffmpeg)
     boxes = text_lines(layer) if layer is not None else []
     if len(boxes) > MAX_LINES:
         raise ValueError("The text layer has too many separate lines to animate.")
@@ -259,6 +281,64 @@ def render_final(raw: bytes, background: Image.Image, layer: Image.Image | None,
                             timing.step, gains)
 
 
+def render_directed(raw: bytes, background: Image.Image, layer: Image.Image, animation: TextAnimation,
+                    director: Director, *, ffmpeg: str = "ffmpeg") -> FinishOutput:
+    """The director's motion over the colour-matched clip, frame by frame. Once every cue has settled, each frame
+    gets the text layer itself, so the held text (and what the checks measure) is exactly the layer."""
+    width, height = background.size
+    out_w, out_h = output_size(width, height)
+    frame_bytes, frames = width * height * 3, round(DURATION * FPS)
+    with tempfile.TemporaryDirectory(prefix="tiny-soho-finish-") as directory:
+        folder = Path(directory)
+        raw_path, out_path = folder / "raw.mp4", folder / "final.mp4"
+        raw_path.write_bytes(raw)
+        gains = colour_gains(background, video_frame(raw_path, (width, height), last=False, ffmpeg=ffmpeg))
+        # Same clip treatment as the line reveal: hold a short clip's last frame, trim a long one, match colour.
+        decode = [ffmpeg, "-v", "error", "-i", str(raw_path), "-vf",
+                  f"scale={width}:{height},setsar=1,fps={FPS},tpad=stop_mode=clone:stop_duration={DURATION},"
+                  f"colorchannelmixer=rr={gains[0]}:gg={gains[1]}:bb={gains[2]},format=rgb24",
+                  "-t", str(DURATION), "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"]
+        encode = [ffmpeg, "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{width}x{height}",
+                  "-r", str(FPS), "-i", "pipe:0", "-vf", f"scale={out_w}:{out_h}:flags=neighbor,setsar=1,format=yuv420p",
+                  "-an", "-t", str(DURATION), "-r", str(FPS), "-c:v", "libx264", "-crf", str(CRF),
+                  "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out_path)]
+        reader = subprocess.Popen(decode, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        writer = subprocess.Popen(encode, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        started = time.monotonic()
+        try:
+            for index in range(frames):
+                if time.monotonic() - started > TIMEOUT_SECONDS:
+                    raise subprocess.TimeoutExpired(encode, TIMEOUT_SECONDS)
+                data = reader.stdout.read(frame_bytes)  # type: ignore[union-attr]
+                if len(data) < frame_bytes:
+                    break  # tpad holds short clips, so this only happens on a broken clip; ffmpeg's exit code tells.
+                frame = Image.frombytes("RGB", (width, height), data).convert("RGBA")
+                seconds = index / FPS
+                if seconds >= director.settled_at:
+                    frame.alpha_composite(layer)
+                else:
+                    director.draw(frame, seconds)
+                writer.stdin.write(frame.convert("RGB").tobytes())  # type: ignore[union-attr]
+            writer.stdin.close()  # type: ignore[union-attr]
+            if writer.wait(timeout=TIMEOUT_SECONDS) or reader.wait(timeout=60) or not out_path.exists():
+                raise subprocess.CalledProcessError(1, encode)
+        finally:
+            for process in (reader, writer):
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+        cover = apply_gains(video_frame(raw_path, (width, height), last=animation.coverFrame == "last", ffmpeg=ffmpeg),
+                            gains).convert("RGBA")
+        if animation.coverFrame == "last":
+            cover.alpha_composite(layer)
+        else:
+            director.draw(cover, 0.0)  # The director's hook is on screen from frame 0.
+        buffer = BytesIO()
+        cover.convert("RGB").save(buffer, format="PNG")
+        return FinishOutput(out_path.read_bytes(), buffer.getvalue(), out_w, out_h, director.lines,
+                            director.text_in_by, 0.0, gains, "director")
+
+
 def open_layer(data: bytes, *, name: str) -> Image.Image:
     with Image.open(BytesIO(data)) as image:
         if image.width * image.height > MAX_LAYER_PIXELS:
@@ -272,6 +352,8 @@ class FinishStorage(Protocol):
     def download_owned_source(self, owner_user_id: str, project_id: str, asset_id: str) -> tuple[bytes, str, str]: ...
 
     def download_owned_input(self, owner_user_id: str, project_id: str, asset_id: str) -> tuple[bytes, str, str]: ...
+
+    def download_direction_plan(self, owner_user_id: str, project_id: str, text_asset_id: str) -> bytes | None: ...
 
     def find_derived(self, object_path: str) -> str | None: ...
 
@@ -333,15 +415,25 @@ def run_finish_job(job: "VisionJob", storage: FinishStorage, ffmpeg: str) -> "Vi
             layer = clean_text_layer(open_layer(text_data, name="text layer"))
         if background.size != (width, height):
             raise ValueError("The background does not match the slide size.")
+        director, plan_problem = None, None
+        if text_id and layer is not None and animation.style != "none":  # Style none keeps the text still.
+            plan = storage.download_direction_plan(job.owner_user_id, job.project_id, text_id)
+            if plan is not None:
+                try:
+                    director = director_for(plan, layer)
+                except ValueError as error:  # Not the creator's inputs: fall back to the line reveal and say why.
+                    plan_problem = str(error)
+        extra = {"motionPlanProblem": plan_problem} if plan_problem else {}
         if all(existing):  # Already finished (a retried job): report the result, render and upload nothing.
-            data = finish_metadata(raw, background, layer, animation, ffmpeg=ffmpeg) | {"reused": True}
-            return VisionResult("completed", existing, paths, out_w, out_h, data=data)  # type: ignore[arg-type]
-        result = render_final(raw, background, layer, animation, ffmpeg=ffmpeg)
+            data = finish_metadata(raw, background, layer, animation, director=director, ffmpeg=ffmpeg)
+            return VisionResult("completed", existing, paths, out_w, out_h,  # type: ignore[arg-type]
+                                data=data | extra | {"reused": True})
+        result = render_final(raw, background, layer, animation, director=director, ffmpeg=ffmpeg)
     except ValueError as error:
         return attention("finish_inputs_invalid", str(error))
     except (OSError, subprocess.SubprocessError):
         return attention("finish_failed", "The clip could not be finished. Try this take again.")
     cover_id = existing[1] or storage.upload_derived(paths[1], result.cover, "image/png", "derived-image", overwrite=True)
     final_id = existing[0] or storage.upload_derived(paths[0], result.video, "video/mp4", "derived-video", overwrite=True)
-    return VisionResult("completed", [final_id, cover_id], paths, result.width, result.height,
-                        data=result_data(result.lines, result.text_in_by, result.step, result.gains, animation))
+    data = result_data(result.lines, result.text_in_by, result.step, result.gains, animation, result.text_motion)
+    return VisionResult("completed", [final_id, cover_id], paths, result.width, result.height, data=data | extra)

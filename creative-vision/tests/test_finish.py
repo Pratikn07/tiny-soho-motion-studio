@@ -210,6 +210,7 @@ class FakeStorage:
         self.assets: dict[str, str] = {}
         self.uploads: list[tuple[str, str, bool]] = []
         self.downloads: list[str] = []
+        self.plan: bytes | None = None  # A director plan saved next to the text layer.
 
     def download_owned_source(self, owner, project, asset_id):
         assert (owner, project, asset_id) == (OWNER, PROJECT, RAW)
@@ -219,6 +220,10 @@ class FakeStorage:
     def download_owned_input(self, owner, project, asset_id):
         self.downloads.append(asset_id)
         return (*self.files[asset_id], "signed")
+
+    def download_direction_plan(self, owner, project, asset_id):
+        assert (owner, project, asset_id) == (OWNER, PROJECT, TEXT)
+        return self.plan
 
     def find_derived(self, object_path):
         return self.assets.get(object_path)
@@ -308,3 +313,123 @@ def test_golden_potty_slide(tmp_path):
     mean = sum(ImageStat.Stat(difference, mask=letters).mean) / 3
     print(f"potty: {out.lines} lines, in by {out.text_in_by}s, letter-pixel difference {mean:.2f}, gains {out.gains}")
     assert mean <= 3
+
+
+# --- The motion director's plan ----------------------------------------------------------------------------------
+
+def director_plan(**changes) -> dict:
+    """A plan in the director's format for the 240x240 test slide: a still hook and a line that rises in at 0.6 s."""
+    base = {"brand": False, "concept": "story", "lines": [
+        {"id": "l1", "role": "headline", "box": [20, 30, 220, 60], "size": 26, "runs": [{"text": "Hook line", "rose": True}]},
+        {"id": "l2", "role": "body", "box": [20, 140, 220, 170], "size": 22, "runs": [{"text": "then this", "rose": False}]},
+    ], "motion": [{"line": "l1", "effect": "none", "at": 0}, {"line": "l2", "effect": "rise", "at": 0.6, "dur": 0.45}]}
+    return base | changes
+
+
+def directed_layer(plan: dict) -> Image.Image:
+    """The settled text on transparency, as the director's render.py writes text-layer.png."""
+    from src.motion import Director, parse_plan
+    director = Director.from_plan(parse_plan(json.dumps(plan).encode(), (240, 240)), (240, 240))
+    layer = Image.new("RGBA", (240, 240), (0, 0, 0, 0))
+    director.draw(layer, 10.0)
+    return layer
+
+
+def letters_match(frame: Image.Image, layer: Image.Image) -> float:
+    expected = background().convert("RGBA")
+    expected.alpha_composite(layer)
+    solid = layer.getchannel("A").point(lambda v: 255 if v == 255 else 0)
+    return sum(ImageStat.Stat(ImageChops.difference(frame, expected.convert("RGB")), mask=solid).mean) / 3
+
+
+def test_directed_final_plays_the_plan_and_holds_the_exact_text_layer(tmp_path):
+    from src.finish import director_for
+    plan = director_plan()
+    layer = clean_text_layer(directed_layer(plan))
+    out = render_final(raw_clip(tmp_path, darken=1.0), background(), layer, TextAnimation(),
+                       director=director_for(json.dumps(plan).encode(), layer))
+    assert (out.text_motion, out.lines, out.text_in_by, out.step) == ("director", 2, 1.05, 0.0)
+    info = probe(out.video, tmp_path)
+    assert (info["width"], info["height"], info["frames"], info["duration"]) == (240, 240, 120, 5.0)
+    first, middle, last = (frame_at(out.video, tmp_path, t) for t in (0.0, 0.7, 4.9))
+    hook, second = (20, 20, 220, 70), (20, 125, 220, 180)
+    still = background()
+    assert ImageChops.difference(first.crop(hook), still.crop(hook)).getbbox() is not None  # Hook on frame 0.
+    assert max(ImageStat.Stat(ImageChops.difference(first.crop(second), still.crop(second))).extrema[0]) <= 8
+    assert letters_match(middle, layer) > letters_match(last, layer)  # Still rising at 0.7 s.
+    from src.checks import PROVISIONAL, text_drift
+    assert text_drift(last, layer) <= PROVISIONAL.text_drift  # The held text is the layer: the take checks pass.
+
+
+def test_finish_job_uses_the_directors_plan_and_falls_back_to_lines(tmp_path):
+    processor = VisionProcessor(ffmpeg_path="ffmpeg", ffprobe_path="ffprobe")
+    storage = FakeStorage(tmp_path)
+    storage.files[TEXT] = (png(directed_layer(director_plan()), "PNG"), "image/png")
+    storage.plan = json.dumps(director_plan()).encode()
+    result = process_vision_job(finish_job(), storage, processor)
+    assert result.status == "completed"
+    assert result.data["textMotion"] == "director" and result.data["lines"] == 2 and result.data["textInBy"] == 1.05
+    again = process_vision_job(finish_job(), storage, processor)
+    assert again.data == result.data | {"reused": True}
+
+    late = director_plan(motion=[{"line": "l2", "effect": "rise", "at": 4.4, "dur": 0.45}])
+    for bad in (b"not json", json.dumps(late).encode()):
+        storage = FakeStorage(tmp_path)
+        storage.plan = bad
+        result = process_vision_job(finish_job(), storage, processor)
+        assert result.status == "completed" and result.data["textMotion"] == "lines" and result.data["lines"] == 3
+        assert result.data["motionPlanProblem"]
+
+    storage = FakeStorage(tmp_path)
+    storage.plan = json.dumps(director_plan()).encode()
+    still = finish_job(textAnimation={"style": "none", "firstAt": 0, "step": 0, "fade": 0, "rise": 0, "coverFrame": "last"})
+    assert process_vision_job(still, storage, processor).data["textMotion"] == "lines"  # Style none keeps text still.
+
+
+def test_directed_first_frame_cover_shows_the_hook(tmp_path):
+    from src.finish import director_for
+    plan = director_plan()
+    layer = clean_text_layer(directed_layer(plan))
+    animation = TextAnimation(coverFrame="first")
+    out = render_final(raw_clip(tmp_path, darken=1.0), background(), layer, animation,
+                       director=director_for(json.dumps(plan).encode(), layer))
+    with Image.open(BytesIO(out.cover)) as image:
+        cover = image.convert("RGB")
+    hook, second = (20, 20, 220, 70), (20, 125, 220, 180)
+    assert ImageChops.difference(cover.crop(hook), background().crop(hook)).getbbox() is not None
+    assert ImageChops.difference(cover.crop(second), background().crop(second)).getbbox() is None
+
+
+def test_repository_finds_the_plan_only_next_to_a_directed_text_layer():
+    from unittest.mock import Mock
+
+    import httpx
+    from src.config import HostedVisionConfig
+    from src.repository import JobStorage, SupabaseVisionRepository, VisionRepositoryError
+
+    run, slide = "88888888-8888-4888-8888-888888888888", "99999999-9999-4999-8999-999999999999"
+    folder = f"owners/{OWNER}/projects/{PROJECT}/direction/{run}/{slide}/"
+
+    def repository(object_path, sign_status=200):
+        client = Mock()
+        client.request.return_value = httpx.Response(200, json=[{"id": TEXT, "object_path": object_path,
+                                                                 "mime_type": "image/png", "name": "text-layer.png"}])
+        client.post.return_value = httpx.Response(sign_status, json={"signedURL": "/object/sign/x?token=t"})
+        client.get.return_value = httpx.Response(200, content=b'{"lines": []}')
+        return SupabaseVisionRepository(HostedVisionConfig("https://storage.example", "test-only", 1), client), client
+
+    repo, client = repository(f"{folder}text-layer.png")
+    assert JobStorage(repo, finish_job()).download_direction_plan(OWNER, PROJECT, TEXT) == b'{"lines": []}'
+    assert client.post.call_args.args[0].endswith(f"/creative-studio/{folder}plan.json")
+    for path in (f"owners/{OWNER}/projects/{PROJECT}/slides/{slide}/text.png",
+                 f"owners/{OWNER}/projects/{PROJECT}/direction/{run}/../{slide}/text-layer.png",
+                 f"owners/other/projects/{PROJECT}/direction/{run}/{slide}/text-layer.png"):
+        repo, client = repository(path)
+        assert repo.download_direction_plan(finish_job(), TEXT) is None and not client.post.called
+    repo, _ = repository(f"{folder}text-layer.png", sign_status=400)  # Directed before plans were kept.
+    assert repo.download_direction_plan(finish_job(), TEXT) is None
+    repo, _ = repository(f"{folder}text-layer.png", sign_status=503)
+    with pytest.raises(VisionRepositoryError):
+        repo.download_direction_plan(finish_job(), TEXT)
+    with pytest.raises(VisionRepositoryError):  # Only this job's own text layer.
+        JobStorage(repo, finish_job()).download_direction_plan(OWNER, PROJECT, RAW)

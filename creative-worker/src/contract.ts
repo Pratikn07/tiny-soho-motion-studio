@@ -133,6 +133,10 @@ export type FinishJobResult = {
   colourGains: [number, number, number];
   style: "none" | "fade" | "fade-rise" | "soft-zoom" | "slide-in";
   coverFrame: "first" | "last";
+  /** "director" when the motion director's plan.json was played; absent from results made before it existed. */
+  textMotion?: "lines" | "director";
+  /** Why a saved plan was not used (the final then used the line reveal). */
+  motionPlanProblem?: string;
 };
 
 export type CheckJobOptions = {
