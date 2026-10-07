@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Keeps the Studio Mac runner running while you're logged in. install.sh fills in RUNNER_DIR, NODE and HOME. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.tinysoho.runner</string>
+  <key>ProgramArguments</key>
+  <array><string>__NODE__</string><string>__RUNNER_DIR__/runner.mjs</string></array>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>__PATH__</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/tiny-soho-runner.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/tiny-soho-runner.log</string>
+</dict>
+</plist>
