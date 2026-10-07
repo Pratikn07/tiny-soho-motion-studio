@@ -11,10 +11,12 @@ import { contractFixtures } from "@/lib/contract/fixtures";
 import type { RunView } from "@/lib/contract";
 import { CreationShell } from "./CreationShell";
 import { AppShell } from "@/components/shell/AppShell";
+import { createMockReelsApi } from "@/components/reels/mock-api";
 
 /** Development-only preview on T0's sample data. Files stay in this browser tab; nothing is uploaded. */
 export default function CreationPreview({ shell = false }: { shell?: boolean }) {
   const api = useMemo(() => createMockCreationApi({ seed: true, uploadDelayMs: 350, running:getMockRunningSlides }), []);
+  const reelsApi = useMemo(() => createMockReelsApi(), []);
   const [version, setVersion] = useState(0);
   const [sample, setSample] = useState("completed");
   return (
@@ -35,7 +37,7 @@ export default function CreationPreview({ shell = false }: { shell?: boolean }) 
         }}><option value="completed">Completed</option><option value="queued">Waiting</option><option value="generating">Animating</option><option value="failed">Failed</option></select></label>
       </details>
       {shell
-        ? <AppShell carousels={(bar) => <CreationShell key={version} api={api} initialUploadMode="finished" topbar={bar} />} />
+        ? <AppShell macState="online" reelsApi={reelsApi} carousels={(bar) => <CreationShell key={version} api={api} initialUploadMode="finished" topbar={bar} />} />
         : <CreationShell key={version} api={api} initialUploadMode="finished" />}
     </>
   );

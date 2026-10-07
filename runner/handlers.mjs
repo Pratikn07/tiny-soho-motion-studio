@@ -33,6 +33,32 @@ function firstJsonArray(text) {
   return JSON.parse(match[0]);
 }
 
+/** House rules for every Tiny Soho script, from the first reel ("It's Not the Sugar"). */
+const SCRIPT_RULES = [
+  "Tiny Soho is a calm, realistic parenting account for US moms of toddlers. Voice: a warm mom narrator.",
+  "Length: 20-30 seconds spoken, about 55-75 words, 6-9 lines. US spelling.",
+  "Line 1 is the hook: a clear, surprising claim a viewer understands in the first 2 seconds.",
+  "Shape: conflict, then one big question, then the twist, then one easy thing to do.",
+  "Every line gets one matching visual (onScreen), short enough to read on a phone.",
+  "Voice cues in square brackets are allowed at the start of a line: [curious] [pause] [warmly] [softly] [whispers] [slowly] [excited].",
+  "No shaming of kids, parents or food. No medical advice. Only widely established facts; hedge anything uncertain with 'probably'.",
+  "End with a save prompt tied to a future moment (for example 'Save this for Halloween night').",
+].join("\n");
+
+const scriptAnswer = 'Answer with only JSON: {"lines": [{"time": "0:00", "voice": string, "onScreen": string}], "notes": string}. '
+  + "Times are estimates in m:ss. notes: one sentence on any fact a person should double-check.";
+
+function parseScript(text) {
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw stepError("claude_bad_output", "Claude did not return a script.");
+  const data = JSON.parse(match[0]);
+  const lines = (Array.isArray(data.lines) ? data.lines : []).slice(0, 20).map((line) => ({
+    time: String(line.time ?? "").slice(0, 12), voice: String(line.voice ?? "").slice(0, 400), onScreen: String(line.onScreen ?? "").slice(0, 200),
+  })).filter((line) => line.voice);
+  if (!lines.length) throw stepError("claude_bad_output", "The script came back empty.");
+  return { lines, notes: String(data.notes ?? "").slice(0, 500) };
+}
+
 const handlers = {
   /** Idea, first draft: three story ideas for the topic, for the creator to pick from. */
   "idea/draft": async (job, reel, { progress }) => {
@@ -49,6 +75,22 @@ const handlers = {
     }));
     return { status: "needs_review", result: { ideas }, progress: "Three ideas ready for review" };
   },
+};
+
+handlers["script/draft"] = async (job, reel, { progress }) => {
+  await progress("Claude is writing the script");
+  const idea = job.input.idea ?? {};
+  const text = await askClaude([SCRIPT_RULES, "", `Idea: ${idea.title ?? ""}`, `Hook: ${idea.hook ?? ""}`, `Why it works: ${idea.why ?? ""}`,
+    `Original topic: ${String(job.input.topic ?? "").slice(0, 400)}`, "", "Write the reel script.", scriptAnswer].join("\n"));
+  return { status: "needs_review", result: parseScript(text), progress: "Script ready for review" };
+};
+
+handlers["script/revise"] = async (job, reel, { progress }) => {
+  await progress("Claude is changing the script");
+  const text = await askClaude([SCRIPT_RULES, "", `Idea: ${job.input.idea?.title ?? ""}`, "Current script (JSON):",
+    JSON.stringify(job.input.lines ?? []), "", `The creator asks: ${String(job.input.comments ?? "").slice(0, 1000)}`,
+    "Change only what they ask; keep everything else.", scriptAnswer].join("\n"));
+  return { status: "needs_review", result: parseScript(text), progress: "Revised script ready for review" };
 };
 
 export async function handle(job, reel, tools) {

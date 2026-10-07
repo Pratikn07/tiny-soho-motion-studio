@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { DEFAULT_SECTION, sectionFromHash, type SectionId } from "./sections";
 import { ShellBar, type MacState } from "./ShellBar";
+import type { ReelsApi } from "@/components/reels/api";
+import { ReelsStudio } from "@/components/reels/ReelsStudio";
 import s from "./shell.module.css";
 
 /**
@@ -11,8 +13,10 @@ import s from "./shell.module.css";
  * which receives the shell's bar as its own top bar (`carousels(bar)`) so its layout is unchanged. The other
  * sections show what they will hold until their screens are built. The section is kept in the URL hash.
  */
-export function AppShell({ carousels, onSignOut, macState = "not-set-up" }: {
+export function AppShell({ carousels, onSignOut, macState = "not-set-up", reelsApi = null }: {
   carousels: (bar: ReactNode) => ReactNode;
+  /** The Reels API; without it the Reels section shows what it will hold. */
+  reelsApi?: ReelsApi | null;
   onSignOut?: () => void;
   macState?: MacState;
 }) {
@@ -33,8 +37,8 @@ export function AppShell({ carousels, onSignOut, macState = "not-set-up" }: {
   return (
     <div className={s.page}>
       <header className={s.pageHeader}>{bar}</header>
-      <main className={s.pageBody} id="studio-main">
-        {section === "reels" && <ReelsSection />}
+      <main className={`${s.pageBody} ${section === "reels" && reelsApi ? s.wide : ""}`} id="studio-main">
+        {section === "reels" && (reelsApi ? <ReelsStudio api={reelsApi} macState={macState} /> : <ReelsSection />)}
         {section === "library" && <LibrarySection />}
         {section === "creations" && <CreationsSection onCarousels={() => go("carousels")} />}
       </main>
