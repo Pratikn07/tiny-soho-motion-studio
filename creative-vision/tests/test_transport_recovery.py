@@ -15,6 +15,16 @@ def test_network_disconnect_becomes_recoverable_repository_error():
     with pytest.raises(VisionRepositoryError): repository.claim_vision_job()
     assert repository.claim_vision_job() is None
 
+def test_an_idle_queue_claims_nothing_instead_of_an_all_null_job():
+    client=Mock()
+    empty={'id':None,'owner_user_id':None,'project_id':None,'source_asset_id':None,'operation':None,'options':None,'input_asset_ids':None,'worker_lease_id':None}
+    repository=SupabaseVisionRepository(HostedVisionConfig('https://storage.example','test-only',1),client)
+    for body in (empty,[empty],[]):
+        client.request.return_value=httpx.Response(200,json=body)
+        assert repository.claim_vision_job() is None
+    client.request.return_value=httpx.Response(200,content=b'null')
+    assert repository.claim_vision_job() is None
+
 def test_long_composition_extends_only_its_owned_lease():
     from src.processor import VisionJob
     client=Mock();client.request.return_value=httpx.Response(200,json=[{'id':'job'}])
