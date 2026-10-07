@@ -10,6 +10,7 @@ import { StudioShell } from "@/components/StudioShell";
 import { CreationShell } from "@/components/creation/CreationShell";
 import { createCreationApi } from "@/components/creation/api";
 import { AppShell } from "@/components/shell/AppShell";
+import { useRunnerStatus } from "@/components/shell/useRunnerStatus";
 
 export function HostedStudio({ creation = false, shell = false }: { creation?: boolean; shell?: boolean }) {
   const [client, setClient] = useState<ReturnType<typeof createBrowserSupabaseClient> | null>(null);
@@ -40,6 +41,10 @@ export function HostedStudio({ creation = false, shell = false }: { creation?: b
   const creationApi = useMemo(() => client ? createCreationApi({
     getAccessToken: async () => (await client.auth.getSession()).data.session?.access_token ?? null,
   }) : null, [client]);
+  const getAccessToken = useMemo(() => client
+    ? async () => (await client.auth.getSession()).data.session?.access_token ?? null
+    : null, [client]);
+  const macState = useRunnerStatus(getAccessToken, shell && Boolean(session));
   useEffect(() => {
     if (!api || !session) return;
     let current = true;
@@ -85,6 +90,7 @@ export function HostedStudio({ creation = false, shell = false }: { creation?: b
     return <>{authError && <p role="alert">{authError}</p>}<AppShell
       key={session.user.id}
       onSignOut={() => void signOut()}
+      macState={macState}
       carousels={(bar) => <CreationShell api={creationApi} initialUploadMode="finished" topbar={bar} />}
     /></>;
   }
