@@ -263,9 +263,10 @@ async function finaliseSlide(
     });
     const motion = motionFromResult(slide);
     if (motion) {
+      const direction = { runId: run.id, previewAssetId: preview ? ids.preview : null, story: motion.story, prompt: motion.prompt };
       document = creationDocumentV2Schema.parse({
         ...document,
-        slides: document.slides.map((s) => (s.id === slide.slide_id && !s.motion ? { ...s, motion } : s)),
+        slides: document.slides.map((s) => (s.id === slide.slide_id ? { ...s, direction, motion: s.motion ?? motion } : s)),
       });
     }
     try {

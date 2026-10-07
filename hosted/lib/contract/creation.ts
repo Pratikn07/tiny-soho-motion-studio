@@ -102,6 +102,16 @@ export const slideMotionSchema = z
   );
 export type SlideMotion = z.infer<typeof slideMotionSchema>;
 
+/** Set when the slide's layers came from the Claude Code motion director; cleared when its layers change. */
+export const slideDirectionSchema = z.object({
+  runId: z.string().uuid(),
+  previewAssetId: z.string().uuid().nullable(),
+  /** The director's scene for the video model, written for this layout. */
+  story: z.string().trim().min(1).max(1000),
+  prompt: z.string().trim().min(1).max(5000),
+});
+export type SlideDirection = z.infer<typeof slideDirectionSchema>;
+
 const dimension = z.number().int().positive().max(MAX_IMAGE_SIDE);
 
 export const slideV2Schema = z
@@ -118,6 +128,7 @@ export const slideV2Schema = z
     checks: uploadCheckResultSchema.optional(),
     reviewRunId: z.string().uuid().optional(),
     motion: slideMotionSchema.optional(),
+    direction: slideDirectionSchema.optional(),
     modelId: z.string().trim().min(1).max(120).optional(),
     textAnimation: textAnimationSchema.optional(),
     latestRunId: z.string().uuid().optional(),

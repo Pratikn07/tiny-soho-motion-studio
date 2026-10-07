@@ -190,6 +190,12 @@ describe("direction run", () => {
     const slide = project.carousel_document.slides[0];
     expect(slide).toMatchObject({ width: 200, height: 250, layers: { backgroundAssetId: backgroundId, textAssetId: textId } });
     expect(slide.motion).toMatchObject({ source: "creator", prompt: "She lifts the dinosaur shirt out of the basket.\nAvoid: No camera moves." });
+    // The slide remembers it was directed, so the Text and Motion steps can show the director's version.
+    expect(slide.direction).toEqual({
+      runId: run.id, previewAssetId: stableAssetId(run.id, slideId, "preview.mp4"),
+      story: "She lifts the dinosaur shirt out of the basket.",
+      prompt: "She lifts the dinosaur shirt out of the basket.\nAvoid: No camera moves.",
+    });
     expect(slide.checks).toBeDefined();
     const kinds = fake.current!.tables.creative_studio_assets
       .filter((a) => a.provenance?.source === "direction-run").map((a) => a.kind).sort();

@@ -81,7 +81,7 @@ export function withSlideLayers(
       if (slide.id !== slideId) return slide;
       const changed = slide.layers.backgroundAssetId !== layers.background.assetId
         || slide.layers.textAssetId !== layers.textAssetId;
-      const { reviewRunId: _staleReview, ...rest } = slide;
+      const { reviewRunId: _staleReview, direction: _staleDirection, ...rest } = slide;
       return {
         ...(changed ? rest : slide),
         width: layers.background.width,
