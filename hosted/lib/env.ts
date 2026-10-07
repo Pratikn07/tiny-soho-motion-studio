@@ -9,6 +9,8 @@ export type ServerEnv = {
   ownerEmails: string[];
   configured: boolean;
   creationsV2Enabled: boolean;
+  /** The Studio shell with Reels, Carousels, Library and Creations (`TINY_SOHO_STUDIO_SHELL=true`). */
+  studioShellEnabled: boolean;
 };
 
 const value = (input: EnvInput, key: string) => input[key]?.trim() ?? "";
@@ -28,6 +30,7 @@ export function parseServerEnv(input: EnvInput): ServerEnv {
     supabaseServiceRoleKey,
     ownerEmails,
     creationsV2Enabled: value(input, "TINY_SOHO_CREATIONS_V2").toLowerCase() === "true",
+    studioShellEnabled: value(input, "TINY_SOHO_STUDIO_SHELL").toLowerCase() === "true",
     configured: Boolean(
       supabaseUrl
       && supabasePublishableKey

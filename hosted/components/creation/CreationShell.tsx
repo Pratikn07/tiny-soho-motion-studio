@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 
 import { MAX_SLIDES, type CreationSummary, type SlideV2 } from "@/lib/contract";
 import { CreationSidebar } from "@/components/carousel/CreationSidebar";
@@ -42,9 +42,11 @@ const slideName = (file: File) => file.name.replace(/\.[^.]+$/, "").slice(0, 255
  * A new creation starts from finished slides (the motion director separates their words) or from layers.
  * `initialUploadMode` defaults to layers for older entry points; the production page opens on finished slides.
  */
-export function CreationShell({ api, onSignOut, initialUploadMode = "layers", directionPollMs }: {
+export function CreationShell({ api, onSignOut, initialUploadMode = "layers", directionPollMs, topbar }: {
   api: CreationApi;
   onSignOut?: () => void;
+  /** Replaces the page's own wordmark, tools and sign out, e.g. with the Studio shell's section bar. */
+  topbar?: ReactNode;
   initialUploadMode?: "finished" | "layers";
   /** How often to check on the motion director (default 15 s). */
   directionPollMs?: number;
@@ -375,6 +377,7 @@ export function CreationShell({ api, onSignOut, initialUploadMode = "layers", di
   return (
     <div className={`${c.app} ${pageDrop ? c.pageDrop : ""}`} {...pageDropProps}>
       <header className={c.topbar}>
+        {topbar ?? <>
         <a href="#creation-main" className={c.wordmark} aria-label="Tiny Soho Studio">tiny soho<span>STUDIO</span></a>
         <div className={c.topbarActions}>
           <details className={c.tools}>
@@ -385,6 +388,7 @@ export function CreationShell({ api, onSignOut, initialUploadMode = "layers", di
           </details>
           {onSignOut && <button className={c.textButton} onClick={onSignOut}>Sign out</button>}
         </div>
+        </>}
       </header>
       <CreationSidebar
         creations={creations}
