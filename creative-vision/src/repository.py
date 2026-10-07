@@ -43,7 +43,8 @@ class SupabaseVisionRepository:
         response = self._request("POST", "/rest/v1/rpc/claim_creative_studio_vision_job", json={})
         payload = response.json()
         row = payload[0] if isinstance(payload, list) and payload else payload
-        if not row:
+        # With nothing to claim, the SQL function returns its row type with every field NULL, not an empty result.
+        if not isinstance(row, dict) or not row.get("id"):
             return None
         return VisionJob(
             id=row["id"],
