@@ -1,0 +1,64 @@
+/* Reels section: the Editorial Worktable from DESIGN.md. Rail of steps, then the step's stage. */
+.home, .work {
+  --ink: #242622; --muted: #6e7069; --line: #e2e2d9; --paper: #f5f5ef; --surface: #fdfdf9;
+  --sage: #486452; --sage-deep: #272e25; --sage-wash: #edf2e9; --clay: #a14c2d; --note: #f4f1e7;
+  color: var(--ink);
+}
+.home { display: grid; gap: 24px; max-width: 980px; }
+.work { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 0; margin: -40px -34px -56px; min-height: calc(100svh - 78px); }
+.rail { display: grid; align-content: start; gap: 10px; padding: 24px 16px; background: var(--surface); border-right: 1px solid var(--line); }
+.stage { display: grid; align-content: start; gap: 18px; padding: 32px clamp(18px, 3vw, 40px) 56px; min-width: 0; }
+.title { margin: 0; font-family: StudioDidot, Georgia, serif; font-size: 30px; font-weight: 400; line-height: 1.2; letter-spacing: -.6px; text-wrap: balance; }
+.subtitle { margin: 0 0 10px; font-family: StudioDidot, Georgia, serif; font-size: 20px; font-weight: 400; }
+.reelTitle { margin: 4px 6px 6px; font-family: StudioDidot, Georgia, serif; font-size: 18px; font-weight: 400; line-height: 1.25; }
+.lede { margin: 6px 0 0; max-width: 64ch; color: var(--muted); font-size: 14px; }
+.muted { margin: 0; color: var(--muted); }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.field { width: 100%; padding: 12px; font: inherit; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 4px; resize: vertical; }
+.field:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
+.newReel { display: grid; gap: 10px; padding: 18px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+.primary { min-height: 44px; padding: 0 16px; color: #fff; background: var(--sage-deep); border: 0; border-radius: 4px; font: inherit; font-weight: 600; cursor: pointer; }
+.secondary { min-height: 42px; padding: 0 14px; color: var(--sage-deep); background: none; border: 1px solid var(--line); border-radius: 4px; font: inherit; font-weight: 600; cursor: pointer; }
+.primary:disabled, .secondary:disabled { opacity: .45; cursor: not-allowed; }
+.link { justify-self: start; padding: 4px 6px; color: var(--sage-deep); background: none; border: 0; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.reelRow { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 14px 16px; text-align: left; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 4px; font: inherit; cursor: pointer; }
+.reelRow span { color: var(--muted); }
+.steps { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.step { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; width: 100%; padding: 9px 8px; text-align: left; color: var(--ink); background: none; border: 1px solid transparent; border-radius: 4px; font: inherit; cursor: pointer; }
+.step[aria-current="step"] { background: #fff; border-color: var(--line); }
+.step:disabled { color: var(--muted); cursor: default; }
+.stepNo { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.badge { padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.badgeDone { background: var(--sage-wash); color: var(--sage); }
+.badgeNow { background: var(--note); color: var(--clay); }
+.badgeSoon { border: 1px solid var(--line); color: var(--muted); }
+.status { margin: 0; padding: 12px 14px; background: var(--sage-wash); border-radius: 6px; }
+.failed { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--note); border: 1px solid var(--line); border-radius: 6px; }
+.failed p { margin: 0; color: var(--clay); }
+.error { margin: 0; color: var(--clay); }
+.ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.idea { display: grid; align-content: start; gap: 8px; padding: 18px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+.idea h2 { margin: 0; font-family: StudioDidot, Georgia, serif; font-size: 20px; font-weight: 400; line-height: 1.2; }
+.idea button { justify-self: start; margin-top: 6px; }
+.chosen { border-color: var(--sage); background: var(--sage-wash); }
+.hook { margin: 0; font-size: 14px; }
+.panel { display: grid; gap: 6px; }
+.tableWrap { overflow-x: auto; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th, .table td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.table th { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.table tr:last-child td { border-bottom: 0; }
+.time { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+.note { margin: 0; padding: 12px 14px; background: var(--note); border: 1px solid var(--line); border-radius: 6px; }
+.actions { display: grid; gap: 10px; }
+.buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+
+@media (max-width: 740px) {
+  .work { grid-template-columns: 1fr; margin: -28px -18px -48px; }
+  .rail { border-right: 0; border-bottom: 1px solid var(--line); }
+  .steps { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
+  .step { grid-template-columns: auto auto; }
+  .step .badge { display: none; }
+}
