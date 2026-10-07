@@ -45,10 +45,30 @@ export function MotionPanel({ creation, slide, ready, api, editSlide }: SlidePan
     if (slide.motion) editSlide((current) => (current.motion ? { ...current, motion: { ...current.motion, motionStyle: next } } : current));
   };
   const review = state.status === "ready" ? state.review : null;
+  const direction = slide.direction;
+  const directorChosen = Boolean(direction && slide.motion?.source === "creator" && slide.motion.prompt === direction.prompt);
 
   return (
     <div className={m.panel}>
       <h2 className={m.title}>Motion</h2>
+      {direction && (
+        <ul className={m.suggestions} role="radiogroup" aria-label="The director's scene">
+          <li className={`${m.suggestion} ${directorChosen ? m.suggestionSelected : ""}`}>
+            <label className={m.suggestionPick}>
+              <input type="radio" name={`motion-${slide.id}`} checked={directorChosen}
+                onChange={() => setMotion({ source: "creator", story: direction.story, prompt: direction.prompt })}
+                aria-describedby={`director-${slide.id}-story director-${slide.id}-note`} />
+              <span className={m.suggestionText}>
+                <strong>The director&rsquo;s scene (recommended)</strong>
+                <span id={`director-${slide.id}-story`} className={m.story}>{direction.story}</span>
+                <span id={`director-${slide.id}-note`} className={`${m.risk} ${m.risk_safe}`}>
+                  <Icon name="check" size={12} />Written for this layout, to keep the scene clear of the text
+                </span>
+              </span>
+            </label>
+          </li>
+        </ul>
+      )}
       {state.status === "waiting" && (
         <p className={m.muted}>Motion suggestions appear once this slide&rsquo;s layers pass their checks.</p>
       )}
@@ -66,7 +86,9 @@ export function MotionPanel({ creation, slide, ready, api, editSlide }: SlidePan
       )}
       {review && (
         <>
-          <p className={m.muted}>Pick one, safest first. Suggestions favor a steady camera and clear text. Review each overlap risk.</p>
+          <p className={m.muted}>{direction
+            ? "Other ideas, safest first. Small movements of the face and hands keep the text clear; whole-body moves often don't."
+            : "Pick one, safest first. Suggestions favor a steady camera and clear text. Review each overlap risk."}</p>
           <ul className={m.suggestions} role="radiogroup" aria-label="Suggested motions">
             {review.suggestions.map((suggestion, index) => (
               <SuggestionCard
@@ -99,7 +121,7 @@ export function MotionPanel({ creation, slide, ready, api, editSlide }: SlidePan
         api={api}
         creationId={creation.id}
         slideId={slide.id}
-        current={slide.motion?.source === "creator" ? slide.motion.story : null}
+        current={slide.motion?.source === "creator" && !directorChosen ? slide.motion.story : null}
         disabled={!ready}
         onUse={(story, prompt) => setMotion({ source: "creator", story, prompt })}
       />

@@ -27,6 +27,7 @@ function TakesForSlide({
 }: SlidePanelProps) {
   const { run, error, reload } = useRun(api, slide.latestRunId);
   const [busy, setBusy] = useState(false),
+    [downloading, setDownloading] = useState<string | null>(null),
     [notice, setNotice] = useState(""),
     [comparison, setComparison] = useState(false);
   const mounted = useRef(true),
@@ -77,10 +78,21 @@ function TakesForSlide({
       );
       if (mounted.current) reload();
     });
-  const download = (takeId: string, kind: "clip" | "cover") =>
-    perform(async () => {
-      if (run) await downloadTake(api, run.id, takeId, kind, slide.name);
-    });
+  // Downloads only mark their own button: the rest of the panel stays usable while a file is fetched.
+  const download = async (takeId: string, kind: "clip" | "cover") => {
+    if (!run) return;
+    const attempt = run.takes.find((take) => take.id === takeId)?.attempt;
+    setDownloading(`${takeId}:${kind}`);
+    setNotice("");
+    try {
+      await downloadTake(api, run.id, takeId, kind, attempt ? `${slide.name}-take-${attempt}` : slide.name);
+    } catch (error) {
+      if (mounted.current)
+        setNotice(error instanceof Error ? error.message : "That couldn't be downloaded. Try again.");
+    } finally {
+      if (mounted.current) setDownloading(null);
+    }
+  };
   const grid = run ? (
     <TakeGrid
       api={api}
@@ -88,6 +100,7 @@ function TakesForSlide({
       takes={run.takes}
       active={isActive(run)}
       busy={busy}
+      downloading={downloading}
       onChoose={choose}
       onDownload={download}
       onRefresh={reload}

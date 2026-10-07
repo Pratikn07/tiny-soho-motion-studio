@@ -10,6 +10,7 @@ export function TakeGrid({
   takes,
   active = true,
   busy,
+  downloading = null,
   onChoose,
   onDownload,
   onRefresh,
@@ -19,6 +20,8 @@ export function TakeGrid({
   takes: TakeView[];
   active?: boolean;
   busy: boolean;
+  /** `${takeId}:${kind}` of the download in progress, if any. Only that button waits. */
+  downloading?: string | null;
   onChoose: (id: string) => Promise<unknown>;
   onDownload: (id: string, kind: "clip" | "cover") => Promise<unknown>;
   onRefresh: () => void;
@@ -157,18 +160,20 @@ export function TakeGrid({
           </button>
           <button
             className={s.secondary}
-            disabled={busy}
+            disabled={downloading === `${take.id}:clip`}
+            aria-busy={downloading === `${take.id}:clip`}
             onClick={() => void onDownload(take.id, "clip")}
           >
-            Download this clip
+            {downloading === `${take.id}:clip` ? "Downloading…" : "Download this clip"}
           </button>
           {take.coverUrl && (
             <button
               className={s.secondary}
-              disabled={busy}
+              disabled={downloading === `${take.id}:cover`}
+              aria-busy={downloading === `${take.id}:cover`}
               onClick={() => void onDownload(take.id, "cover")}
             >
-              Download cover image
+              {downloading === `${take.id}:cover` ? "Downloading…" : "Download cover image"}
             </button>
           )}
         </div>

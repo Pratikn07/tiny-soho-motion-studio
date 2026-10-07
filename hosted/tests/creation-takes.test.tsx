@@ -446,3 +446,43 @@ it("never replaces the newly opened creation with a late selection response", as
   });
   expect(hook.result.current.view?.id).toBe(next.id);
 });
+
+it("downloads one take without greying out the rest of the panel, and names the file by take", async () => {
+  const run = completed(),
+    creation = structuredClone(contractFixtures.creation);
+  run.takes = run.takes.map((take) => ({ ...take, urlsExpireAt: new Date(Date.now() + 300_000).toISOString() }));
+  delete creation.document.slides[0].chosenTakeId;
+  const api = apiFor({ run });
+  let finish: (response: Response) => void = () => {};
+  vi.spyOn(globalThis, "fetch").mockImplementation(
+    () => new Promise<Response>((resolve) => { finish = resolve; }),
+  );
+  URL.createObjectURL = vi.fn(() => "blob:clip");
+  URL.revokeObjectURL = vi.fn();
+  const names: string[] = [];
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+    names.push(this.download);
+  });
+  render(
+    <TakesPanel
+      creation={creation}
+      slide={creation.document.slides[0]}
+      ready
+      api={api}
+      edit={() => {}}
+      editSlide={() => {}}
+      saveServerStep={vi.fn()}
+    />,
+  );
+  const ready = await screen.findByRole("article", { name: `Take ${run.takes[1].attempt}` });
+  fireEvent.click(within(ready).getByRole("button", { name: "Download this clip" }));
+  const waiting = await within(ready).findByRole("button", { name: "Downloading…" });
+  expect(waiting).toBeDisabled();
+  // Everything else stays usable while that one file loads.
+  expect(within(ready).getByRole("button", { name: "Choose this take" })).toBeEnabled();
+  expect(within(ready).getByRole("button", { name: "Download cover image" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Try another take" })).toBeEnabled();
+  await act(async () => finish(new Response(new Blob(["mp4"]))));
+  await within(ready).findByRole("button", { name: "Download this clip" });
+  expect(names).toEqual([`${creation.document.slides[0].name}-take-${run.takes[1].attempt}.mp4`]);
+});

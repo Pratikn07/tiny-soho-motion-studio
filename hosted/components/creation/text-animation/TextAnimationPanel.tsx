@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
-import { DEFAULT_TEXT_ANIMATION, type TextAnimation } from "@/lib/contract";
+import { useEffect, useState } from "react";
+import { DEFAULT_TEXT_ANIMATION, type SlideV2, type TextAnimation } from "@/lib/contract";
+import type { CreationApi } from "../api";
 import type { SlidePanelProps } from "../panels";
 import { TextPreview } from "./TextPreview";
 import s from "./text-animation.module.css";
@@ -14,6 +15,19 @@ export function TextAnimationPanel({ creation, slide, api, edit, editSlide }: Sl
   const update = (change: Partial<TextAnimation>) => overriding
     ? editSlide((item) => ({ ...item, textAnimation: { ...(item.textAnimation ?? creation.document.defaults.textAnimation), ...change } }))
     : edit((doc) => ({ ...doc, defaults: { ...doc.defaults, textAnimation: { ...doc.defaults.textAnimation, ...change } } }));
+  const cover = <label className={s.field}>Cover image<select value={animation.coverFrame} onChange={(e) => update({ coverFrame: e.target.value as "first" | "last" })}>
+      <option value="last">Full text on last frame (recommended)</option><option value="first">First frame</option>
+    </select></label>;
+  if (slide.direction) return <div className={s.panel}>
+    <h2 className={s.title}>Text animation</h2>
+    <p className={s.muted}>Designed by the motion director for this slide. Every final video plays this motion over the
+      generated clip, then holds the text exactly as designed.</p>
+    {slide.direction.previewAssetId
+      ? <DirectorPreview api={api} slide={slide} assetId={slide.direction.previewAssetId} />
+      : <p className={s.muted}>The director&rsquo;s preview isn&rsquo;t available for this slide.</p>}
+    {cover}
+    <p className={s.muted}>To use a simple line-by-line reveal instead, upload this slide&rsquo;s layers again.</p>
+  </div>;
   return <div className={s.panel}>
     <h2 className={s.title}>Text animation</h2>
     <p className={s.muted}>{overriding ? "Only for this slide." : "Creation default. Slides with custom settings keep theirs."}</p>
@@ -25,9 +39,7 @@ export function TextAnimationPanel({ creation, slide, api, edit, editSlide }: Sl
       {speed === "custom" && <option value="custom">Custom timing</option>}
       <option value="gentle">Gentle</option><option value="normal">Normal</option><option value="quick">Quick</option>
     </select></label>
-    <label className={s.field}>Cover image<select value={animation.coverFrame} onChange={(e) => update({ coverFrame: e.target.value as "first" | "last" })}>
-      <option value="last">Full text on last frame (recommended)</option><option value="first">First frame</option>
-    </select></label>
+    {cover}
     <label className={s.override}><input type="checkbox" checked={overriding} onChange={(e) => editSlide((item) => {
       const { textAnimation: previous, ...rest } = item;
       return e.target.checked ? { ...rest, textAnimation: { ...animation } } : rest;
@@ -40,5 +52,23 @@ export function TextAnimationPanel({ creation, slide, api, edit, editSlide }: Sl
     <p className={s.muted}>Changes apply to future videos. Generate again to update an existing take.</p>
     {slide.layers.textAssetId ? <TextPreview key={`${slide.id}-${retry}`} api={api} slide={slide} animation={animation} onRetry={() => setRetry((n) => n + 1)} />
       : <p className={s.muted}>Add a transparent text layer to preview its animation.</p>}
+  </div>;
+}
+
+/** The director's own preview: its text motion over the still, text-free photo. */
+function DirectorPreview({ api, slide, assetId }: { api: CreationApi; slide: SlideV2; assetId: string }) {
+  const [url, setUrl] = useState<string | null>(null), [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setUrl(null);
+    setFailed(false);
+    api.assetUrl(assetId).then((next) => { if (live) setUrl(next); }, () => { if (live) setFailed(true); });
+    return () => { live = false; };
+  }, [api, assetId]);
+  if (failed) return <p className={s.muted}>The director&rsquo;s preview couldn&rsquo;t be loaded. Reopen this tab to try again.</p>;
+  if (!url) return <p className={s.muted}>Loading the director&rsquo;s preview…</p>;
+  return <div className={s.preview}>
+    <video src={url} style={{ aspectRatio: `${slide.width ?? 4} / ${slide.height ?? 5}`, width: "100%" }}
+      muted loop playsInline autoPlay controls aria-label="The director's text animation" />
   </div>;
 }
