@@ -10,15 +10,16 @@ import { getMockRunningSlides, mockTakes } from "./takes/mock-routes";
 import { contractFixtures } from "@/lib/contract/fixtures";
 import type { RunView } from "@/lib/contract";
 import { CreationShell } from "./CreationShell";
+import { AppShell } from "@/components/shell/AppShell";
 
 /** Development-only preview on T0's sample data. Files stay in this browser tab; nothing is uploaded. */
-export default function CreationPreview() {
+export default function CreationPreview({ shell = false }: { shell?: boolean }) {
   const api = useMemo(() => createMockCreationApi({ seed: true, uploadDelayMs: 350, running:getMockRunningSlides }), []);
   const [version, setVersion] = useState(0);
   const [sample, setSample] = useState("completed");
   return (
     <>
-      <details style={{ position: "fixed", left: "50%", top: 8, transform: "translateX(-50%)", zIndex: 60, maxWidth: 270, padding: "6px 10px", font: "11px/1.4 system-ui, sans-serif", color: "#6d3a26", background: "#f4f1e7", border: "1px solid #e7dccb", borderRadius: 4 }}>
+      <details style={{ position: "fixed", left: "50%", ...(shell ? { bottom: 8 } : { top: 8 }), transform: "translateX(-50%)", zIndex: 60, maxWidth: 270, padding: "6px 10px", font: "11px/1.4 system-ui, sans-serif", color: "#6d3a26", background: "#f4f1e7", border: "1px solid #e7dccb", borderRadius: 4 }}>
         <summary>Local preview · Sample data</summary>
         <p>Files stay in this tab. Nothing is uploaded.</p>
         <label>Sample run state <select value={sample} onChange={event => {
@@ -33,7 +34,9 @@ export default function CreationPreview() {
           setSample(status); setVersion(value => value + 1);
         }}><option value="completed">Completed</option><option value="queued">Waiting</option><option value="generating">Animating</option><option value="failed">Failed</option></select></label>
       </details>
-      <CreationShell key={version} api={api} initialUploadMode="finished" />
+      {shell
+        ? <AppShell carousels={(bar) => <CreationShell key={version} api={api} initialUploadMode="finished" topbar={bar} />} />
+        : <CreationShell key={version} api={api} initialUploadMode="finished" />}
     </>
   );
 }

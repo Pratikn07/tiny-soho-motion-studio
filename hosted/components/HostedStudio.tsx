@@ -9,8 +9,9 @@ import { Login } from "@/components/Login";
 import { StudioShell } from "@/components/StudioShell";
 import { CreationShell } from "@/components/creation/CreationShell";
 import { createCreationApi } from "@/components/creation/api";
+import { AppShell } from "@/components/shell/AppShell";
 
-export function HostedStudio({ creation = false }: { creation?: boolean }) {
+export function HostedStudio({ creation = false, shell = false }: { creation?: boolean; shell?: boolean }) {
   const [client, setClient] = useState<ReturnType<typeof createBrowserSupabaseClient> | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +80,13 @@ export function HostedStudio({ creation = false }: { creation?: boolean }) {
       <button onClick={() => void signOut()}>Sign out</button>
       {authError && <p role="alert">{authError}</p>}
     </main></div>;
+  }
+  if (shell && creationApi) {
+    return <>{authError && <p role="alert">{authError}</p>}<AppShell
+      key={session.user.id}
+      onSignOut={() => void signOut()}
+      carousels={(bar) => <CreationShell api={creationApi} initialUploadMode="finished" topbar={bar} />}
+    /></>;
   }
   return <>{authError && <p role="alert">{authError}</p>}{creation && creationApi
     ? <CreationShell key={session.user.id} api={creationApi} onSignOut={() => void signOut()} initialUploadMode="finished" />
