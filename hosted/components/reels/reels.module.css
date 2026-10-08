@@ -107,6 +107,31 @@
 .dot, .dotOn { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
 .dotOn { background: var(--sage); }
 
+.imageCards { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.imageCard { display: grid; gap: 10px; padding: 16px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+.imageCard p { margin: 0; }
+.promptDetails { font-size: 13px; }
+.promptDetails summary { cursor: pointer; color: var(--sage-deep); font-weight: 600; }
+.promptDetails p { margin-top: 6px; color: var(--ink); }
+label.primary, label.secondary { display: inline-flex; align-items: center; }
+.drop { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: start; padding: 14px; background: var(--paper); border: 1px dashed var(--line); border-radius: 6px; }
+.drop:not(.dropDone) { grid-template-columns: 1fr; }
+.dropOver { border-color: var(--sage); background: var(--sage-wash); }
+.dropDone { border-style: solid; }
+.dropBody { display: grid; gap: 8px; min-width: 0; }
+.thumb { width: 120px; max-height: 200px; overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 4px; }
+.thumb img { display: block; width: 100%; height: auto; }
+.thumbClear { background: repeating-conic-gradient(#e9e6dc 0% 25%, #fdfdf9 0% 50%) 50% / 16px 16px; }
+.checks { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.checks li::before { display: inline-block; width: 1.3em; font-weight: 700; }
+.checkOk::before { content: "✓"; color: var(--sage); }
+.checkWarn::before { content: "!"; color: var(--clay); }
+.checkFail { color: var(--clay); }
+.checkFail::before { content: "✕"; color: var(--clay); }
+.reviewGood, .reviewRedo { padding: 8px 10px; border-radius: 4px; font-size: 13px; }
+.reviewGood { background: var(--sage-wash); }
+.reviewRedo { background: var(--note); color: var(--clay); }
+
 @media (max-width: 740px) {
   .work { grid-template-columns: 1fr; margin: -28px -18px -48px; }
   .rail { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -117,4 +142,5 @@
   .inline { flex-direction: column; }
   .sceneWithFrame { grid-template-columns: 1fr; }
   .sceneFrame { position: static; }
+  .drop, .drop:not(.dropDone) { grid-template-columns: 1fr; }
 }

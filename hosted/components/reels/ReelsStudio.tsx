@@ -7,7 +7,8 @@ import type { ReelIdea, ReelStep, ReelSummary, ReelView } from "@/lib/reels";
 import type { MacState } from "@/components/shell/ShellBar";
 import type { NewReelInput, ReelsApi } from "./api";
 import { active, CopyButton, JobState } from "./job-state";
-import { ImagesStep, StoryboardStep } from "./storyboard";
+import { ImagesStep } from "./images";
+import { StoryboardStep } from "./storyboard";
 import r from "./reels.module.css";
 
 const STEPS: Array<{ id: ReelStep; label: string }> = [
@@ -163,7 +164,7 @@ function ReelWorkspace({ api, id, macState, onBack }: { api: ReelsApi; id: strin
         {shown === "script" && <ScriptStep reel={reel} macState={macState} onRevise={(comments) => act({ action: "revise_script", comments })}
           onApprove={() => void act({ action: "approve_script" })} onRetry={() => void act({ action: "retry" })} />}
         {shown === "storyboard" && <StoryboardStep reel={reel} macState={macState} act={act} onRetry={() => void act({ action: "retry" })} />}
-        {shown === "images" && <ImagesStep reel={reel} />}
+        {shown === "images" && <ImagesStep reel={reel} api={api} act={act} onReel={(next) => setReel(next)} macState={macState} />}
         {!BUILT.includes(shown) && (
           <div className={r.panel}>
             <h1 className={r.title}>{STEPS.find((item) => item.id === shown)?.label}</h1>

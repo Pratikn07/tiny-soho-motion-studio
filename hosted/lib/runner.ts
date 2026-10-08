@@ -3,7 +3,14 @@ import { z } from "zod";
 
 import { StudioError } from "@/lib/errors";
 
-type DataClient = { from: (table: string) => any; rpc: (fn: string, args: Record<string, unknown>) => any };
+type DataClient = {
+  from: (table: string) => any;
+  rpc: (fn: string, args: Record<string, unknown>) => any;
+  storage?: { from: (bucket: string) => { createSignedUrl: (path: string, seconds: number) => Promise<{ data: { signedUrl: string } | null; error: unknown }> } };
+};
+
+/** How long the Studio Mac's link to an uploaded image works; it is made when the job is claimed. */
+const IMAGE_LINK_SECONDS = 15 * 60;
 
 export type RunnerConfig = { token: string; ownerId: string };
 
@@ -86,7 +93,15 @@ export class RunnerRepository {
     const { data: reel, error: reelError } = await this.client.from("creative_studio_reels")
       .select("id,title,current_step,document,revision").eq("id", job.reel_id).maybeSingle();
     if (reelError) throw unavailable();
-    return { job: publicJob(job), reel };
+    return { job: await this.withImageLink(publicJob(job)), reel };
+  }
+
+  /** An image check gets a fresh link to the uploaded image, only for a file in this owner's reel folder. */
+  private async withImageLink(job: ReturnType<typeof publicJob>) {
+    const path = job.step === "images" ? job.input?.objectPath : null;
+    if (typeof path !== "string" || !path.startsWith(`owners/${this.ownerId}/reels/${job.reelId}/images/`) || !this.client.storage) return job;
+    const { data } = await this.client.storage.from("creative-studio").createSignedUrl(path, IMAGE_LINK_SECONDS);
+    return data?.signedUrl ? { ...job, input: { ...job.input, imageUrl: data.signedUrl } } : job;
   }
 
   /** Records progress or a result. The lease must match; a running update renews it for two more minutes. */

@@ -10,7 +10,8 @@ sleeps, jobs wait in the queue and start when it wakes.
   `TINY_SOHO_CLAUDE_AUTH` to `api_key` (with an Anthropic API key in Claude Code) when creators join.
 - **Built so far:** the job loop, leases and status; Idea (three story ideas, or a breakdown of a reference reel);
   Script (from an idea or a pasted brief, keeping a brief's script draft); Storyboard (the look, then scenes and
-  the image list, then a rough SVG sketch per scene, drawn three at a time at low effort). Other steps report
+  the image list, then a rough SVG sketch per scene, drawn three at a time at low effort); Images (a look at each
+  uploaded image against its prompt, via a link made when the job is claimed). Other steps report
   `step_not_ready` until they're added to `handlers.mjs`.
 - **Tools:** Claude gets no tools for ideas and scripts. It may use `Read` (the reference reel's frames, in a temp
   folder) and `WebFetch` (only when the creator added reference links) for the reference and storyboard steps.
