@@ -21,7 +21,11 @@ export function askClaude(prompt, { timeoutMs = 180_000, tools = [], maxTurns, c
       : ["--max-turns", "1", "--allowedTools", ""];
     const child = spawn("claude", ["-p", prompt, "--output-format", "json", ...toolArgs], { cwd: dir });
     let out = "", err = "";
-    const timer = setTimeout(() => { child.kill("SIGTERM"); reject(stepError("claude_timeout", "Claude Code took too long.")); }, timeoutMs);
+    const minutes = Math.round(timeoutMs / 60_000);
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(stepError("claude_timeout", `Claude Code took longer than ${minutes} minute${minutes === 1 ? "" : "s"}. Try again.`));
+    }, timeoutMs);
     child.stdout.on("data", (chunk) => { out += chunk; });
     child.stderr.on("data", (chunk) => { err += chunk; });
     child.on("error", (error) => { clearTimeout(timer); reject(stepError("claude_unavailable", `Could not start Claude Code: ${error.message}`)); });
@@ -94,6 +98,13 @@ function briefText(brief) {
   if (scriptDraft?.length) lines.push("script draft:", ...scriptDraft.map((line, i) => `${i + 1}. ${line.voice} | ${line.onScreen}`));
   return lines.join("\n");
 }
+
+/**
+ * Time limits for the thinking steps. Look and storyboard prompts carry the whole motion library, and a storyboard
+ * writes every scene and image prompt in one answer, so they get longer than ideas and scripts (3 minutes).
+ */
+export const LOOK_TIMEOUT_MS = 5 * 60_000;
+export const STORYBOARD_TIMEOUT_MS = 10 * 60_000;
 
 const handlers = {
   /** Idea, first draft: three story ideas for the topic, or a breakdown of a reference reel plus three angles. */
@@ -315,7 +326,7 @@ async function storyboardJob(job, reel, { progress }) {
   const input = job.input;
   if (input.phase === "look") {
     const count = Math.min(Math.max(Number(input.count) || 3, 1), 3);
-    await progress(count > 1 ? "Claude is suggesting looks" : "Claude is shaping the look");
+    await progress(count > 1 ? "Claude is suggesting looks (usually about a minute)" : "Claude is shaping the look (usually about a minute)");
     const ask = input.own ? `The creator describes the look they want: ${str(input.own, 1000)}. Turn it into one look.`
       : input.current ? `Current look (JSON): ${JSON.stringify(input.current)}\nThe creator asks: ${str(input.comments, 1000)}. Change only what they ask.`
         : input.brief?.treatment ? `The brief already names the treatment. Turn it into one full look and keep its idea.`
@@ -324,17 +335,17 @@ async function storyboardJob(job, reel, { progress }) {
       `Series: ${input.series || "standalone (or infer it from the story)"}.`,
       `Treatments already used in this series (do not repeat): ${list(input.seriesUsed).join("; ") || "none"}.`,
       `Looks the creator rejected for this reel (do not suggest again): ${list(input.avoid).join("; ") || "none"}.`,
-      "", ask, lookAnswer(count)].join("\n"), { tools: webTools(input), maxTurns: 8 });
+      "", ask, lookAnswer(count)].join("\n"), { tools: webTools(input), maxTurns: 8, timeoutMs: LOOK_TIMEOUT_MS });
     return { status: "needs_review", result: { phase: "look", looks: parseLooks(text) }, progress: count > 1 ? "Looks ready to choose from" : "Look ready" };
   }
   const revising = job.kind === "revise";
-  await progress(revising ? "Claude is changing the storyboard" : "Claude is writing the storyboard");
+  await progress(revising ? "Claude is changing the storyboard (usually 2–5 minutes)" : "Claude is writing the storyboard (usually 3–6 minutes)");
   const target = input.image ? `Change only the image ${str(input.image, 80)}.` : input.scene ? `Change only scene ${input.scene}.` : "Change only what they ask.";
   const text = await askClaude([LOOK_RULES, "", MOTION_LIBRARY, "", STORYBOARD_RULES, "", storyContext(input), "",
     `The approved look (JSON): ${JSON.stringify(input.look)}. Every scene and image prompt follows this treatment.`,
     ...(revising ? ["", `Current storyboard (JSON): ${JSON.stringify(input.storyboard)}`, `The creator asks: ${str(input.comments, 1000)}`,
       `${target} Keep everything else exactly as it is.`] : ["", "Write the storyboard."]),
-    storyboardAnswer].join("\n"), { tools: webTools(input), maxTurns: 8, timeoutMs: 300_000 });
+    storyboardAnswer].join("\n"), { tools: webTools(input), maxTurns: 8, timeoutMs: STORYBOARD_TIMEOUT_MS });
   return { status: "needs_review", result: { phase: "scenes", ...parseStoryboard(text) }, progress: "Storyboard ready for review" };
 }
 handlers["storyboard/draft"] = storyboardJob;

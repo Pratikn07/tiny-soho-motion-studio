@@ -41,6 +41,11 @@ describe("runner parsers", () => {
     }
   });
 
+  it("gives looks and storyboards more time than ideas and scripts", () => {
+    expect(handlers.LOOK_TIMEOUT_MS).toBe(5 * 60_000);
+    expect(handlers.STORYBOARD_TIMEOUT_MS).toBe(10 * 60_000);
+  });
+
   it("fails clearly when Claude doesn't answer with JSON", () => {
     expect(() => handlers.parseStoryboard("Sorry, I can't.")).toThrow(expect.objectContaining({ code: "claude_bad_output" }));
     expect(() => handlers.parseLooks("[not json]")).toThrow(expect.objectContaining({ code: "claude_bad_output" }));
