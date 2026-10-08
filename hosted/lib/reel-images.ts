@@ -156,17 +156,24 @@ export class ReelImageStore {
     if (paths.length) await this.bucket.remove(paths);
   }
 
-  /** Short-lived links so the page can show the uploaded images. */
+  /** Short-lived links so the page can show the uploaded images and play the voice takes. */
   async withUrls(view: ReelView): Promise<ReelView> {
     const uploads = Object.values(view.document.images ?? {});
-    if (!uploads.length) return view;
-    const { data } = await this.bucket.createSignedUrls(uploads.map((upload) => upload.objectPath), VIEW_SECONDS);
+    const takes = view.document.voice?.takes ?? [];
+    if (!uploads.length && !takes.length) return view;
+    const paths = [...uploads.map((upload) => upload.objectPath), ...takes.map((take) => take.objectPath)];
+    const { data } = await this.bucket.createSignedUrls(paths, VIEW_SECONDS);
     const byPath = new Map((data ?? []).map((item) => [item.path, item.signedUrl]));
     const imageUrls: Record<string, string> = {};
+    const voiceUrls: Record<string, string> = {};
     for (const upload of uploads) {
       const url = byPath.get(upload.objectPath);
       if (url) imageUrls[upload.file] = url;
     }
-    return { ...view, imageUrls };
+    for (const take of takes) {
+      const url = byPath.get(take.objectPath);
+      if (url) voiceUrls[take.id] = url;
+    }
+    return { ...view, imageUrls, voiceUrls };
   }
 }

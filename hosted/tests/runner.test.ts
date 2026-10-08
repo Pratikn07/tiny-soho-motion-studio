@@ -93,3 +93,29 @@ describe("RunnerRepository", () => {
     expect(status).toMatchObject({ state: "online", label: "Studio Mac", claudeAuth: "subscription", queue: { queued: 2, running: 1 } });
   });
 });
+
+describe("runner job files", () => {
+  const LEASE = "77777777-7777-4777-8777-777777777777";
+  const JOB = "88888888-8888-4888-8888-888888888888";
+  const withStorage = (job: Record<string, unknown> | null) => {
+    const client = fakeClient({ "creative_studio_reel_jobs.single": { data: job, error: null } });
+    const createSignedUploadUrl = vi.fn(async (path: string) => ({ data: { signedUrl: `https://storage.test/upload/${path}` }, error: null }));
+    return { client: { ...client, storage: { from: () => ({ createSignedUploadUrl, createSignedUrl: vi.fn() }) } }, createSignedUploadUrl };
+  };
+
+  it("gives a held voice job a one-time link into its reel's voice folder", async () => {
+    const { client, createSignedUploadUrl } = withStorage({ id: JOB, reel_id: "r1", step: "voice", status: "running", worker_lease_id: LEASE });
+    const link = await new RunnerRepository(client as never, OWNER).jobFileUpload(JOB, { leaseId: LEASE, name: "take-a.mp3", mime: "audio/mpeg" });
+    expect(link.objectPath).toBe(`owners/${OWNER}/reels/r1/voice/${JOB}-take-a.mp3`);
+    expect(createSignedUploadUrl).toHaveBeenCalledWith(link.objectPath, { upsert: false });
+  });
+
+  it("refuses a job the runner no longer holds, or a step that doesn't upload", async () => {
+    const lost = withStorage({ id: JOB, reel_id: "r1", step: "voice", status: "running", worker_lease_id: "99999999-9999-4999-8999-999999999999" });
+    await expect(new RunnerRepository(lost.client as never, OWNER).jobFileUpload(JOB, { leaseId: LEASE, name: "take-a.mp3", mime: "audio/mpeg" }))
+      .rejects.toMatchObject({ code: "lease_lost" });
+    const script = withStorage({ id: JOB, reel_id: "r1", step: "script", status: "running", worker_lease_id: LEASE });
+    await expect(new RunnerRepository(script.client as never, OWNER).jobFileUpload(JOB, { leaseId: LEASE, name: "take-a.mp3", mime: "audio/mpeg" }))
+      .rejects.toMatchObject({ code: "no_files" });
+  });
+});

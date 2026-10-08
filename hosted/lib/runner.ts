@@ -6,7 +6,10 @@ import { StudioError } from "@/lib/errors";
 type DataClient = {
   from: (table: string) => any;
   rpc: (fn: string, args: Record<string, unknown>) => any;
-  storage?: { from: (bucket: string) => { createSignedUrl: (path: string, seconds: number) => Promise<{ data: { signedUrl: string } | null; error: unknown }> } };
+  storage?: { from: (bucket: string) => {
+    createSignedUrl: (path: string, seconds: number) => Promise<{ data: { signedUrl: string } | null; error: unknown }>;
+    createSignedUploadUrl: (path: string, options?: { upsert?: boolean }) => Promise<{ data: { signedUrl: string } | null; error: unknown }>;
+  } };
 };
 
 /** How long the Studio Mac's link to an uploaded image works; it is made when the job is claimed. */
@@ -42,6 +45,13 @@ export const heartbeatSchema = z.object({
   label: z.string().min(1).max(120),
   claudeAuth: z.enum(["subscription", "api_key"]),
   version: z.string().max(60).optional(),
+});
+
+/** A file the runner makes for a job (a voice take), uploaded through a one-time link. */
+export const jobFileSchema = z.object({
+  leaseId: z.string().uuid(),
+  name: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,60}$/i),
+  mime: z.enum(["audio/mpeg"]),
 });
 
 export const claimSchema = z.object({ runnerId: heartbeatSchema.shape.runnerId });
@@ -102,6 +112,21 @@ export class RunnerRepository {
     if (typeof path !== "string" || !path.startsWith(`owners/${this.ownerId}/reels/${job.reelId}/images/`) || !this.client.storage) return job;
     const { data } = await this.client.storage.from("creative-studio").createSignedUrl(path, IMAGE_LINK_SECONDS);
     return data?.signedUrl ? { ...job, input: { ...job.input, imageUrl: data.signedUrl } } : job;
+  }
+
+  /** A one-time upload link for a file the job made, only while the runner holds the job, into that reel's folder. */
+  async jobFileUpload(jobId: string, input: z.infer<typeof jobFileSchema>) {
+    const { data: job, error } = await this.client.from("creative_studio_reel_jobs").select("id,reel_id,step,status,worker_lease_id")
+      .eq("id", jobId).eq("owner_user_id", this.ownerId).maybeSingle();
+    if (error) throw unavailable();
+    if (!job || job.status !== "running" || job.worker_lease_id !== input.leaseId) {
+      throw new StudioError(409, "lease_lost", "This job is no longer held by this runner.");
+    }
+    if (job.step !== "voice" || !this.client.storage) throw new StudioError(400, "no_files", "This step doesn't upload files.");
+    const objectPath = `owners/${this.ownerId}/reels/${job.reel_id}/voice/${job.id}-${input.name}`;
+    const { data, error: signError } = await this.client.storage.from("creative-studio").createSignedUploadUrl(objectPath, { upsert: false });
+    if (signError || !data?.signedUrl) throw new StudioError(502, "upload_unavailable", "Uploads are temporarily unavailable.");
+    return { uploadUrl: data.signedUrl, objectPath };
   }
 
   /** Records progress or a result. The lease must match; a running update renews it for two more minutes. */

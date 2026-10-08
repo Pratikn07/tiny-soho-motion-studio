@@ -11,13 +11,18 @@ sleeps, jobs wait in the queue and start when it wakes.
 - **Built so far:** the job loop, leases and status; Idea (three story ideas, or a breakdown of a reference reel);
   Script (from an idea or a pasted brief, keeping a brief's script draft); Storyboard (the look, then scenes and
   the image list, then a rough SVG sketch per scene, drawn three at a time at low effort); Images (a look at each
-  uploaded image against its prompt, via a link made when the job is claimed). Other steps report
+  uploaded image against its prompt, via a link made when the job is claimed); Voice (two takes in the cloned
+  ElevenLabs voice, line by line, joined with ffmpeg, word-timed and checked for cues read aloud; see `voice.mjs`).
+  Other steps report
   `step_not_ready` until they're added to `handlers.mjs`.
 - **Tools:** Claude gets no tools for ideas and scripts. It may use `Read` (the reference reel's frames, in a temp
   folder) and `WebFetch` (only when the creator added reference links) for the reference and storyboard steps.
 - **Motion library:** `motion-library.md` ships with the runner and goes into every look and storyboard prompt:
   styles sorted for the brand, treatments, moves and transitions from prompt-motion.com and motionin.design.
   Edit it to change what the Mac suggests, then update the installed runner.
+- **Voice needs** `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` in `runner.env` (see `runner.env.example`). Takes
+  are uploaded to the reel's storage folder through a one-time link from the Studio. Line recordings stay in
+  `~/.cache/tiny-soho/voice/<reel>/<take>/`, so redoing a line re-voices only that line.
 - **Reference reels need** `yt-dlp`, `ffmpeg` and `uv` on this Mac (`brew install yt-dlp ffmpeg uv`). The voice is
   transcribed with faster-whisper through uv; the first run downloads the model. If transcription fails, the
   breakdown still runs from the frames. Downloads are deleted when the job ends.
