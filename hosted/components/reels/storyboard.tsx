@@ -187,14 +187,35 @@ function ScenesPart({ reel, macState, act, onRetry }: { reel: ReelView; macState
 function References({ reel, act }: { reel: ReelView; act: Act }) {
   const [link, setLink] = useState("");
   const links = reel.document.references ?? [];
+  const chosen = Boolean(reel.document.look?.chosen);
+  const scenesReady = Boolean(reel.document.storyboard) && !active(reel.jobs.storyboard);
   return (
     <section className={r.panel} aria-labelledby="refs-title">
-      <h2 id="refs-title" className={r.subtitle}>References</h2>
-      <p className={r.lede}>Links for mood or motion (Savee, prompt-motion, motionin). The Studio Mac opens them when it shapes the look and scenes.</p>
-      {links.length > 0 && <ul className={r.refs}>{links.map((item) => <li key={item}><a href={item} target="_blank" rel="noreferrer">{item}</a></li>)}</ul>}
+      <h2 id="refs-title" className={r.subtitle}>References <span className={r.muted}>(optional)</span></h2>
+      <p className={r.lede}>The Studio Mac already draws on its motion library (styles, treatments and moves gathered from prompt-motion and motionin). Add a link only when you want one exact thing.</p>
+      {links.length > 0 && (
+        <>
+          <ul className={r.refs}>{links.map((item) => (
+            <li key={item}>
+              <a href={item} target="_blank" rel="noreferrer">{item}</a>{" "}
+              <button type="button" className={r.link} aria-label={`Remove ${item}`} onClick={() => void act({ action: "remove_reference", url: item })}>Remove</button>
+            </li>
+          ))}</ul>
+          <p className={r.muted} role="status">
+            {!chosen ? "Saved. The Studio Mac opens these links when you pick a look, ask for other looks or describe your own."
+              : scenesReady ? "Saved. The scenes below were written before any links you add now, so redo them to use the links."
+                : "Saved. The Studio Mac opens these links while it writes the scenes."}
+          </p>
+          {chosen && scenesReady && !reel.document.storyboard?.approved && (
+            <div><button type="button" className={r.secondary}
+              onClick={() => void act({ action: "revise_storyboard", comments: "Use the reference links I added: open them and take what fits this look. Keep the script and the look." })}>
+              Redo scenes with these links</button></div>
+          )}
+        </>
+      )}
       <form className={r.inline} onSubmit={(event) => { event.preventDefault(); void act({ action: "add_reference", url: link.trim() }).then(() => setLink("")); }}>
         <label htmlFor="ref-link" className={r.srOnly}>Reference link</label>
-        <input id="ref-link" className={r.field} type="url" value={link} placeholder="https://" onChange={(event) => setLink(event.target.value)} />
+        <input id="ref-link" className={r.field} type="url" value={link} placeholder="Paste a link, then Add link" onChange={(event) => setLink(event.target.value)} />
         <button type="submit" className={r.secondary} disabled={!/^https?:\/\/\S+$/.test(link.trim())}>Add link</button>
       </form>
     </section>

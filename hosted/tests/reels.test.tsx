@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createMockReelsApi } from "@/components/reels/mock-api";
 import { ReelsStudio } from "@/components/reels/ReelsStudio";
-import { reelActionSchema, ReelsRepository } from "@/lib/reels";
+import { lookSchema, reelActionSchema, ReelsRepository } from "@/lib/reels";
 
 afterEach(() => cleanup());
 
@@ -198,6 +198,14 @@ describe("ReelsRepository: briefs, references, looks and storyboards", () => {
     expect(client.writes).toHaveLength(0);
   });
 
+  it("removes a reference link and keeps long look descriptions", async () => {
+    const client = fakeClient({ creative_studio_reels: [reelRow({ references: ["https://a.test/1", "https://a.test/2"] }, "storyboard"), { data: null, error: null }, reelRow({}, "storyboard")], creative_studio_reel_jobs: [{ data: [], error: null }, { data: [], error: null }] });
+    await new ReelsRepository(client as never, OWNER).act(REEL, { action: "remove_reference", url: "https://a.test/1" });
+    const saved = client.writes.find((write) => write.op === "update")!.value as Record<string, any>;
+    expect(saved.document.references).toEqual(["https://a.test/2"]);
+    expect(lookSchema.safeParse({ ...LOOK, treatment: "x".repeat(800) }).success).toBe(true);
+  });
+
   it("lets the creator edit one image prompt and asks for approval again", async () => {
     const storyboard = { version: 1, scenes: [SCENE], approved: true };
     const client = fakeClient({ creative_studio_reels: [reelRow({ storyboard }, "storyboard"), { data: null, error: null }, reelRow({}, "storyboard")], creative_studio_reel_jobs: [{ data: [], error: null }, { data: [], error: null }] });
@@ -210,7 +218,8 @@ describe("ReelsRepository: briefs, references, looks and storyboards", () => {
 describe("Reels screens: brief, looks and storyboard", () => {
   const BRIEF = "TITLE: The Worst Week\nHOOK: Halloween and the clock change, same weekend.\nSERIES: Halloween\nSCRIPT DRAFT:\n1. [curious] The worst week? | Calendar\n2. Save this for 31 Oct. | Heart";
 
-  it("goes from a pasted brief to an approved storyboard", async () => {
+  // Walks a whole reel through the sample runner, so it gets more time than the default on a busy machine.
+  it("goes from a pasted brief to an approved storyboard", { timeout: 20_000 }, async () => {
     render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
     fireEvent.change(await screen.findByLabelText("Paste your brief"), { target: { value: BRIEF } });
     expect(screen.getByRole("status")).toHaveTextContent("“The Worst Week” · series Halloween · 2 script lines");
@@ -241,7 +250,30 @@ describe("Reels screens: brief, looks and storyboard", () => {
     expect(within(rail).getAllByRole("button").map((button) => button.textContent)).toEqual(expect.arrayContaining([expect.stringMatching(/04Images/), expect.stringMatching(/05Voice/)]));
   });
 
-  it("describes your own look when none of the options fit", async () => {
+  // Walks a whole reel through the sample runner, so it gets more time than the default on a busy machine.
+  it("saves reference links, says when they're used, and redoes the scenes with them", { timeout: 20_000 }, async () => {
+    render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
+    fireEvent.change(await screen.findByLabelText("Paste your brief"), { target: { value: BRIEF } });
+    fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve script" }));
+    await screen.findAllByRole("button", { name: "Use this look" });
+
+    fireEvent.change(screen.getByLabelText("Reference link"), { target: { value: "https://prompt-motion.com/gdgtify-287ddf" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add link" }));
+    expect(await screen.findByText(/Saved. The Studio Mac opens these links when you pick a look/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "https://prompt-motion.com/gdgtify-287ddf" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Use this look" })[0]);
+    expect(await screen.findByText(/written before any links you add now/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Redo scenes with these links" }));
+    expect(await screen.findByText(/Changed: Use the reference links I added/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove https://prompt-motion.com/gdgtify-287ddf" }));
+    await waitFor(() => expect(screen.queryByRole("link", { name: "https://prompt-motion.com/gdgtify-287ddf" })).not.toBeInTheDocument());
+  });
+
+  // Walks a whole reel through the sample runner, so it gets more time than the default on a busy machine.
+  it("describes your own look when none of the options fit", { timeout: 20_000 }, async () => {
     render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
     fireEvent.change(await screen.findByLabelText("Paste your brief"), { target: { value: BRIEF } });
     fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));

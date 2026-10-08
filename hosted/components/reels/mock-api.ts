@@ -180,6 +180,9 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
         case "add_reference":
           reel.document = { ...doc, references: [...new Set([...(doc.references ?? []), action.url])] };
           break;
+        case "remove_reference":
+          reel.document = { ...doc, references: (doc.references ?? []).filter((item) => item !== action.url) };
+          break;
         case "retry":
           break;
       }

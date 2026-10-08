@@ -26,12 +26,13 @@ export type ScriptLine = z.infer<typeof scriptLineSchema>;
 /** A reel's look: the treatment for this reel, inside its series theme (docs/reels/claude-project/04). */
 export const lookSchema = z.object({
   name: z.string().min(1).max(80),
-  treatment: z.string().max(400),
-  emotion: z.string().max(120),
+  // Limits match parseLooks in runner/handlers.mjs; a look over a limit would be dropped when it is read back.
+  treatment: z.string().max(800),
+  emotion: z.string().max(200),
   accent: z.string().max(120),
-  signatureMoment: z.string().max(300),
-  music: z.string().max(200),
-  why: z.string().max(300),
+  signatureMoment: z.string().max(600),
+  music: z.string().max(300),
+  why: z.string().max(400),
 });
 export type ReelLook = z.infer<typeof lookSchema>;
 
@@ -87,6 +88,7 @@ export const reelActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("restore_storyboard"), version: z.number().int().min(1) }),
   z.object({ action: z.literal("approve_storyboard") }),
   z.object({ action: z.literal("add_reference"), url }),
+  z.object({ action: z.literal("remove_reference"), url: z.string().max(500) }),
   z.object({ action: z.literal("retry") }),
 ]);
 export type ReelAction = z.infer<typeof reelActionSchema>;
@@ -280,6 +282,9 @@ export class ReelsRepository {
         break;
       case "add_reference":
         await this.save(reelId, { ...doc, references: [...new Set([...(doc.references ?? []), action.url])].slice(-10) }, {});
+        break;
+      case "remove_reference":
+        await this.save(reelId, { ...doc, references: (doc.references ?? []).filter((item) => item !== action.url) }, {});
         break;
       case "retry": {
         const failed = Object.values(reel.jobs).find((job) => job?.status === "failed");
