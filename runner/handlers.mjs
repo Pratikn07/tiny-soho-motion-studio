@@ -1,7 +1,7 @@
 // What the runner does for each reel step. Thinking steps call Claude Code on this Mac (`claude -p`, your login);
 // mechanical steps will run plain scripts. Steps not built yet fail clearly instead of guessing.
 import { execFile, spawn } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -215,7 +215,16 @@ handlers["script/revise"] = async (job, reel, { progress }) => {
   return { status: "needs_review", result: parseScript(text), progress: "Revised script ready for review" };
 };
 
-/** The look rules: brand constants, series themes and the treatment menu (docs/reels/claude-project/04). */
+/**
+ * The motion library (runner/motion-library.md): styles sorted for the brand, treatments, moves and transitions
+ * collected from prompt-motion.com and motionin.design. Read on every look and storyboard job, so the Mac draws
+ * on it without the creator pasting links.
+ */
+export const MOTION_LIBRARY = (() => {
+  try { return readFileSync(new URL("./motion-library.md", import.meta.url), "utf8"); } catch { return ""; }
+})();
+
+/** The look rules: brand constants and series themes (docs/reels/claude-project/04). Treatments come from the library. */
 const LOOK_RULES = [
   "Every Tiny Soho reel has three layers.",
   "Brand (never changes): Fraunces and Inter type, one rose (#B0544C) italic emphasis word per line, a warm mom narrator,",
@@ -230,23 +239,21 @@ const LOOK_RULES = [
   "- Myths, 'Myth or not': the evidence desk, curious and fair; sage #3F5A47 for the verdict; motifs: the MYTH / TRUE /",
   "  IT DEPENDS stamp, a source line under every claim, a rating meter; sound: light pizzicato and a firm stamp.",
   "- Standalone: brand layer only.",
-  "Reel treatment (fresh every reel, never repeated inside a series): medium and texture, layout, transitions, one",
-  "signature moment. Menu to pick from or combine: cut-paper collage; a tired mum's diary in two-colour riso print;",
-  "paper theatre or shadow puppets; trading cards or yearbook portraits; an evidence board with stamps and string;",
-  "a chalkboard or classroom poster; embroidery or felt; a fixed camera (porch, nursery door) with time passing;",
-  "a film photo album or Polaroids. A fresh idea outside the menu is welcome if the engine can draw it in code.",
+  "Reel treatment (fresh every reel, never repeated inside a series): a style, a treatment, moves and transitions,",
+  "and one signature moment. Pick them from the motion library below; combining entries is welcome. Never use a",
+  "style the library marks off-brand. A fresh idea outside the library is welcome if the engine can draw it in code.",
   "The reel is 9:16, 20-30 s, one scene per script line, drawn in code (three.js and canvas) with a few AI images",
   "for the cast and print-style objects.",
 ].join("\n");
 
 const lookAnswer = (count) => `Answer with only a JSON array of ${count} object${count > 1 ? "s" : ""}: {"name": string (2-4 words),`
-  + ' "treatment": string, "emotion": string, "accent": string (one colour name and hex), "signatureMoment": string,'
+  + ' "treatment": string (one sentence on what the viewer sees, then the library style and treatment in brackets), "emotion": string, "accent": string (one colour name and hex), "signatureMoment": string,'
   + ' "music": string, "why": string (one sentence: why it suits this story)}.';
 
 export function parseLooks(text) {
   const looks = list(jsonIn(text, "[", "a list of looks")).slice(0, 3).map((look) => ({
-    name: str(look.name, 80), treatment: str(look.treatment, 400), emotion: str(look.emotion, 120), accent: str(look.accent, 120),
-    signatureMoment: str(look.signatureMoment, 300), music: str(look.music, 200), why: str(look.why, 300),
+    name: str(look.name, 80), treatment: str(look.treatment, 800), emotion: str(look.emotion, 200), accent: str(look.accent, 120),
+    signatureMoment: str(look.signatureMoment, 600), music: str(look.music, 300), why: str(look.why, 400),
   })).filter((look) => look.name);
   if (!looks.length) throw stepError("claude_bad_output", "Claude did not return any looks.");
   return looks;
@@ -260,6 +267,7 @@ const REUSABLE = "reel01 kraft paper texture, reel01 night-blue paper texture, r
 const STORYBOARD_RULES = [
   "One scene per script line. Each scene: the line, its paper or background colour, what code draws, the one signature",
   "move (landing on a spoken word), and the transition into the next scene through an object, not a plain cut.",
+  "Take moves and transitions from the motion library and name them (for example 'Marker draw-on', 'Object carry').",
   "Images: only what code cannot draw well, which means the cast (Anaika, her mum) and print-style objects. Type, shapes,",
   "stamps, meters, labels, charts, lines and effects are code. Put several small objects on one sheet image where you can.",
   `Reuse an existing image when it fits; set "reuse" to its name and leave the prompt short. Reusable: ${REUSABLE}.`,
@@ -312,7 +320,7 @@ async function storyboardJob(job, reel, { progress }) {
       : input.current ? `Current look (JSON): ${JSON.stringify(input.current)}\nThe creator asks: ${str(input.comments, 1000)}. Change only what they ask.`
         : input.brief?.treatment ? `The brief already names the treatment. Turn it into one full look and keep its idea.`
           : `Suggest ${count} looks that differ from each other and suit the story's emotion.`;
-    const text = await askClaude([LOOK_RULES, "", storyContext(input), "",
+    const text = await askClaude([LOOK_RULES, "", MOTION_LIBRARY, "", storyContext(input), "",
       `Series: ${input.series || "standalone (or infer it from the story)"}.`,
       `Treatments already used in this series (do not repeat): ${list(input.seriesUsed).join("; ") || "none"}.`,
       `Looks the creator rejected for this reel (do not suggest again): ${list(input.avoid).join("; ") || "none"}.`,
@@ -322,7 +330,7 @@ async function storyboardJob(job, reel, { progress }) {
   const revising = job.kind === "revise";
   await progress(revising ? "Claude is changing the storyboard" : "Claude is writing the storyboard");
   const target = input.image ? `Change only the image ${str(input.image, 80)}.` : input.scene ? `Change only scene ${input.scene}.` : "Change only what they ask.";
-  const text = await askClaude([LOOK_RULES, "", STORYBOARD_RULES, "", storyContext(input), "",
+  const text = await askClaude([LOOK_RULES, "", MOTION_LIBRARY, "", STORYBOARD_RULES, "", storyContext(input), "",
     `The approved look (JSON): ${JSON.stringify(input.look)}. Every scene and image prompt follows this treatment.`,
     ...(revising ? ["", `Current storyboard (JSON): ${JSON.stringify(input.storyboard)}`, `The creator asks: ${str(input.comments, 1000)}`,
       `${target} Keep everything else exactly as it is.`] : ["", "Write the storyboard."]),

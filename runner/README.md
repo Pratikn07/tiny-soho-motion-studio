@@ -13,6 +13,9 @@ sleeps, jobs wait in the queue and start when it wakes.
   the image list). Other steps report `step_not_ready` until they're added to `handlers.mjs`.
 - **Tools:** Claude gets no tools for ideas and scripts. It may use `Read` (the reference reel's frames, in a temp
   folder) and `WebFetch` (only when the creator added reference links) for the reference and storyboard steps.
+- **Motion library:** `motion-library.md` ships with the runner and goes into every look and storyboard prompt:
+  styles sorted for the brand, treatments, moves and transitions from prompt-motion.com and motionin.design.
+  Edit it to change what the Mac suggests, then update the installed runner.
 - **Reference reels need** `yt-dlp`, `ffmpeg` and `uv` on this Mac (`brew install yt-dlp ffmpeg uv`). The voice is
   transcribed with faster-whisper through uv; the first run downloads the model. If transcription fails, the
   breakdown still runs from the frames. Downloads are deleted when the job ends.

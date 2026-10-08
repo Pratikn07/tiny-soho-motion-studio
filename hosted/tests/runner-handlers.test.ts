@@ -22,8 +22,23 @@ describe("runner parsers", () => {
   it("reads looks and scripts in the Studio's shapes", () => {
     const looks = handlers.parseLooks(`[{"name": "Paper theatre", "treatment": "Stage", "emotion": "Warm", "accent": "Gold", "signatureMoment": "Curtain", "music": "Music box", "why": "Storybook"}]`);
     expect(lookSchema.safeParse(looks[0]).success).toBe(true);
+    // A long treatment survives the runner and still passes the Studio's check, so it isn't cut or dropped.
+    const [long] = handlers.parseLooks(JSON.stringify([{ name: "Evidence board", treatment: "t".repeat(780), signatureMoment: "s".repeat(500), why: "w".repeat(350) }]));
+    expect(long.treatment).toHaveLength(780);
+    expect(lookSchema.safeParse(long).success).toBe(true);
     const { lines } = handlers.parseScript(`{"lines": [{"time": "0:00", "voice": "[curious] Hook", "onScreen": "HOOK"}], "notes": ""}`);
     expect(scriptLineSchema.safeParse(lines[0]).success).toBe(true);
+  });
+
+  it("ships the motion library with the runner, with off-brand styles kept out of the fits", () => {
+    const library = String((handlers as Record<string, unknown>).MOTION_LIBRARY);
+    expect(library).toContain("## 2. Treatments");
+    const fits = library.slice(library.indexOf("### Fits Tiny Soho"), library.indexOf("### Use with care"));
+    const offBrand = library.slice(library.indexOf("### Off-brand"), library.indexOf("## 2."));
+    for (const style of ["Glitch", "Synthwave", "Neon sign", "Particles"]) {
+      expect(offBrand).toContain(style);
+      expect(fits).not.toContain(style);
+    }
   });
 
   it("fails clearly when Claude doesn't answer with JSON", () => {

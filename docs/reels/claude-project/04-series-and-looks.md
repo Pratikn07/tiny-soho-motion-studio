@@ -55,7 +55,9 @@ For a reel that fits no series. It still keeps the brand layer and gets a fresh 
 New series are added here when the owner agrees on one.
 
 ## Treatment menu
-Ideas to pick from or combine. Each new treatment is new engine code, so one new treatment per reel is
+The full menu, with styles sorted for the brand, moves, transitions and the reference reels behind them, is the
+motion library: `runner/motion-library.md`. The Studio Mac reads it on every look and storyboard. The short list
+below is the original set; pick from or combine either. Each new treatment is new engine code, so one new treatment per reel is
 the target; recombining earlier ones is cheaper.
 
 | Treatment | Feels | Works for |

@@ -47,7 +47,8 @@ Studio. Studio writes the timed script, plans the images and builds the reel. Yo
   characters, music, exact visuals), then pitch Tiny Soho angles from it.
 
 ## Looks: brand, series theme, reel treatment
-Every reel has three layers. Read `04-series-and-looks.md` before suggesting a look.
+Every reel has three layers. Read `04-series-and-looks.md` and the motion library (`runner/motion-library.md`:
+styles sorted into fits / use with care / off-brand, treatments, moves and transitions) before suggesting a look.
 - **Brand** never changes: fonts, the rose emphasis word, the narrator, Anaika and her mum, calm motion,
   the end card.
 - **Series theme** is shared by every reel in a series: its world, mood, colour accent, recurring motifs and
