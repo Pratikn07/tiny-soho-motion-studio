@@ -36,6 +36,19 @@ const SAMPLE_LOOKS: ReelLook[] = [
   { name: "Porch camera", treatment: "One fixed frame of the porch as the night passes.", emotion: "Observational",
     accent: "Porch-light amber", signatureMoment: "The clock on the wall jumps an hour back.", music: "Soft plucked strings", why: "Time passing is the story." },
 ];
+/** A simple sample sketch: the paper, the scene's words, an image slot and a pencil-blue note. */
+const escapeXml = (text: string) => text.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
+export const sampleSketch = (scene: ReelScene) => [
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">',
+  `<rect width="1080" height="1920" fill="${scene.n % 2 ? "#1F2340" : "#F4EADC"}"/>`,
+  `<text x="540" y="520" text-anchor="middle" font-family="Georgia, serif" font-size="96" fill="${scene.n % 2 ? "#F4EADC" : "#321708"}">${escapeXml(scene.codeDraws.slice(0, 18))}</text>`,
+  '<rect x="290" y="700" width="500" height="620" rx="24" fill="none" stroke="#B0544C" stroke-width="6" stroke-dasharray="20 14"/>',
+  `<text x="540" y="1020" text-anchor="middle" font-family="Helvetica, sans-serif" font-size="32" fill="#B0544C">${escapeXml(scene.images[0]?.file ?? "drawn in code")}</text>`,
+  `<text x="120" y="1440" font-family="Georgia, serif" font-style="italic" font-size="40" fill="#4A6FA5">${escapeXml(scene.move.slice(0, 40))}</text>`,
+  '<line x1="0" y1="1500" x2="1080" y2="1500" stroke="#4A6FA5" stroke-width="3" stroke-dasharray="12 12" opacity=".5"/>',
+  "</svg>",
+].join("");
+
 const sampleScenes = (look: ReelLook): ReelScene[] => SAMPLE_SCRIPT.map((line, index) => ({
   n: index + 1, line: line.voice, paper: index % 2 ? "Night #1F2340" : "Cream #F4EADC", codeDraws: line.onScreen,
   move: "Rises in on the stressed word", transition: "The hero object carries into the next scene",
@@ -55,6 +68,11 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
     reel.jobs.unshift({ id: crypto.randomUUID(), step, kind, status: "queued", progress: null, errorCode: null, result: null,
       createdAt: now(), updatedAt: now(), readyAt: Date.now() + delayMs, output });
   };
+  const queueSketches = (reel: MockReel, only: number[]) => {
+    const storyboard = reel.document.storyboard!;
+    queue(reel, "storyboard", "render", { phase: "sketches", version: storyboard.version,
+      sketches: storyboard.scenes.filter((scene) => only.includes(scene.n)).map((scene) => ({ n: scene.n, svg: sampleSketch(scene) })) });
+  };
   const absorb = (reel: MockReel, latest: ReelView["jobs"]) => {
     const doc = reel.document;
     const script = latest.script;
@@ -69,9 +87,17 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
     }
     if (board.result.phase === "scenes" && reel.document.storyboard?.fromJob !== board.id) {
       const previous = reel.document.storyboard;
-      reel.document = { ...reel.document, storyboard: { version: (previous?.version ?? 0) + 1, scenes: board.result.scenes as ReelScene[],
+      const scenes = (board.result.scenes as ReelScene[]).map(({ sketch: _sketch, ...scene }) => scene);
+      reel.document = { ...reel.document, storyboard: { version: (previous?.version ?? 0) + 1, scenes,
         notes: String(board.result.notes ?? ""), approved: false, fromJob: board.id },
       storyboardHistory: previous ? [previous, ...(reel.document.storyboardHistory ?? [])].slice(0, 5) : reel.document.storyboardHistory };
+      queueSketches(reel, scenes.map((scene) => scene.n));
+    }
+    const storyboard = reel.document.storyboard;
+    if (board.result.phase === "sketches" && storyboard && storyboard.sketchesFrom !== board.id && board.result.version === storyboard.version) {
+      const drawn = new Map((board.result.sketches as Array<{ n: number; svg: string }>).map((item) => [item.n, item.svg]));
+      reel.document = { ...reel.document, storyboard: { ...storyboard, sketchesFrom: board.id,
+        scenes: storyboard.scenes.map((scene) => (drawn.has(scene.n) ? { ...scene, sketch: drawn.get(scene.n) } : scene)) } };
     }
   };
   const view = (id: string): ReelView => {
@@ -84,7 +110,10 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
     const latest: ReelView["jobs"] = {};
     for (const job of reel.jobs) if (!latest[job.step]) latest[job.step] = job;
     absorb(reel, latest);
-    return structuredClone({ ...reel, jobs: latest });
+    // Absorbing can queue a sketch job; list the jobs again so the page sees it and keeps refreshing.
+    const jobs: ReelView["jobs"] = {};
+    for (const job of reel.jobs) if (!jobs[job.step]) jobs[job.step] = job;
+    return structuredClone({ ...reel, jobs });
   };
   const looks = (doc: ReelDocument, count: number, note?: string) => ({ phase: "look", looks: (doc.brief?.treatment && count === 1
     ? [{ ...SAMPLE_LOOKS[0], name: "Your treatment", treatment: doc.brief.treatment }]
@@ -174,6 +203,9 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
             storyboardHistory: [board, ...(doc.storyboardHistory ?? []).filter((item) => item.version !== action.version)] };
           break;
         }
+        case "redraw_sketches":
+          if (board) queueSketches(reel, action.scene ? [action.scene] : board.scenes.map((scene) => scene.n));
+          break;
         case "approve_storyboard":
           if (board) { reel.document = { ...doc, storyboard: { ...board, approved: true } }; reel.currentStep = "images"; }
           break;

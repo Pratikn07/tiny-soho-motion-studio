@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createMockReelsApi } from "@/components/reels/mock-api";
 import { ReelsStudio } from "@/components/reels/ReelsStudio";
-import { lookSchema, reelActionSchema, ReelsRepository } from "@/lib/reels";
+import { lookSchema, reelActionSchema, ReelsRepository, safeSketch } from "@/lib/reels";
 
 afterEach(() => cleanup());
 
@@ -292,5 +292,106 @@ describe("Reels screens: brief, looks and storyboard", () => {
     expect(await screen.findByRole("heading", { name: "What makes it work" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy for Claude" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Use this angle" })).toHaveLength(3);
+  });
+});
+
+const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920"><rect width="1080" height="1920" fill="#F4EADC"/></svg>';
+const sketchJob = (id: string, result: Record<string, unknown>) => ({ ...job(id, "storyboard", result), kind: "render" });
+
+describe("Storyboard sketches", () => {
+  it("accepts plain SVG sketches and refuses anything that could run or load something", () => {
+    expect(safeSketch(SVG)).toBe(SVG);
+    for (const bad of [
+      '<svg><script>alert(1)</script></svg>', '<svg onload="x()"><rect/></svg>', '<svg><image href="https://x.test/a.png"/></svg>',
+      '<svg><foreignObject><div/></foreignObject></svg>', '<svg><rect style="fill:url(https://x.test)"/></svg>', "<div>no</div>", `<svg>${"x".repeat(20_000)}</svg>`,
+    ]) expect(safeSketch(bad)).toBeNull();
+  });
+
+  it("queues one sketch job when new scenes arrive", async () => {
+    const client = fakeClient({
+      creative_studio_reels: [{ data: null, error: null }, reelRow({}, "storyboard")],
+      creative_studio_reel_jobs: [{ data: null, error: null }, { data: [], error: null }],
+    });
+    const repo = new ReelsRepository(client as never, OWNER);
+    const view = { id: REEL, title: "T", status: "in_progress", currentStep: "storyboard" as const, updatedAt: "",
+      document: { script: { lines: [{ time: "0:00", voice: "Hook", onScreen: "HOOK" }], approved: true }, look: { options: [LOOK], rejected: [], chosen: LOOK } },
+      jobs: { storyboard: job("j1", "storyboard", { phase: "scenes", scenes: [SCENE] }) } };
+    await repo.absorb(view);
+    const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
+    expect(queued).toMatchObject({ step: "storyboard", kind: "render", input: { phase: "sketches", version: 1, only: [1] } });
+    expect(queued.input.scenes[0].sketch).toBeUndefined();
+    const saved = (client.writes.find((write) => write.op === "update")!.value as Record<string, any>).document;
+    expect(saved.storyboard.sketchesQueued).toBe("j1-v1");
+    // Read again before the sketches come back: nothing new is queued.
+    const writes = client.writes.length;
+    await repo.absorb({ ...view, document: saved });
+    expect(client.writes.length).toBe(writes);
+  });
+
+  it("folds sketches into the version they were drawn for, and ignores an older version", async () => {
+    const client = fakeClient({ creative_studio_reels: [{ data: null, error: null }] });
+    const repo = new ReelsRepository(client as never, OWNER);
+    const storyboard = { version: 2, scenes: [SCENE, { ...SCENE, n: 2 }], approved: false, fromJob: "j1", sketchesQueued: "j1-v2" };
+    const base = { id: REEL, title: "T", status: "in_progress", currentStep: "storyboard" as const, updatedAt: "", document: { look: { options: [LOOK], rejected: [], chosen: LOOK }, storyboard } };
+    const old = await repo.absorb({ ...base, jobs: { storyboard: sketchJob("s0", { phase: "sketches", version: 1, sketches: [{ n: 1, svg: SVG }] }) } });
+    expect(old.document.storyboard?.scenes[0].sketch).toBeUndefined();
+    const drawn = await repo.absorb({ ...base, jobs: { storyboard: sketchJob("s1", { phase: "sketches", version: 2, sketches: [{ n: 1, svg: SVG }, { n: 2, svg: "<svg onload=x()></svg>" }] }) } });
+    expect(drawn.document.storyboard?.scenes[0].sketch).toBe(SVG);
+    expect(drawn.document.storyboard?.scenes[1].sketch).toBeUndefined();
+  });
+
+  it("folds sketches into a storyboard approved before sketches existed", async () => {
+    const client = fakeClient({ creative_studio_reels: [{ data: null, error: null }] });
+    const storyboard = { version: 1, scenes: [SCENE], approved: true, fromJob: "j1" };
+    const view = { id: REEL, title: "T", status: "in_progress", currentStep: "images" as const, updatedAt: "",
+      document: { look: { options: [LOOK], rejected: [], chosen: LOOK }, storyboard },
+      jobs: { storyboard: sketchJob("s1", { phase: "sketches", version: 1, sketches: [{ n: 1, svg: SVG }] }) } };
+    const drawn = await new ReelsRepository(client as never, OWNER).absorb(view);
+    expect(drawn.document.storyboard).toMatchObject({ approved: true, scenes: [{ sketch: SVG }] });
+    expect(client.writes.filter((write) => write.op === "insert")).toHaveLength(0);
+  });
+
+  it("keeps sketches of scenes a change left alone, and sends the scenes' words without sketches", async () => {
+    const client = fakeClient({
+      creative_studio_reels: [{ data: null, error: null }, reelRow({}, "storyboard")],
+      creative_studio_reel_jobs: [{ data: null, error: null }, { data: [], error: null }],
+    });
+    const repo = new ReelsRepository(client as never, OWNER);
+    const previous = { version: 1, scenes: [{ ...SCENE, sketch: SVG }, { ...SCENE, n: 2, sketch: SVG }], approved: false, fromJob: "j1" };
+    const view = { id: REEL, title: "T", status: "in_progress", currentStep: "storyboard" as const, updatedAt: "",
+      document: { look: { options: [LOOK], rejected: [], chosen: LOOK }, storyboard: previous },
+      jobs: { storyboard: job("j2", "storyboard", { phase: "scenes", scenes: [SCENE, { ...SCENE, n: 2, move: "Stamp" }] }) } };
+    await repo.absorb(view);
+    const saved = (client.writes.find((write) => write.op === "update")!.value as Record<string, any>).document;
+    expect(saved.storyboard.scenes[0].sketch).toBe(SVG);
+    expect(saved.storyboard.scenes[1].sketch).toBeUndefined();
+    expect(saved.storyboardHistory[0].scenes[0].sketch).toBeUndefined();
+    const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
+    expect(queued.input.only).toEqual([2]);
+  });
+});
+
+describe("Reels screens: sketches", () => {
+  it("shows a sketch per scene, a storyboard sheet and a silent preview", { timeout: 20_000 }, async () => {
+    render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
+    fireEvent.change(await screen.findByLabelText("Paste your brief"), { target: { value: "TITLE: Sketch test\nHOOK: A hook\nSERIES: Myths" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve script" }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Use this look" }))[0]);
+    await screen.findByRole("heading", { name: "Approve the storyboard" });
+
+    await waitFor(() => expect(screen.getAllByRole("img", { name: /^Sketch of scene/ })).toHaveLength(7), { timeout: 8000 });
+    fireEvent.click(screen.getByRole("radio", { name: "Storyboard sheet" }));
+    const sheet = screen.getByRole("list", { name: "Storyboard sheet" });
+    expect(within(sheet).getAllByRole("listitem")).toHaveLength(7);
+    expect(within(sheet).getByText("0:00–0:04")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    const player = screen.getByRole("dialog", { name: "Storyboard preview" });
+    fireEvent.click(within(player).getByRole("button", { name: "Pause" }));
+    fireEvent.click(within(player).getByRole("button", { name: "Next" }));
+    expect(within(player).getByRole("img", { name: /^Sketch of scene 2/ })).toBeInTheDocument();
+    fireEvent.click(within(player).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

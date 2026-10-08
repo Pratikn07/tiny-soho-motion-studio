@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lookSchema, sceneSchema, scriptLineSchema } from "@/lib/reels";
+import { lookSchema, safeSketch, sceneSchema, scriptLineSchema } from "@/lib/reels";
 
 // The runner is plain Node (runner/handlers.mjs); its parsers must produce what the Studio accepts.
 const handlers: Record<string, (text: string) => any> = await import(/* @vite-ignore */ new URL("../../runner/handlers.mjs", import.meta.url).href);
@@ -44,6 +44,15 @@ describe("runner parsers", () => {
   it("gives looks and storyboards more time than ideas and scripts", () => {
     expect(handlers.LOOK_TIMEOUT_MS).toBe(5 * 60_000);
     expect(handlers.STORYBOARD_TIMEOUT_MS).toBe(10 * 60_000);
+  });
+
+  it("pulls a sketch out of Claude's answer and refuses unsafe ones", () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920"><rect width="1080" height="1920"/></svg>';
+    expect(handlers.parseSketch("```svg\n" + svg + "\n```")).toBe(svg);
+    expect(safeSketch(handlers.parseSketch(svg))).toBe(svg);
+    expect(() => handlers.parseSketch("<svg><script>x()</script></svg>")).toThrow(expect.objectContaining({ code: "sketch_unsafe" }));
+    expect(() => handlers.parseSketch("No sketch, sorry")).toThrow(expect.objectContaining({ code: "claude_bad_output" }));
+    expect(handlers.SKETCH_TIMEOUT_MS).toBe(3 * 60_000);
   });
 
   it("fails clearly when Claude doesn't answer with JSON", () => {

@@ -9,6 +9,26 @@ type DataClient = { from: (table: string) => any };
 export const REEL_STEPS = ["idea", "script", "storyboard", "images", "voice", "build", "sound", "export"] as const;
 export type ReelStep = (typeof REEL_STEPS)[number];
 
+/** Largest sketch kept, in characters. A scene sketch is usually 4–10k. */
+export const SKETCH_MAX = 16_000;
+
+/**
+ * A sketch is shown as an image (an <img> with an SVG data URL), so scripts in it never run; this also refuses
+ * anything that could run or load something if it were ever shown inline.
+ */
+export function safeSketch(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const svg = value.trim();
+  if (svg.length > SKETCH_MAX || !/^<svg[\s>]/i.test(svg) || !/<\/svg>$/i.test(svg)) return null;
+  if (/<(script|foreignObject|image|iframe|object|embed|use)\b|\bon[a-z]+\s*=|(xlink:)?href\s*=|@import|url\(\s*['"]?(https?:|\/\/|data:)/i.test(svg)) return null;
+  return svg;
+}
+
+/** A scene without its sketch, for prompts and comparisons. */
+export function sceneText({ sketch: _sketch, ...scene }: ReelScene) {
+  return scene;
+}
+
 export const ideaSchema = z.object({
   title: z.string().min(1).max(120),
   hook: z.string().max(200),
@@ -56,10 +76,16 @@ export const sceneSchema = z.object({
   move: z.string().max(300),
   transition: z.string().max(300),
   images: z.array(imageSchema).max(6),
+  /** A rough 9:16 sketch of the scene as SVG, drawn by the Studio Mac after the scenes are written. */
+  sketch: z.string().max(SKETCH_MAX).optional(),
 });
 export type ReelScene = z.infer<typeof sceneSchema>;
 
-export type ReelStoryboard = { version: number; scenes: ReelScene[]; notes?: string; approved?: boolean; fromJob?: string };
+export type ReelStoryboard = {
+  version: number; scenes: ReelScene[]; notes?: string; approved?: boolean; fromJob?: string;
+  /** Which job's sketches were last folded in, and which version a sketch job was queued for, so each happens once. */
+  sketchesFrom?: string; sketchesQueued?: string;
+};
 
 const url = z.string().trim().url().max(500).refine((value) => /^https?:\/\//.test(value), "Use an http(s) link.");
 
@@ -87,6 +113,7 @@ export const reelActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("edit_image_prompt"), scene: z.number().int().min(1).max(20), file: z.string().min(1).max(80), prompt: z.string().trim().min(1).max(1200) }),
   z.object({ action: z.literal("restore_storyboard"), version: z.number().int().min(1) }),
   z.object({ action: z.literal("approve_storyboard") }),
+  z.object({ action: z.literal("redraw_sketches"), scene: z.number().int().min(1).max(20).optional() }),
   z.object({ action: z.literal("add_reference"), url }),
   z.object({ action: z.literal("remove_reference"), url: z.string().max(500) }),
   z.object({ action: z.literal("retry") }),
@@ -144,6 +171,27 @@ function jobView(row: Record<string, any>): ReelJobView {
   return {
     id: row.id, step: row.step, kind: row.kind, status: row.status, progress: row.progress ?? null,
     errorCode: row.error_code ?? null, result: row.result ?? null, createdAt: row.created_at, updatedAt: row.updated_at,
+  };
+}
+
+/** History keeps the words of earlier versions only; sketches are redrawn if a version is restored. */
+function withoutSketches(storyboard: ReelStoryboard): ReelStoryboard {
+  return { ...storyboard, scenes: storyboard.scenes.map(sceneText), sketchesFrom: undefined, sketchesQueued: undefined };
+}
+
+/** The version to queue sketches for, or null when every scene has one or a job is already queued for this version. */
+function sketchesToQueue(doc: ReelDocument) {
+  const storyboard = doc.storyboard;
+  if (!storyboard || storyboard.approved || !doc.look?.chosen || !storyboard.scenes.some((scene) => !scene.sketch)) return null;
+  const key = `${storyboard.fromJob ?? "restored"}-v${storyboard.version}`;
+  return storyboard.sketchesQueued === key ? null : key;
+}
+
+/** What the Studio Mac needs to draw sketches: the scenes' words, the look and the script timings. */
+function sketchInput(doc: ReelDocument, only: number[]) {
+  return {
+    phase: "sketches", version: doc.storyboard!.version, only, look: doc.look!.chosen,
+    scenes: doc.storyboard!.scenes.map(sceneText), script: doc.script?.lines ?? [],
   };
 }
 
@@ -256,7 +304,7 @@ export class ReelsRepository {
       case "revise_storyboard":
         if (!doc.storyboard || !doc.look?.chosen) throw conflict("no_storyboard", "There is no storyboard to change yet.");
         await this.queue(reelId, "storyboard", "revise", {
-          phase: "scenes", ...storyboardBase(), look: doc.look.chosen, storyboard: doc.storyboard.scenes,
+          phase: "scenes", ...storyboardBase(), look: doc.look.chosen, storyboard: doc.storyboard.scenes.map(sceneText),
           comments: action.comments, scene: action.scene ?? null, image: action.image ?? null,
         });
         break;
@@ -272,14 +320,22 @@ export class ReelsRepository {
       case "restore_storyboard": {
         const earlier = doc.storyboardHistory?.find((item) => item.version === action.version);
         if (!earlier || !doc.storyboard) throw conflict("no_version", "That version isn't saved any more.");
-        const history = [doc.storyboard, ...(doc.storyboardHistory ?? []).filter((item) => item.version !== action.version)].slice(0, HISTORY);
-        await this.save(reelId, { ...doc, storyboard: { ...earlier, approved: false }, storyboardHistory: history }, {});
+        const history = [withoutSketches(doc.storyboard), ...(doc.storyboardHistory ?? []).filter((item) => item.version !== action.version)].slice(0, HISTORY);
+        const restored = { ...earlier, approved: false, sketchesQueued: undefined };
+        await this.save(reelId, { ...doc, storyboard: restored, storyboardHistory: history }, {});
+        await this.queueSketches(reelId, { ...doc, storyboard: restored });
         break;
       }
       case "approve_storyboard":
         if (!doc.storyboard?.scenes.length) throw conflict("no_storyboard", "There is no storyboard to approve yet.");
         await this.save(reelId, { ...doc, storyboard: { ...doc.storyboard, approved: true } }, { current_step: "images" });
         break;
+      case "redraw_sketches": {
+        if (!doc.storyboard?.scenes.length || !doc.look?.chosen) throw conflict("no_storyboard", "There is no storyboard to sketch yet.");
+        const only = action.scene ? [action.scene] : doc.storyboard.scenes.map((scene) => scene.n);
+        await this.queue(reelId, "storyboard", "render", sketchInput(doc, only), `sketches-${doc.storyboard.version}-${crypto.randomUUID()}`);
+        break;
+      }
       case "add_reference":
         await this.save(reelId, { ...doc, references: [...new Set([...(doc.references ?? []), action.url])].slice(-10) }, {});
         break;
@@ -307,11 +363,28 @@ export class ReelsRepository {
   async absorb(view: ReelView): Promise<ReelView> {
     const script = this.absorbScript(view);
     // Storyboard results only count while the reel is on that step: going back to the script clears them.
-    const storyboard = view.currentStep === "storyboard" ? this.absorbStoryboard(script ?? view.document, view.jobs.storyboard) : null;
-    const document = storyboard ?? script;
+    // Sketches can also be drawn for a storyboard approved earlier, so those fold in on any later step.
+    const sketchesLater = view.currentStep !== "storyboard" && view.jobs.storyboard?.result?.phase === "sketches";
+    const storyboard = view.currentStep === "storyboard" || sketchesLater ? this.absorbStoryboard(script ?? view.document, view.jobs.storyboard) : null;
+    let document = storyboard ?? script;
     if (!document) return view;
+    const queueFor = view.currentStep === "storyboard" ? sketchesToQueue(document) : null;
+    if (queueFor) document = { ...document, storyboard: { ...document.storyboard!, sketchesQueued: queueFor } };
     await this.save(view.id, document, {});
+    if (queueFor) {
+      await this.queueSketches(view.id, document);
+      // Read again so the new sketch job is in the view: the page keeps refreshing while a job is active.
+      return this.get(view.id);
+    }
     return { ...view, document };
+  }
+
+  /** Queues a sketch job for the storyboard's scenes that have no sketch yet. Safe to call twice: the key is per version. */
+  private async queueSketches(reelId: string, doc: ReelDocument) {
+    const storyboard = doc.storyboard;
+    const missing = (storyboard?.scenes ?? []).filter((scene) => !scene.sketch).map((scene) => scene.n);
+    if (!storyboard || !missing.length || !doc.look?.chosen) return;
+    await this.queue(reelId, "storyboard", "render", sketchInput(doc, missing), `sketches-${storyboard.fromJob ?? "restored"}-v${storyboard.version}-${missing.join(".")}`);
   }
 
   private absorbScript(view: ReelView): ReelDocument | null {
@@ -334,16 +407,33 @@ export class ReelsRepository {
       if (!looks.success) return null;
       return { ...doc, look: { options: looks.data, rejected: doc.look?.rejected ?? [], fromJob: job.id } };
     }
+    if (job.result.phase === "sketches") {
+      const storyboard = doc.storyboard;
+      if (!storyboard || storyboard.sketchesFrom === job.id || job.result.version !== storyboard.version) return null;
+      const drawn = new Map<number, string>();
+      for (const item of Array.isArray(job.result.sketches) ? job.result.sketches : []) {
+        const svg = safeSketch(item?.svg);
+        if (svg && Number.isInteger(item?.n)) drawn.set(item.n, svg);
+      }
+      const scenes = storyboard.scenes.map((scene) => (drawn.has(scene.n) ? { ...scene, sketch: drawn.get(scene.n) } : scene));
+      return { ...doc, storyboard: { ...storyboard, scenes, sketchesFrom: job.id } };
+    }
     if (doc.storyboard?.fromJob === job.id) return null;
-    const scenes = z.array(sceneSchema).min(1).max(20).safeParse(job.result.scenes);
-    if (!scenes.success) return null;
+    const parsed = z.array(sceneSchema).min(1).max(20).safeParse(job.result.scenes);
+    if (!parsed.success) return null;
     const notes = typeof job.result.notes === "string" ? job.result.notes.slice(0, 600) : undefined;
     const previous = doc.storyboard;
     const version = Math.max(previous?.version ?? 0, ...(doc.storyboardHistory ?? []).map((item) => item.version)) + 1;
+    // A scene the change left alone keeps its sketch, so only changed scenes are redrawn.
+    const scenes = parsed.data.map((scene) => {
+      const before = previous?.scenes.find((item) => item.n === scene.n);
+      const same = before?.sketch && JSON.stringify(sceneText(before)) === JSON.stringify(sceneText(scene));
+      return same ? { ...scene, sketch: before!.sketch } : sceneText(scene);
+    });
     return {
       ...doc,
-      storyboard: { version, scenes: scenes.data, notes, approved: false, fromJob: job.id },
-      storyboardHistory: previous ? [previous, ...(doc.storyboardHistory ?? [])].slice(0, HISTORY) : doc.storyboardHistory,
+      storyboard: { version, scenes, notes, approved: false, fromJob: job.id },
+      storyboardHistory: previous ? [withoutSketches(previous), ...(doc.storyboardHistory ?? [])].slice(0, HISTORY) : doc.storyboardHistory,
     };
   }
 
@@ -380,10 +470,11 @@ export class ReelsRepository {
     if (error) throw unavailable();
   }
 
-  private async queue(reelId: string, step: ReelStep, kind: "draft" | "revise" | "render" | "mix", input: Record<string, unknown>) {
+  private async queue(reelId: string, step: ReelStep, kind: "draft" | "revise" | "render" | "mix", input: Record<string, unknown>, key?: string) {
     const { error } = await this.client.from("creative_studio_reel_jobs").insert({
-      owner_user_id: this.ownerId, reel_id: reelId, idempotency_key: crypto.randomUUID(), step, kind, input,
+      owner_user_id: this.ownerId, reel_id: reelId, idempotency_key: (key ?? crypto.randomUUID()).slice(0, 200), step, kind, input,
     });
-    if (error) throw unavailable();
+    // 23505: the same keyed job is already queued (two reads absorbed at once). That's the outcome we wanted.
+    if (error && error.code !== "23505") throw unavailable();
   }
 }
