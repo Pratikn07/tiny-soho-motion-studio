@@ -269,32 +269,3 @@ export function StoryboardStep({ reel, macState, act, onRetry }: { reel: ReelVie
     </>
   );
 }
-
-/** Images, for now: the list to make from the approved storyboard. Uploading comes with storage. */
-export function ImagesStep({ reel }: { reel: ReelView }) {
-  const images = storyboardImages(reel.document.storyboard);
-  const toMake = images.filter((image) => !image.reuse);
-  return (
-    <>
-      <div>
-        <span className={r.eyebrow}>Step 04 · Images</span>
-        <h1 className={r.title}>Make the images</h1>
-        <p className={r.lede}>Make each image in Gemini, Seedream or Higgsfield with its prompt. Uploading them here comes next; until then, send them to Claude Code.</p>
-      </div>
-      {toMake.length > 0 && <div><CopyButton text={allPrompts(reel.document.storyboard?.scenes ?? [])} label="Copy all prompts" /></div>}
-      <div className={r.tableWrap}>
-        <table className={r.table}>
-          <thead><tr><th>Scene</th><th>File</th><th>What</th><th /></tr></thead>
-          <tbody>{images.map((image) => (
-            <tr key={`${image.scene}-${image.file}`}>
-              <td className={r.time}>{image.scene}</td>
-              <td>{image.file}</td>
-              <td>{image.reuse ? `Reuse: ${image.reuse}` : image.purpose || image.prompt.slice(0, 120)}</td>
-              <td>{!image.reuse && <CopyButton text={imageBrief(image)} />}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
-    </>
-  );
-}

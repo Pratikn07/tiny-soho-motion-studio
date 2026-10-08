@@ -114,6 +114,8 @@ export const reelActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("restore_storyboard"), version: z.number().int().min(1) }),
   z.object({ action: z.literal("approve_storyboard") }),
   z.object({ action: z.literal("redraw_sketches"), scene: z.number().int().min(1).max(20).optional() }),
+  z.object({ action: z.literal("recheck_image"), file: z.string().min(1).max(80) }),
+  z.object({ action: z.literal("continue_images") }),
   z.object({ action: z.literal("add_reference"), url }),
   z.object({ action: z.literal("remove_reference"), url: z.string().max(500) }),
   z.object({ action: z.literal("retry") }),
@@ -145,6 +147,18 @@ export type ReelDocument = {
   storyboardHistory?: ReelStoryboard[];
   /** Links the creator added for mood or motion (Savee, prompt-motion, motionin). */
   references?: string[];
+  /** Images the creator uploaded at the Images step, by storyboard filename. */
+  images?: Record<string, ReelUpload>;
+};
+
+/** One instant check on an uploaded image. "fail" means it won't work as it is. */
+export type ReelImageCheck = { code: string; level: "ok" | "warn" | "fail"; message: string };
+
+/** An image the creator uploaded for a storyboard file, with the instant checks and the Studio Mac's look at it. */
+export type ReelUpload = {
+  file: string; uploadId: string; objectPath: string; mime: string; bytes: number; width: number; height: number;
+  sha256: string; uploadedAt: string; checks: ReelImageCheck[];
+  review: { status: "pending" | "good" | "redo" | "error"; notes: string; jobId?: string };
 };
 
 export type ReelView = {
@@ -156,6 +170,10 @@ export type ReelView = {
   updatedAt: string;
   /** The newest job for each step that has one. */
   jobs: Partial<Record<ReelStep, ReelJobView>>;
+  /** Short-lived links to the uploaded images, by filename (added by the API, not stored). */
+  imageUrls?: Record<string, string>;
+  /** The newest image-check job for each uploaded file (several run one after another). */
+  imageJobs?: Record<string, ReelJobView & { uploadId?: string }>;
 };
 
 export type ReelSummary = { id: string; title: string; status: string; currentStep: ReelStep; updatedAt: string };
@@ -198,6 +216,44 @@ function sketchInput(doc: ReelDocument, only: number[]) {
 /** Every image the storyboard asks for, in scene order. */
 export function storyboardImages(storyboard?: ReelStoryboard) {
   return (storyboard?.scenes ?? []).flatMap((scene) => scene.images.map((image) => ({ scene: scene.n, ...image })));
+}
+
+/** The name an image is reused by: its filename without the extension. */
+const imageName = (file: string) => file.replace(/\.[a-z0-9]+$/i, "");
+
+/**
+ * The images to make, once each, with every scene that uses them: scenes that list the file, and later scenes that
+ * reuse it by name.
+ */
+export function imagesToMake(storyboard?: ReelStoryboard) {
+  const all = storyboardImages(storyboard);
+  const made = new Map<string, ReelImage & { scenes: number[] }>();
+  for (const image of all) {
+    if (image.reuse) continue;
+    const entry = made.get(image.file) ?? { ...image, scenes: [] as number[] };
+    if (!entry.scenes.includes(image.scene)) entry.scenes.push(image.scene);
+    made.set(image.file, entry);
+  }
+  for (const image of all) {
+    if (!image.reuse) continue;
+    const own = made.get(image.file) ?? [...made.values()].find((entry) => imageName(entry.file) === imageName(image.reuse));
+    if (own && !own.scenes.includes(image.scene)) own.scenes.push(image.scene);
+  }
+  return [...made.values()].map((image) => ({ ...image, scenes: image.scenes.sort((a, b) => a - b) }));
+}
+
+/** Images reused from earlier reels (nothing to make), once each, with their scenes. */
+export function imagesReused(storyboard?: ReelStoryboard) {
+  const own = imagesToMake(storyboard);
+  const ours = (image: ReelImage) => own.some((entry) => entry.file === image.file || imageName(entry.file) === imageName(image.reuse));
+  const byName = new Map<string, { reuse: string; scenes: number[] }>();
+  for (const image of storyboardImages(storyboard)) {
+    if (!image.reuse || ours(image)) continue;
+    const entry = byName.get(image.reuse) ?? { reuse: image.reuse, scenes: [] };
+    if (!entry.scenes.includes(image.scene)) entry.scenes.push(image.scene);
+    byName.set(image.reuse, entry);
+  }
+  return [...byName.values()];
 }
 
 /** `creative_studio_reels` and their jobs, scoped to one owner. Jobs are picked up by the Studio Mac runner. */
@@ -246,10 +302,15 @@ export class ReelsRepository {
       .eq("reel_id", reelId).eq("owner_user_id", this.ownerId).order("created_at", { ascending: false }).limit(40);
     if (jobsError) throw unavailable();
     const jobs: Partial<Record<ReelStep, ReelJobView>> = {};
-    for (const row of rows ?? []) if (!jobs[row.step as ReelStep]) jobs[row.step as ReelStep] = jobView(row);
+    const imageJobs: NonNullable<ReelView["imageJobs"]> = {};
+    for (const row of rows ?? []) {
+      if (!jobs[row.step as ReelStep]) jobs[row.step as ReelStep] = jobView(row);
+      const file = row.step === "images" && typeof row.input?.file === "string" ? row.input.file : null;
+      if (file && !imageJobs[file]) imageJobs[file] = { ...jobView(row), uploadId: row.input?.uploadId };
+    }
     return {
       id: reel.id, title: reel.title, status: reel.status, currentStep: reel.current_step,
-      document: (reel.document ?? {}) as ReelDocument, updatedAt: reel.updated_at, jobs,
+      document: (reel.document ?? {}) as ReelDocument, updatedAt: reel.updated_at, jobs, imageJobs,
     };
   }
 
@@ -336,6 +397,23 @@ export class ReelsRepository {
         await this.queue(reelId, "storyboard", "render", sketchInput(doc, only), `sketches-${doc.storyboard.version}-${crypto.randomUUID()}`);
         break;
       }
+      case "recheck_image": {
+        const upload = doc.images?.[action.file];
+        if (!upload) throw conflict("no_image", "That image hasn't been uploaded yet.");
+        await this.mutate(reelId, (current) => {
+          const latest = current.images?.[action.file];
+          return latest ? { ...current, images: { ...current.images, [action.file]: { ...latest, review: { status: "pending", notes: "" } } } } : null;
+        });
+        await this.queueImageReview(reelId, doc, upload);
+        break;
+      }
+      case "continue_images": {
+        const missing = imagesToMake(doc.storyboard).filter((image) => !doc.images?.[image.file]);
+        if (!doc.storyboard?.approved) throw conflict("no_storyboard", "Approve the storyboard first.");
+        if (missing.length) throw conflict("images_missing", `Upload ${missing.map((image) => image.file).join(", ")} first.`);
+        await this.save(reelId, doc, { current_step: "voice" });
+        break;
+      }
       case "add_reference":
         await this.save(reelId, { ...doc, references: [...new Set([...(doc.references ?? []), action.url])].slice(-10) }, {});
         break;
@@ -361,6 +439,10 @@ export class ReelsRepository {
    * on the job. Called when the reel is read, so the runner never writes the document itself.
    */
   async absorb(view: ReelView): Promise<ReelView> {
+    if (this.reviewsToFold(view.document, view.imageJobs).length) {
+      const document = await this.mutate(view.id, (current) => this.foldReviews(current, view.imageJobs));
+      if (document) view = { ...view, document };
+    }
     const script = this.absorbScript(view);
     // Storyboard results only count while the reel is on that step: going back to the script clears them.
     // Sketches can also be drawn for a storyboard approved earlier, so those fold in on any later step.
@@ -377,6 +459,92 @@ export class ReelsRepository {
       return this.get(view.id);
     }
     return { ...view, document };
+  }
+
+  /** Image checks that finished (or failed) for the upload currently on file and aren't in the document yet. */
+  private reviewsToFold(doc: ReelDocument, imageJobs: ReelView["imageJobs"] = {}) {
+    return Object.values(imageJobs).filter((job) => {
+      const upload = Object.values(doc.images ?? {}).find((item) => item.uploadId === job.uploadId);
+      return Boolean(upload) && upload!.review.jobId !== job.id && (job.status === "needs_review" || job.status === "failed");
+    });
+  }
+
+  private foldReviews(doc: ReelDocument, imageJobs: ReelView["imageJobs"]): ReelDocument | null {
+    const jobs = this.reviewsToFold(doc, imageJobs);
+    if (!jobs.length) return null;
+    const images = { ...doc.images };
+    for (const job of jobs) {
+      const upload = Object.values(images).find((item) => item.uploadId === job.uploadId);
+      if (!upload) continue;
+      const verdict = job.result?.verdict === "good" ? "good" : job.result?.verdict === "redo" ? "redo" : null;
+      const notes = typeof job.result?.notes === "string" ? job.result.notes.slice(0, 500) : "";
+      images[upload.file] = { ...upload, review: job.status === "failed" || !verdict
+        ? { status: "error", notes: job.progress ?? "The Studio Mac couldn't check this image.", jobId: job.id }
+        : { status: verdict, notes, jobId: job.id } };
+    }
+    return { ...doc, images };
+  }
+
+  /** Records an uploaded image (replacing an earlier upload of the same file) and asks the Studio Mac to look at it. */
+  async recordUpload(reelId: string, upload: ReelUpload) {
+    let replaced: string | null = null;
+    const document = await this.mutate(reelId, (doc) => {
+      replaced = doc.images?.[upload.file]?.objectPath ?? null;
+      return { ...doc, images: { ...doc.images, [upload.file]: upload } };
+    });
+    if (document) await this.queueImageReview(reelId, document, upload);
+    return { replaced: replaced as string | null };
+  }
+
+  /** Forgets an uploaded image; returns its storage path so the caller can delete the file. */
+  async removeUpload(reelId: string, file: string) {
+    let removed: string | null = null;
+    await this.mutate(reelId, (doc) => {
+      const upload = doc.images?.[file];
+      if (!upload) return null;
+      removed = upload.objectPath;
+      const { [file]: _gone, ...images } = doc.images!;
+      return { ...doc, images };
+    });
+    return removed as string | null;
+  }
+
+  /** The storyboard entry for a file the creator has to make, or a clear error. */
+  imageToMake(doc: ReelDocument, file: string) {
+    const image = imagesToMake(doc.storyboard).find((item) => item.file === file);
+    if (!doc.storyboard?.approved) throw conflict("no_storyboard", "Approve the storyboard before uploading images.");
+    if (!image) throw conflict("unknown_image", `${file} isn't an image this storyboard asks for.`);
+    return image;
+  }
+
+  private async queueImageReview(reelId: string, doc: ReelDocument, upload: ReelUpload) {
+    const image = imagesToMake(doc.storyboard).find((item) => item.file === upload.file);
+    await this.queue(reelId, "images", "draft", {
+      phase: "review", file: upload.file, uploadId: upload.uploadId, objectPath: upload.objectPath, mime: upload.mime,
+      image: image ?? null, look: doc.look?.chosen ?? null, checks: upload.checks,
+    }, `review-${upload.uploadId}-${crypto.randomUUID()}`);
+  }
+
+  /**
+   * Changes the document from its latest saved state and saves only if nobody saved in between (compared by
+   * updated_at), retrying a few times. Used where several requests can land at once, like uploads finishing.
+   */
+  private async mutate(reelId: string, change: (doc: ReelDocument) => ReelDocument | null): Promise<ReelDocument | null> {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const { data: row, error } = await this.client.from("creative_studio_reels").select("document,updated_at")
+        .eq("id", reelId).eq("owner_user_id", this.ownerId).maybeSingle();
+      if (error) throw unavailable();
+      if (!row) throw notFound();
+      const next = change((row.document ?? {}) as ReelDocument);
+      if (!next) return null;
+      const updatedAt = new Date().toISOString();
+      const { data: saved, error: saveError } = await this.client.from("creative_studio_reels")
+        .update({ document: next, updated_at: updatedAt }).eq("id", reelId).eq("owner_user_id", this.ownerId).eq("updated_at", row.updated_at)
+        .select("id");
+      if (saveError) throw unavailable();
+      if (Array.isArray(saved) && saved.length) return next;
+    }
+    throw new StudioError(409, "reel_busy", "The reel changed while saving. Try again.");
   }
 
   /** Queues a sketch job for the storyboard's scenes that have no sketch yet. Safe to call twice: the key is per version. */

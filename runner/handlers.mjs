@@ -440,6 +440,58 @@ handlers["storyboard/render"] = async (job, reel, { progress }) => {
     progress: missed ? `Sketches ready (${missed} couldn't be drawn)` : "Sketches ready" };
 };
 
+/** Time for the Studio Mac to look at one uploaded image. */
+export const IMAGE_CHECK_TIMEOUT_MS = 3 * 60_000;
+
+export function parseImageCheck(text) {
+  const data = jsonIn(text, "{", "an image check");
+  const verdict = data.verdict === "good" ? "good" : data.verdict === "redo" ? "redo" : null;
+  if (!verdict) throw stepError("claude_bad_output", "Claude did not say whether the image is good.");
+  return { verdict, notes: str(data.notes, 500) };
+}
+
+/**
+ * Images, check: downloads the creator's upload (a link made when the job was claimed), shrinks a copy for reading,
+ * and has Claude compare it with what the storyboard asked for. It can't compare faces with the cast's character
+ * sheets yet; those aren't in Studio.
+ */
+handlers["images/draft"] = async (job, reel, { progress }) => {
+  const input = job.input;
+  if (input.phase !== "review" || typeof input.imageUrl !== "string") throw stepError("image_link_missing", "There is no image to check.");
+  const dir = mkdtempSync(join(tmpdir(), "tiny-soho-image-"));
+  try {
+    await progress(`Looking at ${str(input.file, 80)}`);
+    const response = await fetch(input.imageUrl);
+    if (!response.ok) throw stepError("image_download_failed", "The image couldn't be downloaded. Try the check again.");
+    const ext = input.mime === "image/jpeg" ? "jpg" : input.mime === "image/webp" ? "webp" : "png";
+    writeFileSync(join(dir, `upload.${ext}`), Buffer.from(await response.arrayBuffer()));
+    // A smaller PNG copy keeps transparency and reads faster.
+    await run("sips", ["-s", "format", "png", "-Z", "1600", `upload.${ext}`, "--out", "check.png"], { cwd: dir, code: "image_unreadable" });
+    const image = input.image ?? {};
+    const text = await askClaude([
+      "You check images for @tinysoho story reels before they are animated. Look at check.png in this folder.",
+      `It should be: ${str(image.purpose, 200)}.`,
+      `The prompt it was made from: ${str(image.prompt, 1200)}`,
+      `Background: ${image.background === "transparent" ? "transparent (a cut-out)" : "a full background"}. Aspect asked: ${str(image.aspect, 12)}.`,
+      image.reference && image.reference !== "none" ? `It shows ${image.reference === "anaika" ? "Anaika, the toddler" : "her mum"} (AI-generated cast).` : "",
+      input.look ? `The reel's look: ${str(input.look.name, 80)}: ${str(input.look.treatment, 400)}` : "",
+      `Instant checks already run: ${list(input.checks).map((check) => `${check.level}: ${check.message}`).join("; ") || "none"}.`,
+      "",
+      "Say it is good if it shows what was asked and would work in the reel. Say redo for any of: the wrong subject or pose;",
+      "a child in distress (crying, wailing, hurt); text, logos or watermarks baked into the picture; extra or broken",
+      "fingers, limbs or faces; a background where a cut-out was asked for; colours far from the brand (cocoa, cream,",
+      "rose, sage, gold, night blue, pumpkin in illustrations); a style that clashes with the look.",
+      'Answer with only JSON: {"verdict": "good" | "redo", "notes": string}. notes: one or two short sentences; for redo, say',
+      "exactly what to change in the prompt or the image.",
+    ].filter(Boolean).join("\n"), { cwd: dir, tools: ["Read"], maxTurns: 4, timeoutMs: IMAGE_CHECK_TIMEOUT_MS });
+    const check = parseImageCheck(text);
+    return { status: "needs_review", result: { phase: "review", file: input.file, uploadId: input.uploadId, ...check },
+      progress: check.verdict === "good" ? "Looks good" : "Needs a redo" };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
+
 export async function handle(job, reel, tools) {
   const handler = handlers[`${job.step}/${job.kind}`];
   if (!handler) throw stepError("step_not_ready", `The ${job.step} step (${job.kind}) isn't built into the runner yet.`);

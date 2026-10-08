@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { requireOwner } from "@/lib/auth";
 import { routeErrorResponse } from "@/lib/http";
+import { ReelImageStore } from "@/lib/reel-images";
 import { reelActionSchema, ReelsRepository } from "@/lib/reels";
 import { createServiceSupabaseClient } from "@/lib/supabase-server";
 
@@ -13,7 +14,9 @@ export async function POST(request: Request, context: Context) {
     const owner = await requireOwner(request);
     const id = z.string().uuid().parse((await context.params).id);
     const action = reelActionSchema.parse(await request.json());
-    return Response.json(await new ReelsRepository(createServiceSupabaseClient() as never, owner.userId).act(id, action));
+    const client = createServiceSupabaseClient();
+    const view = await new ReelsRepository(client as never, owner.userId).act(id, action);
+    return Response.json(await new ReelImageStore(client as never, owner.userId, id).withUrls(view));
   } catch (error) {
     return routeErrorResponse(error);
   }

@@ -55,6 +55,12 @@ describe("runner parsers", () => {
     expect(handlers.SKETCH_TIMEOUT_MS).toBe(3 * 60_000);
   });
 
+  it("reads the Studio Mac's verdict on an image", () => {
+    expect(handlers.parseImageCheck('{"verdict": "redo", "notes": "Anaika looks upset; make it a pout."}')).toEqual({ verdict: "redo", notes: "Anaika looks upset; make it a pout." });
+    expect(() => handlers.parseImageCheck('{"verdict": "maybe"}')).toThrow(expect.objectContaining({ code: "claude_bad_output" }));
+    expect(handlers.IMAGE_CHECK_TIMEOUT_MS).toBe(3 * 60_000);
+  });
+
   it("fails clearly when Claude doesn't answer with JSON", () => {
     expect(() => handlers.parseStoryboard("Sorry, I can't.")).toThrow(expect.objectContaining({ code: "claude_bad_output" }));
     expect(() => handlers.parseLooks("[not json]")).toThrow(expect.objectContaining({ code: "claude_bad_output" }));

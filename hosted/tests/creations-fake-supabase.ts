@@ -12,6 +12,8 @@ const uniqueKeys: Record<string, Array<{ columns: string[]; where?: (row: Row) =
     { columns: ["project_id", "slide_id"], where: (row) => ACTIVE_RUN.includes(row.status) },
   ],
   creative_studio_takes: [{ columns: ["id"] }, { columns: ["run_id", "attempt"] }],
+  creative_studio_reels: [{ columns: ["id"] }],
+  creative_studio_reel_jobs: [{ columns: ["id"] }, { columns: ["reel_id", "idempotency_key"] }],
   creative_studio_jobs: [{ columns: ["id"] }, { columns: ["project_id", "idempotency_key"] }],
   creative_studio_vision_jobs: [{ columns: ["id"] }, { columns: ["project_id", "idempotency_key"] }],
   creative_studio_direction_runs: [{ columns: ["id"] }, { columns: ["project_id", "idempotency_key"] }],
@@ -97,6 +99,13 @@ export function creationsFakeSupabase() {
       this.filters.push((row) => String(readColumn(row, column)) >= value);
       return this;
     }
+    neq(column: string, value: unknown) {
+      this.filters.push((row) => readColumn(row, column) !== value);
+      return this;
+    }
+    limit() {
+      return this;
+    }
     in(column: string, values: unknown[]) {
       this.filters.push((row) => values.includes(readColumn(row, column)));
       return this;
@@ -164,6 +173,14 @@ export function creationsFakeSupabase() {
             .map((name) => ({ name })),
           error: null,
         }),
+        createSignedUrls: async (paths: string[], seconds: number) => ({
+          data: paths.map((path) => ({ path, signedUrl: `https://storage.test/sign/${path}?expires=${seconds}` })),
+          error: null,
+        }),
+        remove: async (paths: string[]) => {
+          for (const path of paths) objects.delete(path);
+          return { data: paths.map((name) => ({ name })), error: null };
+        },
         download: async (path: string) => {
           const object = objects.get(path);
           return object

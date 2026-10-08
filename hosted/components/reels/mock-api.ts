@@ -1,5 +1,5 @@
 import { parseBrief } from "@/lib/reel-brief";
-import type { ReelAction, ReelDocument, ReelJobView, ReelLook, ReelScene, ReelStep, ReelView, ScriptLine } from "@/lib/reels";
+import { imagesToMake, type ReelAction, type ReelDocument, type ReelJobView, type ReelLook, type ReelScene, type ReelStep, type ReelUpload, type ReelView, type ScriptLine } from "@/lib/reels";
 import type { ReelsApi } from "./api";
 
 /** Sample data for the development preview: a stand-in runner answers each job a few seconds after it is queued. */
@@ -112,14 +112,60 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
     absorb(reel, latest);
     // Absorbing can queue a sketch job; list the jobs again so the page sees it and keeps refreshing.
     const jobs: ReelView["jobs"] = {};
-    for (const job of reel.jobs) if (!jobs[job.step]) jobs[job.step] = job;
-    return structuredClone({ ...reel, jobs });
+    const imageJobs: Record<string, MockJob & { uploadId: string }> = {};
+    for (const job of reel.jobs) {
+      if (!jobs[job.step]) jobs[job.step] = job;
+      const file = job.step === "images" ? String(job.output.file) : null;
+      if (file && !imageJobs[file]) imageJobs[file] = { ...job, uploadId: String(job.output.uploadId) };
+    }
+    // The sample runner's image checks fold into the uploads they were made for.
+    for (const job of Object.values(imageJobs)) {
+      const upload = reel.document.images?.[String(job.output.file)];
+      if (upload && job.status === "needs_review" && upload.uploadId === job.uploadId && upload.review.jobId !== job.id) {
+        reel.document = { ...reel.document, images: { ...reel.document.images, [upload.file]: { ...upload,
+          review: { status: job.output.verdict as "good" | "redo", notes: String(job.output.notes), jobId: job.id } } } };
+      }
+    }
+    return structuredClone({ ...reel, jobs, imageJobs, imageUrls: Object.fromEntries(Object.keys(reel.document.images ?? {}).map((file) => [file, previews.get(`${id}/${file}`) ?? ""])) });
   };
   const looks = (doc: ReelDocument, count: number, note?: string) => ({ phase: "look", looks: (doc.brief?.treatment && count === 1
     ? [{ ...SAMPLE_LOOKS[0], name: "Your treatment", treatment: doc.brief.treatment }]
     : SAMPLE_LOOKS.filter((look) => !doc.look?.rejected.includes(look.name)).concat(SAMPLE_LOOKS).slice(0, count))
     .map((look) => (note ? { ...look, why: note } : look)) });
+  /** Sample uploads: the browser's own copy of the file stands in for storage. */
+  const pending = new Map<string, File>();
+  const previews = new Map<string, string>();
+  const reviewImage = (reel: MockReel, upload: ReelUpload) => queue(reel, "images", "draft", { phase: "review", file: upload.file, uploadId: upload.uploadId,
+    verdict: upload.checks.some((check) => check.level === "fail") ? "redo" : "good",
+    notes: upload.checks.some((check) => check.level === "fail") ? "Sample check: the background should be transparent." : "Sample check: matches the prompt and the look." });
   return {
+    startImageUpload: async (id, input) => {
+      const uploadId = crypto.randomUUID();
+      return { uploadId, uploadUrl: `https://mock.storage/upload/${id}/${encodeURIComponent(input.file)}/${uploadId}` };
+    },
+    uploadImage: async (uploadUrl, file, onProgress) => { onProgress(0.5); pending.set(uploadUrl.split("/").pop()!, file); onProgress(1); },
+    finishImageUpload: async (id, input) => {
+      const reel = reels.get(id)!;
+      const file = pending.get(input.uploadId);
+      const image = imagesToMake(reel.document.storyboard).find((item) => item.file === input.file);
+      if (!file || !image) throw new Error("The upload didn't finish. Upload the image again.");
+      const transparent = file.type !== "image/jpeg";
+      const upload: ReelUpload = { file: input.file, uploadId: input.uploadId, objectPath: `sample/${input.file}`, mime: file.type, bytes: file.size,
+        width: 1080, height: 1350, sha256: "sample", uploadedAt: new Date().toISOString(), review: { status: "pending", notes: "" },
+        checks: [{ code: "size", level: "ok", message: "1080×1350 px (sample)." },
+          ...(image.background === "transparent" ? [transparent ? { code: "transparent", level: "ok" as const, message: "Transparent background, as asked." }
+            : { code: "transparent", level: "fail" as const, message: "Needs a transparent background. Save it as a PNG or WebP with transparency." }] : [])] };
+      reel.document = { ...reel.document, images: { ...reel.document.images, [input.file]: upload } };
+      try { previews.set(`${id}/${input.file}`, URL.createObjectURL(file)); } catch { previews.set(`${id}/${input.file}`, ""); }
+      reviewImage(reel, upload);
+      return view(id);
+    },
+    removeImage: async (id, file) => {
+      const reel = reels.get(id)!;
+      const { [file]: _gone, ...images } = reel.document.images ?? {};
+      reel.document = { ...reel.document, images };
+      return view(id);
+    },
     list: async () => [...reels.values()].map((reel) => ({ id: reel.id, title: reel.title, status: reel.status, currentStep: reel.currentStep, updatedAt: reel.updatedAt })),
     create: async (input) => {
       const id = crypto.randomUUID();
@@ -208,6 +254,14 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
           break;
         case "approve_storyboard":
           if (board) { reel.document = { ...doc, storyboard: { ...board, approved: true } }; reel.currentStep = "images"; }
+          break;
+        case "recheck_image": {
+          const upload = doc.images?.[action.file];
+          if (upload) { reel.document = { ...doc, images: { ...doc.images, [action.file]: { ...upload, review: { status: "pending", notes: "" } } } }; reviewImage(reel, upload); }
+          break;
+        }
+        case "continue_images":
+          reel.currentStep = "voice";
           break;
         case "add_reference":
           reel.document = { ...doc, references: [...new Set([...(doc.references ?? []), action.url])] };

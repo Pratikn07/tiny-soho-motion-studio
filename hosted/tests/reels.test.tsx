@@ -395,3 +395,33 @@ describe("Reels screens: sketches", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
+
+describe("Reels screens: images", () => {
+  it("uploads each image once, shows the checks and the Mac's look, then continues", { timeout: 20_000 }, async () => {
+    render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
+    fireEvent.change(await screen.findByLabelText("Paste your brief"), { target: { value: "TITLE: Upload test\nHOOK: A hook" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve script" }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Use this look" }))[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Approve storyboard" }));
+
+    expect(await screen.findByRole("heading", { name: "Make the images" })).toBeInTheDocument();
+    expect(screen.getByText("0 of 1 uploaded · 0 look good")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Reused, nothing to make" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue to Voice" })).toBeDisabled();
+
+    const jpeg = new File(["x"], "anaika.jpg", { type: "image/jpeg" });
+    fireEvent.change(screen.getByLabelText("Upload r02_01_anaika_yawn.png"), { target: { files: [jpeg] } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("needs a transparent background");
+
+    const png = new File(["x"], "anaika.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Upload r02_01_anaika_yawn.png"), { target: { files: [png] } });
+    expect(await screen.findByText("Transparent background, as asked.")).toBeInTheDocument();
+    expect(await screen.findByText(/Looks good\./)).toBeInTheDocument();
+    expect(screen.getByText("1 of 1 uploaded · 1 look good")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Voice" }));
+    const rail = screen.getByRole("navigation", { name: "Reel steps" });
+    await waitFor(() => expect(within(rail).getByRole("button", { name: /Images/ })).toHaveTextContent("Done"));
+  });
+});
