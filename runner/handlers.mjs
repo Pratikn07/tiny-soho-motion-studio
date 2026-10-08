@@ -5,6 +5,8 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { voiceJob } from "./voice.mjs";
+
 function stepError(code, message) {
   return Object.assign(new Error(message), { code });
 }
@@ -183,7 +185,7 @@ async function referenceBreakdown(link, { progress }) {
 }
 
 /** Speech to text with faster-whisper through uv. Returns "" when it isn't available, so the breakdown still runs. */
-async function transcribe(dir, video) {
+export async function transcribe(dir, video) {
   try {
     await run("ffmpeg", ["-v", "error", "-t", "180", "-i", video, "-vn", "-ac", "1", "-ar", "16000", "voice.wav"], { cwd: dir });
     // Samples go in as an array: faster-whisper's own file decoding breaks with some PyAV versions.
@@ -491,6 +493,9 @@ handlers["images/draft"] = async (job, reel, { progress }) => {
     rmSync(dir, { recursive: true, force: true });
   }
 };
+
+handlers["voice/draft"] = (job, reel, tools) => voiceJob(job, reel, tools, { askClaude, run, transcribe });
+handlers["voice/revise"] = handlers["voice/draft"];
 
 export async function handle(job, reel, tools) {
   const handler = handlers[`${job.step}/${job.kind}`];

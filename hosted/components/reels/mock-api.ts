@@ -1,5 +1,5 @@
 import { parseBrief } from "@/lib/reel-brief";
-import { imagesToMake, type ReelAction, type ReelDocument, type ReelJobView, type ReelLook, type ReelScene, type ReelStep, type ReelUpload, type ReelView, type ScriptLine } from "@/lib/reels";
+import { imagesToMake, type ReelVoiceTake, type ReelAction, type ReelDocument, type ReelJobView, type ReelLook, type ReelScene, type ReelStep, type ReelUpload, type ReelView, type ScriptLine } from "@/lib/reels";
 import type { ReelsApi } from "./api";
 
 /** Sample data for the development preview: a stand-in runner answers each job a few seconds after it is queued. */
@@ -58,6 +58,30 @@ const sampleScenes = (look: ReelLook): ReelScene[] => SAMPLE_SCRIPT.map((line, i
       reuse: "reel01 clock face with no hands", prompt: "" }] : [],
 }));
 
+/** A blob of silence, so the sample takes have something to play (the page's policy allows blob: audio, not data:). */
+let silentUrl: string | null = null;
+const silentWav = () => {
+  if (silentUrl !== null) return silentUrl;
+  try {
+    const bytes = Uint8Array.from(atob("UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="), (char) => char.charCodeAt(0));
+    silentUrl = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+  } catch {
+    silentUrl = "";
+  }
+  return silentUrl;
+};
+const sampleTake = (id: string, label: string, gap: number, lines: string[], note?: { n: number; text: string }): ReelVoiceTake => {
+  let at = 0;
+  const spans = lines.map((text, index) => {
+    const start = at, end = at + 2.4 + (index % 3) * 0.4;
+    at = end + gap;
+    return { n: index + 1, text: note?.n === index + 1 ? note.text : text, start: Math.round(start * 10) / 10, end: Math.round(end * 10) / 10 };
+  });
+  return { id, label, gap, stability: 0.45, objectPath: `sample/voice/${id}-${Date.now()}.mp3`, seconds: spans.at(-1)!.end,
+    lines: spans, words: spans.map((span) => ({ n: span.n, word: span.text.replace(/\[[^\]]*\]\s*/g, "").split(" ")[0] || "word", start: span.start, end: span.start + 0.3 })),
+    cueCheck: { ok: true, spokenCues: [], heard: 0.97, transcript: "" } };
+};
+
 type MockJob = ReelJobView & { readyAt: number; output: Record<string, unknown> };
 type MockReel = Omit<ReelView, "jobs"> & { jobs: MockJob[] };
 
@@ -74,6 +98,14 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
       sketches: storyboard.scenes.filter((scene) => only.includes(scene.n)).map((scene) => ({ n: scene.n, svg: sampleSketch(scene) })) });
   };
   const absorb = (reel: MockReel, latest: ReelView["jobs"]) => {
+    const voiceJob = latest.voice;
+    if (reel.currentStep === "voice" && voiceJob?.status === "needs_review" && voiceJob.result && reel.document.voice?.fromJob !== voiceJob.id) {
+      const takes = voiceJob.result.takes as ReelVoiceTake[];
+      const current = reel.document.voice;
+      reel.document = { ...reel.document, voice: voiceJob.result.phase === "line"
+        ? { ...current!, takes: current!.takes.map((take) => takes.find((item) => item.id === take.id) ?? take), fromJob: voiceJob.id, credits: voiceJob.result.credits as never }
+        : { takes, fromJob: voiceJob.id, credits: voiceJob.result.credits as never } };
+    }
     const doc = reel.document;
     const script = latest.script;
     const lines = script?.result?.lines as ScriptLine[] | undefined;
@@ -126,7 +158,8 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
           review: { status: job.output.verdict as "good" | "redo", notes: String(job.output.notes), jobId: job.id } } } };
       }
     }
-    return structuredClone({ ...reel, jobs, imageJobs, imageUrls: Object.fromEntries(Object.keys(reel.document.images ?? {}).map((file) => [file, previews.get(`${id}/${file}`) ?? ""])) });
+    return structuredClone({ ...reel, jobs, imageJobs, imageUrls: Object.fromEntries(Object.keys(reel.document.images ?? {}).map((file) => [file, previews.get(`${id}/${file}`) ?? ""])),
+      voiceUrls: Object.fromEntries((reel.document.voice?.takes ?? []).map((take) => [take.id, silentWav()])) });
   };
   const looks = (doc: ReelDocument, count: number, note?: string) => ({ phase: "look", looks: (doc.brief?.treatment && count === 1
     ? [{ ...SAMPLE_LOOKS[0], name: "Your treatment", treatment: doc.brief.treatment }]
@@ -260,8 +293,32 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
           if (upload) { reel.document = { ...doc, images: { ...doc.images, [action.file]: { ...upload, review: { status: "pending", notes: "" } } } }; reviewImage(reel, upload); }
           break;
         }
-        case "continue_images":
+        case "continue_images": {
           reel.currentStep = "voice";
+          const lines = (doc.script?.lines ?? []).map((line) => line.voice);
+          if (!doc.voice) queue(reel, "voice", "draft", { phase: "takes", credits: { used: 412, remaining: 38_398, limit: 40_000 },
+            takes: [sampleTake("a", "Natural", 0.3, lines), sampleTake("b", "Tight", 0.2, lines)] });
+          break;
+        }
+        case "choose_take":
+          if (doc.voice) reel.document = { ...doc, voice: { ...doc.voice, chosen: action.take, approved: false } };
+          break;
+        case "redo_line": {
+          const take = doc.voice?.takes.find((item) => item.id === action.take);
+          const lines = (doc.script?.lines ?? []).map((line) => line.voice);
+          if (take) queue(reel, "voice", "revise", { phase: "line", credits: { used: 48, remaining: 38_350, limit: 40_000 },
+            takes: [sampleTake(take.id, take.label, take.gap, lines, { n: action.n, text: `[${action.note}] ${lines[action.n - 1]?.replace(/^\[[^\]]*\]\s*/, "") ?? ""}` })] });
+          break;
+        }
+        case "new_takes": {
+          const lines = (doc.script?.lines ?? []).map((line) => line.voice);
+          reel.document = { ...doc, voice: { takes: doc.voice?.takes ?? [] } };
+          queue(reel, "voice", "draft", { phase: "takes", credits: { used: 412, remaining: 37_986, limit: 40_000 },
+            takes: [sampleTake("a", "Natural", 0.3, lines), sampleTake("b", "Tight", 0.2, lines)] });
+          break;
+        }
+        case "approve_voice":
+          if (doc.voice?.chosen) { reel.document = { ...doc, voice: { ...doc.voice, approved: true } }; reel.currentStep = "build"; }
           break;
         case "add_reference":
           reel.document = { ...doc, references: [...new Set([...(doc.references ?? []), action.url])] };

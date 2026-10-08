@@ -425,3 +425,85 @@ describe("Reels screens: images", () => {
     await waitFor(() => expect(within(rail).getByRole("button", { name: /Images/ })).toHaveTextContent("Done"));
   });
 });
+
+const TAKE = (id: string, gap: number, objectPath = `owners/o/reels/r/voice/${id}.mp3`) => ({
+  id, label: id === "a" ? "Natural" : "Tight", gap, stability: 0.45, objectPath, seconds: 5.2,
+  lines: [{ n: 1, text: "[curious] Hook", start: 0, end: 2 }, { n: 2, text: "End", start: 2 + gap, end: 5.2 }],
+  words: [{ n: 1, word: "Hook", start: 0.1, end: 0.5 }], cueCheck: { ok: true, spokenCues: [], heard: 1, transcript: "Hook End" },
+});
+const voiceJob = (id: string, result: Record<string, unknown>) => ({ ...job(id, "storyboard", result), step: "voice" as const });
+
+describe("ReelsRepository: voice", () => {
+  const imagesDoc = { script: { lines: [{ time: "0:00", voice: "[curious] Hook", onScreen: "H" }, { time: "0:02", voice: "End", onScreen: "E" }], approved: true },
+    look: { options: [LOOK], rejected: [], chosen: LOOK }, storyboard: { version: 1, scenes: [{ ...SCENE, images: [] }], approved: true } };
+
+  it("moves to Voice and queues both takes when the images are done", async () => {
+    const client = fakeClient({
+      creative_studio_reels: [reelRow(imagesDoc, "images"), { data: null, error: null }, reelRow({}, "voice")],
+      creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }],
+    });
+    await new ReelsRepository(client as never, OWNER).act(REEL, { action: "continue_images" });
+    expect((client.writes.find((write) => write.op === "update")!.value as Record<string, unknown>).current_step).toBe("voice");
+    const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
+    expect(queued).toMatchObject({ step: "voice", kind: "draft", input: { phase: "takes", lines: ["[curious] Hook", "End"] } });
+  });
+
+  it("folds new takes in, then a redone line into its take only", async () => {
+    const client = fakeClient({ creative_studio_reels: [{ data: null, error: null }, { data: null, error: null }] });
+    const repo = new ReelsRepository(client as never, OWNER);
+    const base = { id: REEL, title: "T", status: "in_progress", currentStep: "voice" as const, updatedAt: "" };
+    const first = await repo.absorb({ ...base, document: imagesDoc, jobs: { voice: voiceJob("v1", { phase: "takes", takes: [TAKE("a", 0.3), TAKE("b", 0.2)], credits: { used: 400, remaining: 38000, limit: 40000 } }) } });
+    expect(first.document.voice).toMatchObject({ fromJob: "v1", credits: { used: 400 } });
+    expect(first.document.voice?.takes.map((take) => take.id)).toEqual(["a", "b"]);
+    const chosen = { ...first.document, voice: { ...first.document.voice!, chosen: "b" } };
+    const redone = await repo.absorb({ ...base, document: chosen, jobs: { voice: voiceJob("v2", { phase: "line", takes: [TAKE("b", 0.2, "owners/o/reels/r/voice/b2.mp3")] }) } });
+    expect(redone.document.voice?.takes.map((take) => take.objectPath)).toEqual(["owners/o/reels/r/voice/a.mp3", "owners/o/reels/r/voice/b2.mp3"]);
+    expect(redone.document.voice).toMatchObject({ chosen: "b", approved: false, fromJob: "v2" });
+  });
+
+  it("redoes one line with the creator's note, and approves only a chosen take", async () => {
+    const doc = { ...imagesDoc, voice: { takes: [TAKE("a", 0.3)], fromJob: "v1" } };
+    const client = fakeClient({
+      creative_studio_reels: [reelRow(doc, "voice"), { data: null, error: null }, reelRow({}, "voice"), reelRow(doc, "voice")],
+      creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }, { data: [], error: null }],
+    });
+    const repo = new ReelsRepository(client as never, OWNER);
+    await repo.act(REEL, { action: "redo_line", take: "a", n: 2, note: "softer" });
+    const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
+    expect(queued).toMatchObject({ step: "voice", kind: "revise", input: { phase: "line", take: { id: "a", gap: 0.3 }, n: 2, note: "softer" } });
+    await expect(repo.act(REEL, { action: "approve_voice" })).rejects.toMatchObject({ code: "no_take" });
+  });
+});
+
+describe("Reels screens: voice", () => {
+  it("records two takes, redoes a line, chooses one and approves", { timeout: 25_000 }, async () => {
+    render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
+    fireEvent.change(await screen.findByLabelText("Paste your brief"), { target: { value: "TITLE: Voice test\nHOOK: A hook" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve script" }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Use this look" }))[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Approve storyboard" }));
+    fireEvent.change(await screen.findByLabelText("Upload r02_01_anaika_yawn.png"), { target: { files: [new File(["x"], "a.png", { type: "image/png" })] } });
+    await screen.findByText(/Looks good\./);
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Voice" }));
+
+    expect(await screen.findByRole("heading", { name: "Choose the voice take" })).toBeInTheDocument();
+    expect(await screen.findByRole("article", { name: "Natural take" })).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Tight take" })).toBeInTheDocument();
+    expect(screen.getByText(/Last recording used 412 ElevenLabs characters · 38,398 of 40,000 left this month/)).toBeInTheDocument();
+    expect(screen.getAllByText(/No cues read aloud/)).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Approve voice" })).toBeDisabled();
+
+    const tight = screen.getByRole("article", { name: "Tight take" });
+    fireEvent.click(within(tight).getAllByRole("button", { name: "Redo this line" })[0]);
+    fireEvent.change(within(tight).getByLabelText("Redo this line"), { target: { value: "slower" } });
+    fireEvent.click(within(tight).getByRole("button", { name: "Redo line" }));
+    expect(await screen.findByText(/Last recording used 48 ElevenLabs characters/)).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("article", { name: "Tight take" })).getByRole("button", { name: "Use this take" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Approve voice" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Approve voice" }));
+    const rail = screen.getByRole("navigation", { name: "Reel steps" });
+    await waitFor(() => expect(within(rail).getByRole("button", { name: /Voice/ })).toHaveTextContent("Done"));
+  });
+});

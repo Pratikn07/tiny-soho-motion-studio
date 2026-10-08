@@ -132,6 +132,11 @@ label.primary, label.secondary { display: inline-flex; align-items: center; }
 .reviewGood { background: var(--sage-wash); }
 .reviewRedo { background: var(--note); color: var(--clay); }
 
+.audio { width: 100%; }
+.voiceLines { display: grid; gap: 8px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; }
+.voiceLines li { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 4px 10px; align-items: baseline; }
+.voiceLines li > :nth-child(n + 3) { grid-column: 2; }
+
 @media (max-width: 740px) {
   .work { grid-template-columns: 1fr; margin: -28px -18px -48px; }
   .rail { border-right: 0; border-bottom: 1px solid var(--line); }

@@ -81,6 +81,25 @@ export const sceneSchema = z.object({
 });
 export type ReelScene = z.infer<typeof sceneSchema>;
 
+const timing = z.number().min(0).max(600);
+export const voiceTakeSchema = z.object({
+  id: z.string().min(1).max(20),
+  label: z.string().max(40),
+  gap: z.number().min(0).max(2),
+  stability: z.number().min(0).max(1),
+  objectPath: z.string().max(400),
+  seconds: timing,
+  lines: z.array(z.object({ n: z.number().int().min(1).max(20), text: z.string().max(400), start: timing, end: timing })).max(20),
+  words: z.array(z.object({ n: z.number().int().min(1).max(20), word: z.string().max(60), start: timing, end: timing })).max(400),
+  cueCheck: z.object({ ok: z.boolean(), spokenCues: z.array(z.string().max(40)).max(20), heard: z.number().min(0).max(1).nullable(), transcript: z.string().max(2000) }),
+});
+export type ReelVoiceTake = z.infer<typeof voiceTakeSchema>;
+export type ReelVoice = {
+  takes: ReelVoiceTake[]; chosen?: string; approved?: boolean; fromJob?: string;
+  /** ElevenLabs characters the last job used, and what's left on the plan this month. */
+  credits?: { used: number; remaining: number | null; limit: number | null };
+};
+
 export type ReelStoryboard = {
   version: number; scenes: ReelScene[]; notes?: string; approved?: boolean; fromJob?: string;
   /** Which job's sketches were last folded in, and which version a sketch job was queued for, so each happens once. */
@@ -116,6 +135,10 @@ export const reelActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("redraw_sketches"), scene: z.number().int().min(1).max(20).optional() }),
   z.object({ action: z.literal("recheck_image"), file: z.string().min(1).max(80) }),
   z.object({ action: z.literal("continue_images") }),
+  z.object({ action: z.literal("choose_take"), take: z.string().min(1).max(20) }),
+  z.object({ action: z.literal("redo_line"), take: z.string().min(1).max(20), n: z.number().int().min(1).max(20), note: z.string().trim().min(1).max(300) }),
+  z.object({ action: z.literal("new_takes") }),
+  z.object({ action: z.literal("approve_voice") }),
   z.object({ action: z.literal("add_reference"), url }),
   z.object({ action: z.literal("remove_reference"), url: z.string().max(500) }),
   z.object({ action: z.literal("retry") }),
@@ -149,6 +172,8 @@ export type ReelDocument = {
   references?: string[];
   /** Images the creator uploaded at the Images step, by storyboard filename. */
   images?: Record<string, ReelUpload>;
+  /** Voice takes from the Studio Mac (ElevenLabs), the chosen one, and whether it is approved. */
+  voice?: ReelVoice;
 };
 
 /** One instant check on an uploaded image. "fail" means it won't work as it is. */
@@ -172,6 +197,8 @@ export type ReelView = {
   jobs: Partial<Record<ReelStep, ReelJobView>>;
   /** Short-lived links to the uploaded images, by filename (added by the API, not stored). */
   imageUrls?: Record<string, string>;
+  /** Short-lived links to the voice takes, by take id (added by the API, not stored). */
+  voiceUrls?: Record<string, string>;
   /** The newest image-check job for each uploaded file (several run one after another). */
   imageJobs?: Record<string, ReelJobView & { uploadId?: string }>;
 };
@@ -412,8 +439,28 @@ export class ReelsRepository {
         if (!doc.storyboard?.approved) throw conflict("no_storyboard", "Approve the storyboard first.");
         if (missing.length) throw conflict("images_missing", `Upload ${missing.map((image) => image.file).join(", ")} first.`);
         await this.save(reelId, doc, { current_step: "voice" });
+        if (!doc.voice?.takes.length) await this.queueVoice(reelId, doc, { phase: "takes" });
         break;
       }
+      case "choose_take":
+        if (!doc.voice?.takes.some((take) => take.id === action.take)) throw conflict("no_take", "That take isn't there any more.");
+        await this.save(reelId, { ...doc, voice: { ...doc.voice!, chosen: action.take, approved: false } }, {});
+        break;
+      case "redo_line": {
+        const take = doc.voice?.takes.find((item) => item.id === action.take);
+        if (!take) throw conflict("no_take", "That take isn't there any more.");
+        await this.save(reelId, { ...doc, voice: { ...doc.voice!, approved: false } }, {});
+        await this.queueVoice(reelId, doc, { phase: "line", take: { id: take.id, label: take.label, gap: take.gap, stability: take.stability }, n: action.n, note: action.note }, "revise");
+        break;
+      }
+      case "new_takes":
+        await this.save(reelId, { ...doc, voice: { takes: doc.voice?.takes ?? [], credits: doc.voice?.credits } }, {});
+        await this.queueVoice(reelId, doc, { phase: "takes" });
+        break;
+      case "approve_voice":
+        if (!doc.voice?.chosen) throw conflict("no_take", "Choose a take first.");
+        await this.save(reelId, { ...doc, voice: { ...doc.voice, approved: true } }, { current_step: "build" });
+        break;
       case "add_reference":
         await this.save(reelId, { ...doc, references: [...new Set([...(doc.references ?? []), action.url])].slice(-10) }, {});
         break;
@@ -448,7 +495,8 @@ export class ReelsRepository {
     // Sketches can also be drawn for a storyboard approved earlier, so those fold in on any later step.
     const sketchesLater = view.currentStep !== "storyboard" && view.jobs.storyboard?.result?.phase === "sketches";
     const storyboard = view.currentStep === "storyboard" || sketchesLater ? this.absorbStoryboard(script ?? view.document, view.jobs.storyboard) : null;
-    let document = storyboard ?? script;
+    const voice = view.currentStep === "voice" ? this.absorbVoice(storyboard ?? script ?? view.document, view.jobs.voice) : null;
+    let document = voice ?? storyboard ?? script;
     if (!document) return view;
     const queueFor = view.currentStep === "storyboard" ? sketchesToQueue(document) : null;
     if (queueFor) document = { ...document, storyboard: { ...document.storyboard!, sketchesQueued: queueFor } };
@@ -459,6 +507,24 @@ export class ReelsRepository {
       return this.get(view.id);
     }
     return { ...view, document };
+  }
+
+  /** Folds finished voice takes in: new takes replace the set; a redone line replaces that one take. */
+  private absorbVoice(doc: ReelDocument, job?: ReelJobView): ReelDocument | null {
+    if (job?.status !== "needs_review" || !job.result || doc.voice?.fromJob === job.id) return null;
+    const takes = z.array(voiceTakeSchema).min(1).max(4).safeParse(job.result.takes);
+    if (!takes.success) return null;
+    const credits = job.result.credits as ReelVoice["credits"];
+    if (job.result.phase === "line") {
+      const replaced = (doc.voice?.takes ?? []).map((take) => takes.data.find((item) => item.id === take.id) ?? take);
+      return { ...doc, voice: { ...doc.voice, takes: replaced, credits, fromJob: job.id, approved: false } };
+    }
+    return { ...doc, voice: { takes: takes.data, credits, fromJob: job.id } };
+  }
+
+  private async queueVoice(reelId: string, doc: ReelDocument, input: Record<string, unknown>, kind: "draft" | "revise" = "draft") {
+    if (!doc.script?.lines.length) throw conflict("no_script", "There is no approved script to voice.");
+    await this.queue(reelId, "voice", kind, { ...input, lines: doc.script.lines.map((line) => line.voice) });
   }
 
   /** Image checks that finished (or failed) for the upload currently on file and aren't in the document yet. */
