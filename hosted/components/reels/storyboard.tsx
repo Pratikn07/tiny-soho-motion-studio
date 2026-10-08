@@ -5,9 +5,13 @@ import { useState } from "react";
 import { storyboardImages, type ReelAction, type ReelImage, type ReelLook, type ReelScene, type ReelView } from "@/lib/reels";
 import type { MacState } from "@/components/shell/ShellBar";
 import { active, CommentBox, CopyButton, JobState } from "./job-state";
+import { Animatic, SketchFrame, StoryboardSheet } from "./sketches";
 import r from "./reels.module.css";
 
 type Act = (action: ReelAction) => Promise<unknown>;
+
+/** True while the Mac is writing looks or scenes. Drawing sketches doesn't count: you can still comment or approve. */
+const writing = (job?: ReelView["jobs"]["storyboard"]) => active(job) && job?.kind !== "render";
 
 const REFERENCE_NAMES = { anaika: "Anaika's character sheet", mum: "Mum's character sheet", none: "" } as const;
 
@@ -136,6 +140,12 @@ function ScenesPart({ reel, macState, act, onRetry }: { reel: ReelView; macState
   const locked = Boolean(storyboard?.approved);
   const images = storyboardImages(storyboard);
   const toMake = images.filter((image) => !image.reuse).length;
+  const [view, setView] = useState<"cards" | "sheet">("cards");
+  const [playFrom, setPlayFrom] = useState<number | null>(null);
+  const drawing = job?.kind === "render" && active(job);
+  const lines = reel.document.script?.lines ?? [];
+  const sketched = storyboard?.scenes.filter((scene) => scene.sketch).length ?? 0;
+  const missing = (storyboard?.scenes.length ?? 0) - sketched;
   return (
     <section className={r.panel} aria-labelledby="scenes-title">
       <h2 id="scenes-title" className={r.subtitle}>Scenes and images</h2>
@@ -146,10 +156,28 @@ function ScenesPart({ reel, macState, act, onRetry }: { reel: ReelView; macState
             <p className={r.muted}>Version {storyboard.version} · {storyboard.scenes.length} scenes · {toMake} image{toMake === 1 ? "" : "s"} to make · {images.length - toMake} reused</p>
             {toMake > 0 && <CopyButton text={allPrompts(storyboard.scenes)} label="Copy all prompts" />}
           </div>
+          <div className={r.summary}>
+            <div className={r.tabs} role="radiogroup" aria-label="Show the storyboard as">
+              <button type="button" role="radio" aria-checked={view === "cards"} className={r.tab} onClick={() => setView("cards")}>Scene cards</button>
+              <button type="button" role="radio" aria-checked={view === "sheet"} className={r.tab} onClick={() => setView("sheet")}>Storyboard sheet</button>
+            </div>
+            <div className={r.buttons}>
+              {missing > 0 && !drawing && <button type="button" className={r.link} onClick={() => void act({ action: "redraw_sketches" })}>
+                {sketched ? `Draw the ${missing} missing sketch${missing === 1 ? "" : "es"}` : "Draw sketches"}</button>}
+              <button type="button" className={r.secondary} disabled={!sketched} onClick={() => setPlayFrom(0)}>Play</button>
+            </div>
+          </div>
           {storyboard.notes && <p className={r.note}>{storyboard.notes}</p>}
-          <ol className={r.scenes}>
-            {storyboard.scenes.map((scene) => (
-              <li key={scene.n} className={r.scene}>
+          {playFrom !== null && <Animatic scenes={storyboard.scenes} lines={lines} start={playFrom} onClose={() => setPlayFrom(null)} />}
+          {view === "sheet" && <StoryboardSheet scenes={storyboard.scenes} lines={lines} drawing={drawing} onOpen={setPlayFrom} />}
+          {view === "cards" && <ol className={r.scenes}>
+            {storyboard.scenes.map((scene, index) => (
+              <li key={scene.n} className={`${r.scene} ${r.sceneWithFrame}`}>
+                <div className={r.sceneFrame}>
+                  <SketchFrame scene={scene} drawing={drawing} onOpen={scene.sketch ? () => setPlayFrom(index) : undefined} />
+                  {scene.sketch && !drawing && !locked && <button type="button" className={r.link} onClick={() => void act({ action: "redraw_sketches", scene: scene.n })}>Redraw sketch</button>}
+                </div>
+                <div className={r.sceneBody}>
                 <div className={r.sceneHead}><span className={r.stepNo}>{String(scene.n).padStart(2, "0")}</span><p className={r.hook}>{scene.line}</p></div>
                 <dl className={r.facts}>
                   <dt>Paper</dt><dd>{scene.paper}</dd>
@@ -162,10 +190,11 @@ function ScenesPart({ reel, macState, act, onRetry }: { reel: ReelView; macState
                 ))}</ul>}
                 {!locked && <CommentBox id={`change-scene-${scene.n}`} label="Change this scene" placeholder="For example: the clock should spin backwards"
                   submit="Send changes" onSend={(comments) => act({ action: "revise_storyboard", comments, scene: scene.n })} />}
+                </div>
               </li>
             ))}
-          </ol>
-          {!locked && !active(job) && (
+          </ol>}
+          {!locked && !writing(job) && (
             <div className={r.actions}>
               <CommentBox id="change-storyboard" label="Ask for changes to the whole storyboard" placeholder="For example: fewer images, reuse more from reel 01"
                 submit="Send changes" onSend={(comments) => act({ action: "revise_storyboard", comments })} />
@@ -188,7 +217,7 @@ function References({ reel, act }: { reel: ReelView; act: Act }) {
   const [link, setLink] = useState("");
   const links = reel.document.references ?? [];
   const chosen = Boolean(reel.document.look?.chosen);
-  const scenesReady = Boolean(reel.document.storyboard) && !active(reel.jobs.storyboard);
+  const scenesReady = Boolean(reel.document.storyboard) && !writing(reel.jobs.storyboard);
   return (
     <section className={r.panel} aria-labelledby="refs-title">
       <h2 id="refs-title" className={r.subtitle}>References <span className={r.muted}>(optional)</span></h2>
@@ -234,7 +263,7 @@ export function StoryboardStep({ reel, macState, act, onRetry }: { reel: ReelVie
       <LookPart reel={reel} macState={macState} act={act} onRetry={onRetry} />
       {chosen && <ScenesPart reel={reel} macState={macState} act={act} onRetry={onRetry} />}
       {!reel.document.storyboard?.approved && <References reel={reel} act={act} />}
-      {!reel.document.storyboard?.approved && !active(reel.jobs.storyboard) && (
+      {!reel.document.storyboard?.approved && !writing(reel.jobs.storyboard) && (
         <button type="button" className={r.link} onClick={() => void act({ action: "back_to_script" })}>Back to the script</button>
       )}
     </>

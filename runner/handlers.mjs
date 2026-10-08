@@ -12,14 +12,16 @@ function stepError(code, message) {
 /**
  * Runs Claude Code once and returns its text answer. With no `tools` it gets none and one turn. `tools` names
  * the only built-in tools it may use (for example "Read" to look at frames in `cwd`, "WebFetch" to open a link).
+ * `effort` ("low" … "max") trades thinking for speed; sketches use "low".
  */
-export function askClaude(prompt, { timeoutMs = 180_000, tools = [], maxTurns, cwd } = {}) {
+export function askClaude(prompt, { timeoutMs = 180_000, tools = [], maxTurns, cwd, effort } = {}) {
   return new Promise((resolve, reject) => {
     const dir = cwd ?? mkdtempSync(join(tmpdir(), "tiny-soho-runner-"));
     const toolArgs = tools.length
       ? ["--tools", tools.join(","), "--allowedTools", tools.join(","), "--max-turns", String(maxTurns ?? 12)]
       : ["--max-turns", "1", "--allowedTools", ""];
-    const child = spawn("claude", ["-p", prompt, "--output-format", "json", ...toolArgs], { cwd: dir });
+    const effortArgs = effort ? ["--effort", effort] : [];
+    const child = spawn("claude", ["-p", prompt, "--output-format", "json", ...toolArgs, ...effortArgs], { cwd: dir });
     let out = "", err = "";
     const minutes = Math.round(timeoutMs / 60_000);
     const timer = setTimeout(() => {
@@ -350,6 +352,93 @@ async function storyboardJob(job, reel, { progress }) {
 }
 handlers["storyboard/draft"] = storyboardJob;
 handlers["storyboard/revise"] = storyboardJob;
+
+/** Time for one scene's sketch. Scenes are drawn a few at a time. */
+export const SKETCH_TIMEOUT_MS = 3 * 60_000;
+const SKETCH_AT_ONCE = 3;
+const SKETCH_MAX = 16_000;
+
+const SKETCH_RULES = [
+  "Draw one storyboard frame as a single SVG: a rough but clear sketch of how this scene will look on screen, so the",
+  "creator can judge layout and staging before anything is built. It is a sketch, not finished art.",
+  'Canvas: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">. 9:16.',
+  "Paint the scene's paper or background colour first. Keep everything that must be read inside x 90-990, y 220-1500:",
+  "Instagram covers the bottom 420 px and the right 90 px. Draw a faint dashed line at y 1500 labelled 'caption zone'.",
+  "On-screen words: only the words 'codeDraws' says appear on screen, drawn as they will appear, large, in",
+  "font-family=\"Fraunces, Georgia, serif\" (labels in font-family=\"Inter, Helvetica, Arial, sans-serif\"), with the one",
+  "emphasis word in rose #B0544C italic. The voiceover ('line') is heard, not shown: never draw it, and never draw",
+  "voice cues in square brackets such as [pause] or [curious].",
+  "Images the scene uses: a rounded rectangle where each image sits, with a simple shape hinting at its content (a",
+  "child silhouette, a plate, a pin) and its filename in small Inter text inside. Mark reused images 'reuse'.",
+  "Things code draws (cards, meters, stamps, string, clocks): simple flat shapes in the look's colours.",
+  "Motion: draw the scene's move and its transition into the next scene as annotations in pencil blue #4A6FA5: dashed",
+  "arrows, a small motion line, and two or three short notes in italic serif, taken from this scene's own 'move' and",
+  "'transition' (name the spoken word the move lands on). Notes are read at phone size: font-size 36 or more, on",
+  "a clear area, never on top of other text. Headline words at font-size 80 or more.",
+  "Brand colours: cocoa #321708, cream #F4EADC, rose #B0544C, gold #F3C46B, night #1F2340, sage #3F5A47, pumpkin #E8833A.",
+  "Allowed elements only: svg, g, defs, rect, circle, ellipse, line, polyline, polygon, path, text, tspan, marker,",
+  "linearGradient, radialGradient, stop, pattern, clipPath, title. No script, image, use, foreignObject, links, href,",
+  "event attributes, CSS imports or external fonts. Under 60 elements and under 12,000 characters.",
+  "Answer with only the SVG, starting with <svg and ending with </svg>.",
+].join("\n");
+
+/** Pulls the SVG out of Claude's answer and refuses anything that could run or load something. */
+export function parseSketch(text) {
+  const start = text.indexOf("<svg"), end = text.lastIndexOf("</svg>");
+  if (start < 0 || end < start) throw stepError("claude_bad_output", "Claude did not return a sketch.");
+  const svg = text.slice(start, end + 6).trim();
+  if (svg.length > SKETCH_MAX) throw stepError("sketch_too_large", "The sketch came back too large.");
+  if (/<(script|foreignObject|image|iframe|object|embed|use)\b|\bon[a-z]+\s*=|(xlink:)?href\s*=|@import|url\(\s*['"]?(https?:|\/\/|data:)/i.test(svg)) {
+    throw stepError("sketch_unsafe", "The sketch used something that isn't allowed.");
+  }
+  return svg;
+}
+
+/** Runs `work` over `items` with at most `limit` at a time, keeping the order of results. */
+async function inBatches(items, limit, work) {
+  const results = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) { const index = next++; results[index] = await work(items[index], index); }
+  }));
+  return results;
+}
+
+/**
+ * Storyboard sketches: one SVG frame per scene, drawn a few scenes at a time. A scene that fails is left out (the
+ * Studio offers to redraw it) so one bad drawing doesn't lose the rest.
+ */
+handlers["storyboard/render"] = async (job, reel, { progress }) => {
+  const input = job.input;
+  const only = new Set(list(input.only));
+  const scenes = list(input.scenes).filter((scene) => !only.size || only.has(scene.n));
+  if (!scenes.length) throw stepError("nothing_to_sketch", "There are no scenes to sketch.");
+  const times = list(input.script).map((line) => line.time);
+  let done = 0;
+  const failed = [];
+  await progress(`Drawing sketches (0 of ${scenes.length}, usually 1–3 minutes)`);
+  const drawn = await inBatches(scenes, SKETCH_AT_ONCE, async (scene) => {
+    try {
+      const text = await askClaude([SKETCH_RULES, "",
+        `The look (JSON): ${JSON.stringify(input.look)}`,
+        `Scene ${scene.n} of ${list(input.scenes).length}${times[scene.n - 1] ? `, starting at ${times[scene.n - 1]}` : ""} (JSON): ${JSON.stringify(scene)}`,
+      ].join("\n"), { timeoutMs: SKETCH_TIMEOUT_MS, effort: "low" });
+      return { n: scene.n, svg: parseSketch(text) };
+    } catch (error) {
+      failed.push({ n: scene.n, reason: `${error.code ?? "error"}: ${String(error.message).slice(0, 160)}` });
+      console.log(`sketch for scene ${scene.n} failed: ${error.code ?? "error"} ${String(error.message).slice(0, 160)}`);
+      return null;
+    } finally {
+      done += 1;
+      await progress(`Drawing sketches (${done} of ${scenes.length})`).catch(() => undefined);
+    }
+  });
+  const sketches = drawn.filter(Boolean);
+  if (!sketches.length) throw stepError(failed[0]?.reason.split(":")[0] || "claude_bad_output", `None of the sketches could be drawn (${failed[0]?.reason ?? "no answer"}). Try again.`);
+  const missed = scenes.length - sketches.length;
+  return { status: "needs_review", result: { phase: "sketches", version: input.version, sketches, failed },
+    progress: missed ? `Sketches ready (${missed} couldn't be drawn)` : "Sketches ready" };
+};
 
 export async function handle(job, reel, tools) {
   const handler = handlers[`${job.step}/${job.kind}`];
