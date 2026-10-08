@@ -79,6 +79,7 @@ describe("Reels screens", () => {
   it("starts a reel, picks an idea, and approves the script", async () => {
     render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
     await waitFor(() => expect(screen.getByText("No reels yet. Your first one starts above.")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("radio", { name: "Just a topic" }));
     fireEvent.change(screen.getByLabelText("What should this reel be about?"), { target: { value: "Halloween meltdowns" } });
     fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
 
@@ -94,7 +95,7 @@ describe("Reels screens", () => {
     expect(await screen.findByText("Changed: Shorter hook")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Approve script" }));
-    expect(await screen.findByRole("heading", { name: "Storyboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Choose the look" })).toBeInTheDocument();
     const rail = screen.getByRole("navigation", { name: "Reel steps" });
     expect(within(rail).getByRole("button", { name: /Script/ })).toHaveTextContent("Done");
   });
@@ -102,7 +103,162 @@ describe("Reels screens", () => {
   it("says the job waits for the Studio Mac while it is asleep", async () => {
     const api = createMockReelsApi(60_000);
     render(<ReelsStudio api={api} macState="asleep" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Start a reel" }));
+    fireEvent.click(await screen.findByRole("radio", { name: "Just a topic" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
     expect(await screen.findByText(/Waiting for the Studio Mac/)).toBeInTheDocument();
+  });
+});
+
+const LOOK = { name: "Tired mum's diary", treatment: "Lined paper, riso print", emotion: "Wry", accent: "Pumpkin #E8833A",
+  signatureMoment: "The calendar circles 31 Oct", music: "Celesta", why: "Feels like her notes" };
+const SCENE = { n: 1, line: "Hook", paper: "Cream", codeDraws: "Headline", move: "Rise", transition: "Through the clock",
+  images: [{ file: "r02_01_anaika.png", purpose: "Anaika", prompt: "Anaika yawning", aspect: "9:16", background: "transparent" as const, reference: "anaika" as const, reuse: "" }] };
+const job = (id: string, step: "script" | "storyboard", result: Record<string, unknown>) =>
+  ({ id, step, kind: "draft", status: "needs_review" as const, progress: null, errorCode: null, result, createdAt: "", updatedAt: "" });
+const lines = [{ time: "0:00", voice: "Hook", onScreen: "HOOK" }];
+
+describe("ReelsRepository: briefs, references, looks and storyboards", () => {
+  it("starts a reel from a brief at the script step and keeps its script draft", async () => {
+    const client = fakeClient({ creative_studio_reels: [reelRow({}, "script"), reelRow({}, "script")], creative_studio_reel_jobs: [{ data: null, error: null }, { data: [], error: null }] });
+    await new ReelsRepository(client as never, OWNER).create({ topic: "", brief: "TITLE: Worst week\nHOOK: The worst week of the year\nSCRIPT DRAFT:\n1. Line one | Calendar" });
+    const reel = client.writes.find((write) => write.table === "creative_studio_reels")!.value as Record<string, any>;
+    expect(reel).toMatchObject({ title: "Worst week", current_step: "script", document: { idea: { title: "Worst week", hook: "The worst week of the year" } } });
+    expect(reel.document.brief.scriptDraft).toEqual([{ voice: "Line one", onScreen: "Calendar" }]);
+    const queued = client.writes.find((write) => write.table === "creative_studio_reel_jobs")!.value as Record<string, any>;
+    expect(queued).toMatchObject({ step: "script", kind: "draft", input: { keepScript: true } });
+  });
+
+  it("refuses a brief with nothing to write from", async () => {
+    const client = fakeClient({});
+    await expect(new ReelsRepository(client as never, OWNER).create({ topic: "", brief: "Some notes" })).rejects.toMatchObject({ code: "brief_unreadable" });
+    expect(client.writes).toHaveLength(0);
+  });
+
+  it("starts a reel from a reference link and asks the Studio Mac for a breakdown", async () => {
+    const client = fakeClient({ creative_studio_reels: [reelRow(), reelRow()], creative_studio_reel_jobs: [{ data: null, error: null }, { data: [], error: null }] });
+    await new ReelsRepository(client as never, OWNER).create({ topic: "", reference: "https://www.instagram.com/reel/abc" });
+    const queued = client.writes.find((write) => write.table === "creative_studio_reel_jobs")!.value as Record<string, any>;
+    expect(queued).toMatchObject({ step: "idea", kind: "draft", input: { reference: "https://www.instagram.com/reel/abc" } });
+  });
+
+  it("asks for looks when the script is approved, avoiding treatments used in the same series", async () => {
+    const brief = { raw: "x", hook: "Hook", series: "Halloween" };
+    const other = { id: "other", document: { brief: { raw: "y", series: "halloween" }, look: { options: [], rejected: [], chosen: { ...LOOK, name: "Collage", treatment: "Cut paper" } } } };
+    const client = fakeClient({
+      creative_studio_reels: [reelRow({ brief, script: { lines } }, "script"), { data: null, error: null }, { data: [other], error: null }, reelRow({}, "storyboard")],
+      creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }],
+    });
+    await new ReelsRepository(client as never, OWNER).act(REEL, { action: "approve_script" });
+    const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
+    expect(queued).toMatchObject({ step: "storyboard", kind: "draft", input: { phase: "look", series: "Halloween", count: 3, seriesUsed: ["Collage: Cut paper"] } });
+  });
+
+  it("writes the scenes only after a look is chosen", async () => {
+    const client = fakeClient({
+      creative_studio_reels: [reelRow({ script: { lines, approved: true }, look: { options: [LOOK], rejected: [] } }, "storyboard"), { data: null, error: null }, reelRow({}, "storyboard")],
+      creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }],
+    });
+    await new ReelsRepository(client as never, OWNER).act(REEL, { action: "choose_look", index: 0 });
+    const saved = client.writes.find((write) => write.op === "update")!.value as Record<string, any>;
+    expect(saved.document.look.chosen).toEqual(LOOK);
+    const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
+    expect(queued).toMatchObject({ step: "storyboard", input: { phase: "scenes", look: LOOK } });
+  });
+
+  it("remembers rejected looks when asked for other ones", async () => {
+    const client = fakeClient({
+      creative_studio_reels: [reelRow({ script: { lines, approved: true }, look: { options: [LOOK], rejected: ["Old"] } }, "storyboard"), { data: null, error: null }, reelRow({}, "storyboard")],
+      creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }],
+    });
+    await new ReelsRepository(client as never, OWNER).act(REEL, { action: "more_looks" });
+    const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
+    expect(queued.input).toMatchObject({ phase: "look", count: 3, avoid: ["Old", "Tired mum's diary"] });
+  });
+
+  it("folds looks in once, then keeps earlier storyboards as versions", async () => {
+    const client = fakeClient({ creative_studio_reels: [{ data: null, error: null }, { data: null, error: null }] });
+    const repo = new ReelsRepository(client as never, OWNER);
+    const base = { id: REEL, title: "T", status: "in_progress", currentStep: "storyboard" as const, updatedAt: "" };
+    const withLooks = await repo.absorb({ ...base, document: {}, jobs: { storyboard: job("j1", "storyboard", { phase: "look", looks: [LOOK] }) } });
+    expect(withLooks.document.look).toEqual({ options: [LOOK], rejected: [], fromJob: "j1" });
+    await repo.absorb(withLooks);
+    expect(client.writes).toHaveLength(1);
+
+    const first = { version: 1, scenes: [SCENE], approved: false, fromJob: "j2" };
+    const second = await repo.absorb({ ...base, document: { storyboard: first }, jobs: { storyboard: job("j3", "storyboard", { phase: "scenes", scenes: [{ ...SCENE, move: "Stamp" }] }) } });
+    expect(second.document.storyboard).toMatchObject({ version: 2, fromJob: "j3", scenes: [{ move: "Stamp" }] });
+    expect(second.document.storyboardHistory).toEqual([first]);
+  });
+
+  it("ignores storyboard results once the reel went back to the script", async () => {
+    const client = fakeClient({});
+    const view = { id: REEL, title: "T", status: "in_progress", currentStep: "script" as const, updatedAt: "", document: {},
+      jobs: { storyboard: job("j1", "storyboard", { phase: "look", looks: [LOOK] }) } };
+    expect(await new ReelsRepository(client as never, OWNER).absorb(view)).toBe(view);
+    expect(client.writes).toHaveLength(0);
+  });
+
+  it("lets the creator edit one image prompt and asks for approval again", async () => {
+    const storyboard = { version: 1, scenes: [SCENE], approved: true };
+    const client = fakeClient({ creative_studio_reels: [reelRow({ storyboard }, "storyboard"), { data: null, error: null }, reelRow({}, "storyboard")], creative_studio_reel_jobs: [{ data: [], error: null }, { data: [], error: null }] });
+    await new ReelsRepository(client as never, OWNER).act(REEL, { action: "edit_image_prompt", scene: 1, file: "r02_01_anaika.png", prompt: "Anaika asleep" });
+    const saved = client.writes.find((write) => write.op === "update")!.value as Record<string, any>;
+    expect(saved.document.storyboard).toMatchObject({ approved: false, scenes: [{ images: [{ prompt: "Anaika asleep" }] }] });
+  });
+});
+
+describe("Reels screens: brief, looks and storyboard", () => {
+  const BRIEF = "TITLE: The Worst Week\nHOOK: Halloween and the clock change, same weekend.\nSERIES: Halloween\nSCRIPT DRAFT:\n1. [curious] The worst week? | Calendar\n2. Save this for 31 Oct. | Heart";
+
+  it("goes from a pasted brief to an approved storyboard", async () => {
+    render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
+    fireEvent.change(await screen.findByLabelText("Paste your brief"), { target: { value: BRIEF } });
+    expect(screen.getByRole("status")).toHaveTextContent("“The Worst Week” · series Halloween · 2 script lines");
+    fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
+
+    expect(await screen.findByRole("heading", { name: "Approve the script" })).toBeInTheDocument();
+    expect(screen.getByText("Your script from the brief, timed and checked.")).toBeInTheDocument();
+    expect(within(await screen.findByRole("table")).getAllByRole("row")).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "Approve script" }));
+
+    expect(await screen.findAllByRole("button", { name: "Use this look" })).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "Show other looks" }));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Use this look" })).toHaveLength(3));
+    fireEvent.click(screen.getAllByRole("button", { name: "Use this look" })[0]);
+
+    expect(await screen.findByRole("heading", { name: "Approve the storyboard" })).toBeInTheDocument();
+    expect(await screen.findByText(/1 image to make · 1 reused/)).toBeInTheDocument();
+    expect(screen.getByText("Reuse: reel01 clock face with no hands")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Change this scene" })[1]);
+    fireEvent.change(screen.getByLabelText("Change this scene"), { target: { value: "Spin it backwards" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send changes" }));
+    expect(await screen.findByText("Changed: Spin it backwards")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Restore v1" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve storyboard" }));
+    expect(await screen.findByRole("heading", { name: "Make the images" })).toBeInTheDocument();
+    const rail = screen.getByRole("navigation", { name: "Reel steps" });
+    expect(within(rail).getAllByRole("button").map((button) => button.textContent)).toEqual(expect.arrayContaining([expect.stringMatching(/04Images/), expect.stringMatching(/05Voice/)]));
+  });
+
+  it("describes your own look when none of the options fit", async () => {
+    render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
+    fireEvent.change(await screen.findByLabelText("Paste your brief"), { target: { value: BRIEF } });
+    fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve script" }));
+    fireEvent.change(await screen.findByLabelText("Or describe your own"), { target: { value: "A phone notes app at 2 am" } });
+    fireEvent.click(screen.getByRole("button", { name: "Use my description" }));
+    expect(await screen.findByText("A phone notes app at 2 am")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Use this look" })).toHaveLength(1);
+  });
+
+  it("breaks down a reference reel and offers three angles", async () => {
+    render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
+    fireEvent.click(await screen.findByRole("radio", { name: "Reference reel" }));
+    fireEvent.change(screen.getByLabelText("Link to the reel"), { target: { value: "https://www.instagram.com/reel/xyz" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
+    expect(await screen.findByRole("heading", { name: "What makes it work" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy for Claude" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Use this angle" })).toHaveLength(3);
   });
 });

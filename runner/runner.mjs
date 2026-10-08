@@ -7,7 +7,7 @@ import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { handle } from "./handlers.mjs";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const HEARTBEAT_MS = 20_000;
 const IDLE_POLL_MS = 10_000;
 const RENEW_MS = 45_000;
