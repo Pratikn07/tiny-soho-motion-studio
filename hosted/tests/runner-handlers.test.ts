@@ -77,4 +77,3 @@ describe("Claude Code failures", () => {
     expect(failure("", "", 2)).toBe("claude exited with 2");
   });
 });
-
