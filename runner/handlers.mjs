@@ -77,7 +77,9 @@ function parseIdeas(text) {
 const SCRIPT_RULES = [
   "Tiny Soho is a calm, realistic parenting account for US moms of toddlers. Voice: a warm mom narrator.",
   "Length: 20-30 seconds spoken, about 55-75 words, 6-9 lines. US spelling.",
-  "Line 1 is the hook: a clear, surprising claim a viewer understands in the first 2 seconds.",
+  "Line 1 is the hook: a claim that contradicts a common belief, readable in the first 2 seconds (a parent thinks 'wait, really?').",
+  "Never a question or a plain situation ('Your toddler ate 4 bites. Now what?' made 66.7% skip). If the brief has a HOOK, line 1 says it.",
+  "The answer to the one big question lands by about 12-15 seconds.",
   "Shape: conflict, then one big question, then the twist, then one easy thing to do.",
   "Every line gets one matching visual (onScreen), short enough to read on a phone.",
   "Voice cues in square brackets go just before the words they change: [curious] [pause] [warmly] [softly] [whispers] [slowly] [excited] [mischievously] [matter-of-fact] [brisk]. CAPITALS stress one word. No <break> tags.",
@@ -213,8 +215,9 @@ handlers["script/draft"] = async (job, reel, { progress }) => {
     await progress("Claude is timing and checking your script");
     const text = await askClaude([SCRIPT_RULES, "", "The creator wrote this brief, with a script draft:", briefText(brief), "",
       "Keep their wording. Only add times, add a short onScreen visual where one is missing, and keep their voice cues.",
-      "Do not rewrite lines. In notes, list any rule the draft breaks (length, a slow hook, an unsourced claim, a missing",
-      "save prompt) in one or two short sentences, or say it follows the rules.", scriptAnswer].join("\n"));
+      "Do not rewrite lines. In notes, list any rule the draft breaks (length, a hook that is a question or not a claim, line 1",
+      "differing from the brief's HOOK, an answer landing after 15 seconds, an unsourced claim, a missing save prompt) in one or",
+      "two short sentences, or say it follows the rules.", scriptAnswer].join("\n"));
     return { status: "needs_review", result: parseScript(text), progress: "Your script, timed and checked" };
   }
   await progress("Claude is writing the script");
@@ -295,6 +298,8 @@ const STORYBOARD_RULES = [
   "distress). Characters on a transparent background unless the treatment needs a scene. Set reference to anaika or mum",
   "when that character appears, so the creator attaches the character sheet.",
   "Filenames: rNN_short_name.png in lowercase with underscores; use the scene number in the name.",
+  "Scene 1 is also the cover: at frame 0 the hook claim is already on screen as text and the character is already doing",
+  "something. No title card, no fade in or type-on for the hook.",
 ].join("\n");
 
 const storyboardAnswer = 'Answer with only JSON: {"scenes": [{"n": number, "line": string, "paper": string, "codeDraws": string,'
