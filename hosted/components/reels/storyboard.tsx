@@ -45,6 +45,25 @@ function LookCard({ look, children }: { look: ReelLook; children?: React.ReactNo
   );
 }
 
+/** Looks shown earlier for this reel, folded away, so the creator can still compare, change or pick one. */
+function EarlierLooks({ looks, act }: { looks?: ReelLook[]; act: Act }) {
+  if (!looks?.length) return null;
+  return (
+    <details className={r.earlier}>
+      <summary>Earlier looks ({looks.length})</summary>
+      <div className={r.ideas}>
+        {looks.map((option, index) => (
+          <LookCard key={`${option.name}-${index}`} look={option}>
+            <button type="button" className={r.primary} onClick={() => void act({ action: "choose_look", index, earlier: true })}>Use this look</button>
+            <CommentBox id={`change-earlier-${index}`} label="Change this one" placeholder="For example: keep the map, warmer paper"
+              submit="Send changes" onSend={(comments) => act({ action: "revise_look", comments, index, earlier: true })} />
+          </LookCard>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 /** Storyboard, part A: choose the look before any scenes or image prompts are written. */
 function LookPart({ reel, macState, act, onRetry }: { reel: ReelView; macState: MacState; act: Act; onRetry: () => void }) {
   const look = reel.document.look;
@@ -63,6 +82,7 @@ function LookPart({ reel, macState, act, onRetry }: { reel: ReelView; macState: 
             <button type="button" className={r.link} onClick={() => void act({ action: "more_looks" })}>Show other looks</button>
           </div>
         )}
+        {!reel.document.storyboard?.approved && <EarlierLooks looks={look.earlier} act={act} />}
       </section>
     );
   }
@@ -70,7 +90,7 @@ function LookPart({ reel, macState, act, onRetry }: { reel: ReelView; macState: 
   return (
     <section className={r.panel} aria-labelledby="look-title">
       <h2 id="look-title" className={r.subtitle}>{options.length > 1 ? "Pick a look" : "The look"}</h2>
-      <p className={r.lede}>The look comes first. Scenes and image prompts are written after you approve it.</p>
+      <p className={r.lede}>The look comes first. Scenes and image prompts are written after you approve it. Looks you passed over stay under Earlier looks.</p>
       {working && <JobState job={job} macState={macState} onRetry={onRetry} />}
       {!working && options.length > 0 && (
         <>
@@ -96,6 +116,7 @@ function LookPart({ reel, macState, act, onRetry }: { reel: ReelView; macState: 
           </div>
         </>
       )}
+      {!working && <EarlierLooks looks={look?.earlier} act={act} />}
     </section>
   );
 }

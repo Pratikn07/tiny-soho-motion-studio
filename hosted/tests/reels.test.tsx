@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createMockReelsApi } from "@/components/reels/mock-api";
 import { ReelsStudio } from "@/components/reels/ReelsStudio";
-import { lookSchema, reelActionSchema, ReelsRepository, safeSketch } from "@/lib/reels";
+import { earlierLooks, lookSchema, reelActionSchema, ReelsRepository, safeSketch } from "@/lib/reels";
 
 afterEach(() => cleanup());
 
@@ -165,6 +165,44 @@ describe("ReelsRepository: briefs, references, looks and storyboards", () => {
     expect(queued).toMatchObject({ step: "storyboard", input: { phase: "scenes", look: LOOK } });
   });
 
+  it("keeps looks shown earlier, newest first, without repeats", () => {
+    const map = { ...LOOK, name: "Weather map", treatment: "Gouache map paper" };
+    const marker = { ...LOOK, name: "Marker Notes", treatment: "Marker on a cream desk" };
+    const revised = { ...marker, treatment: "Marker on a cream desk, rose accent" };
+    expect(earlierLooks([marker, undefined, map, { ...map, name: "WEATHER MAP" }], [LOOK])).toEqual([marker, map]);
+    expect(earlierLooks([marker, revised], [revised])).toEqual([marker]);
+    expect(earlierLooks(Array.from({ length: 20 }, (_, n) => ({ ...LOOK, name: `L${n}` })))).toHaveLength(12);
+  });
+
+  it("moves the looks on screen to earlier when new ones arrive, and lets an earlier one be chosen", async () => {
+    const map = { ...LOOK, name: "Weather map", treatment: "Gouache map paper" };
+    const client = fakeClient({ creative_studio_reels: [{ data: null, error: null }] });
+    const base = { id: REEL, title: "T", status: "in_progress", currentStep: "storyboard" as const, updatedAt: "" };
+    const view = await new ReelsRepository(client as never, OWNER).absorb({ ...base, document: { look: { options: [map], rejected: ["Weather map"] } },
+      jobs: { storyboard: job("j2", "storyboard", { phase: "look", looks: [LOOK] }) } });
+    expect(view.document.look).toMatchObject({ options: [LOOK], earlier: [map], rejected: ["Weather map"] });
+
+    const picking = fakeClient({
+      creative_studio_reels: [reelRow({ script: { lines, approved: true }, look: { options: [LOOK], rejected: [], earlier: [map] } }, "storyboard"), { data: null, error: null }, reelRow({}, "storyboard")],
+      creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }],
+    });
+    await new ReelsRepository(picking as never, OWNER).act(REEL, { action: "choose_look", index: 0, earlier: true });
+    const saved = picking.writes.find((write) => write.op === "update")!.value as Record<string, any>;
+    expect(saved.document.look).toMatchObject({ chosen: map, options: [LOOK], earlier: [] });
+    expect(picking.writes.find((write) => write.op === "insert")!.value).toMatchObject({ input: { phase: "scenes", look: map } });
+  });
+
+  it("keeps a chosen look under earlier looks when asking for other ones", async () => {
+    const client = fakeClient({
+      creative_studio_reels: [reelRow({ script: { lines, approved: true }, look: { options: [LOOK], chosen: LOOK, rejected: [] } }, "storyboard"), { data: null, error: null }, reelRow({}, "storyboard")],
+      creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }],
+    });
+    await new ReelsRepository(client as never, OWNER).act(REEL, { action: "more_looks" });
+    const saved = client.writes.find((write) => write.op === "update")!.value as Record<string, any>;
+    expect(saved.document.look).toMatchObject({ options: [LOOK], earlier: [LOOK] });
+    expect(saved.document.look.chosen).toBeUndefined();
+  });
+
   it("remembers rejected looks when asked for other ones", async () => {
     const client = fakeClient({
       creative_studio_reels: [reelRow({ script: { lines, approved: true }, look: { options: [LOOK], rejected: ["Old"] } }, "storyboard"), { data: null, error: null }, reelRow({}, "storyboard")],
@@ -281,7 +319,10 @@ describe("Reels screens: brief, looks and storyboard", () => {
     fireEvent.change(await screen.findByLabelText("Or describe your own"), { target: { value: "A phone notes app at 2 am" } });
     fireEvent.click(screen.getByRole("button", { name: "Use my description" }));
     expect(await screen.findByText("A phone notes app at 2 am")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Use this look" })).toHaveLength(1);
+    // The three looks shown before stay on the page, folded under Earlier looks, so they can still be picked.
+    const earlier = screen.getByText("Earlier looks (3)").closest("details")!;
+    expect(within(earlier).getAllByRole("button", { name: "Use this look" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "Use this look" })).toHaveLength(4);
   });
 
   it("breaks down a reference reel and offers three angles", async () => {

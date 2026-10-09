@@ -56,6 +56,22 @@ export const lookSchema = z.object({
 });
 export type ReelLook = z.infer<typeof lookSchema>;
 
+/** How many looks shown earlier for a reel stay on the page to compare and pick from. */
+export const EARLIER_LOOKS = 12;
+
+/** Looks shown earlier, newest first, without repeats (same name and treatment) or any look in `except`. */
+export function earlierLooks(older: Array<ReelLook | undefined>, except: ReelLook[] = []): ReelLook[] {
+  const key = (look: ReelLook) => `${look.name.trim().toLowerCase()}\n${look.treatment.trim().toLowerCase()}`;
+  const seen = new Set(except.map(key));
+  const kept: ReelLook[] = [];
+  for (const look of older) {
+    if (!look || seen.has(key(look))) continue;
+    seen.add(key(look));
+    kept.push(look);
+  }
+  return kept.slice(0, EARLIER_LOOKS);
+}
+
 export const imageSchema = z.object({
   file: z.string().min(1).max(80),
   purpose: z.string().max(200),
@@ -156,8 +172,8 @@ export const reelActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("revise_script"), comments }),
   z.object({ action: z.literal("approve_script") }),
   z.object({ action: z.literal("back_to_script") }),
-  z.object({ action: z.literal("choose_look"), index: z.number().int().min(0).max(2) }),
-  z.object({ action: z.literal("revise_look"), comments, index: z.number().int().min(0).max(2).optional() }),
+  z.object({ action: z.literal("choose_look"), index: z.number().int().min(0).max(EARLIER_LOOKS - 1), earlier: z.boolean().optional() }),
+  z.object({ action: z.literal("revise_look"), comments, index: z.number().int().min(0).max(EARLIER_LOOKS - 1).optional(), earlier: z.boolean().optional() }),
   z.object({ action: z.literal("more_looks") }),
   z.object({ action: z.literal("own_look"), description: comments }),
   z.object({
@@ -207,7 +223,8 @@ export type ReelDocument = {
   reference?: { url: string };
   idea?: ReelIdea;
   script?: { lines: ScriptLine[]; notes?: string; approved?: boolean };
-  look?: { options: ReelLook[]; chosen?: ReelLook; rejected: string[]; fromJob?: string };
+  /** `earlier`: looks shown before the current options (newest first), kept so the creator can still compare and pick them. */
+  look?: { options: ReelLook[]; chosen?: ReelLook; rejected: string[]; fromJob?: string; earlier?: ReelLook[] };
   storyboard?: ReelStoryboard;
   /** Earlier storyboard versions, newest first, so a change can be undone. */
   storyboardHistory?: ReelStoryboard[];
@@ -423,27 +440,31 @@ export class ReelsRepository {
         await this.save(reelId, { ...doc, script: { ...doc.script, approved: false }, look: undefined, storyboard: undefined }, { current_step: "script" });
         break;
       case "choose_look": {
-        const chosen = doc.look?.options[action.index];
+        const chosen = (action.earlier ? doc.look?.earlier : doc.look?.options)?.[action.index];
         if (!chosen) throw conflict("no_look", "That look isn't available any more.");
-        await this.save(reelId, { ...doc, look: { ...doc.look!, chosen } }, {});
+        // A look chosen before stays on the page with the earlier ones.
+        const earlier = earlierLooks([doc.look?.chosen, ...(doc.look?.earlier ?? [])], [chosen]);
+        await this.save(reelId, { ...doc, look: { ...doc.look!, chosen, earlier } }, {});
         await this.queue(reelId, "storyboard", "draft", { phase: "scenes", ...storyboardBase(), look: chosen });
         break;
       }
       case "revise_look": {
-        const current = action.index === undefined ? doc.look?.chosen ?? doc.look?.options[0] : doc.look?.options[action.index];
+        const current = action.index === undefined ? doc.look?.chosen ?? doc.look?.options[0]
+          : (action.earlier ? doc.look?.earlier : doc.look?.options)?.[action.index];
         if (!current) throw conflict("no_look", "There is no look to change yet.");
-        await this.save(reelId, { ...doc, look: { ...doc.look!, chosen: undefined } }, {});
+        await this.save(reelId, { ...doc, look: { ...doc.look!, chosen: undefined, earlier: earlierLooks([doc.look?.chosen, ...(doc.look?.earlier ?? [])]) } }, {});
         await this.queueLook(reelId, { ...storyboardBase(), current, comments: action.comments, avoid: doc.look?.rejected ?? [], count: 1 }, "revise");
         break;
       }
       case "more_looks": {
         const rejected = [...new Set([...(doc.look?.rejected ?? []), ...(doc.look?.options ?? []).map((look) => look.name)])].slice(-30);
-        await this.save(reelId, { ...doc, look: { options: doc.look?.options ?? [], rejected } }, {});
+        await this.save(reelId, { ...doc, look: { options: doc.look?.options ?? [], rejected, earlier: earlierLooks([doc.look?.chosen, ...(doc.look?.earlier ?? [])]) } }, {});
         await this.queueLook(reelId, { ...storyboardBase(), avoid: rejected, count: 3 });
         break;
       }
       case "own_look":
-        await this.save(reelId, { ...doc, look: { options: doc.look?.options ?? [], rejected: doc.look?.rejected ?? [] } }, {});
+        await this.save(reelId, { ...doc, look: { options: doc.look?.options ?? [], rejected: doc.look?.rejected ?? [],
+          earlier: earlierLooks([doc.look?.chosen, ...(doc.look?.earlier ?? [])]) } }, {});
         await this.queueLook(reelId, { ...storyboardBase(), own: action.description, avoid: [], count: 1 });
         break;
       case "revise_storyboard":
@@ -796,7 +817,9 @@ export class ReelsRepository {
       if (doc.look?.fromJob === job.id) return null;
       const looks = z.array(lookSchema).min(1).max(3).safeParse(job.result.looks);
       if (!looks.success) return null;
-      return { ...doc, look: { options: looks.data, rejected: doc.look?.rejected ?? [], fromJob: job.id } };
+      // The looks on screen until now move to "earlier" rather than disappearing.
+      const earlier = earlierLooks([...(doc.look?.options ?? []), ...(doc.look?.earlier ?? [])], looks.data);
+      return { ...doc, look: { options: looks.data, rejected: doc.look?.rejected ?? [], fromJob: job.id, ...(earlier.length ? { earlier } : {}) } };
     }
     if (job.result.phase === "sketches") {
       const storyboard = doc.storyboard;
