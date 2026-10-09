@@ -221,11 +221,12 @@ function References({ reel, act }: { reel: ReelView; act: Act }) {
   return (
     <section className={r.panel} aria-labelledby="refs-title">
       <h2 id="refs-title" className={r.subtitle}>References <span className={r.muted}>(optional)</span></h2>
-      <p className={r.lede}>The Studio Mac already draws on its motion library (styles, treatments and moves gathered from prompt-motion and motionin). Add a link only when you want one exact thing.</p>
+      <p className={r.lede}>The Studio Mac already draws on its motion library (styles, treatments and moves gathered from prompt-motion and motionin). Paste an Are.na channel to give it your moodboard (it looks at up to 12 of its images), or a link when you want one exact thing.</p>
       {links.length > 0 && (
         <>
           <ul className={r.refs}>{links.map((item) => (
             <li key={item}>
+              {/(^|\.)are\.na\//.test(item.replace(/^https?:\/\//, "")) && <span className={r.tag}>Are.na board</span>}{" "}
               <a href={item} target="_blank" rel="noreferrer">{item}</a>{" "}
               <button type="button" className={r.link} aria-label={`Remove ${item}`} onClick={() => void act({ action: "remove_reference", url: item })}>Remove</button>
             </li>
@@ -244,7 +245,7 @@ function References({ reel, act }: { reel: ReelView; act: Act }) {
       )}
       <form className={r.inline} onSubmit={(event) => { event.preventDefault(); void act({ action: "add_reference", url: link.trim() }).then(() => setLink("")); }}>
         <label htmlFor="ref-link" className={r.srOnly}>Reference link</label>
-        <input id="ref-link" className={r.field} type="url" value={link} placeholder="Paste a link, then Add link" onChange={(event) => setLink(event.target.value)} />
+        <input id="ref-link" className={r.field} type="url" value={link} placeholder="Paste an Are.na channel or a link, then Add link" onChange={(event) => setLink(event.target.value)} />
         <button type="submit" className={r.secondary} disabled={!/^https?:\/\/\S+$/.test(link.trim())}>Add link</button>
       </form>
     </section>

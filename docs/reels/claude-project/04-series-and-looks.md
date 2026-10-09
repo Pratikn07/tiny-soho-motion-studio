@@ -73,6 +73,9 @@ the target; recombining earlier ones is cheaper.
 | Film photo album, Polaroids | Nostalgic | Then-and-now, milestones |
 
 ## Where references come from
+- **Are.na** channels, one per series (for example "Halloween at Anaika's"), as the standing moodboard. The owner finds
+  pins (often on Pinterest) and saves them into the channel; a channel link in the brief's REFERENCES or in Studio's
+  References box makes the Studio Mac look at up to 12 of its images when it shapes the look and scenes.
 - **savee.com** moodboards for mood and emotion. The owner browses and attaches screenshots.
 - **prompt-motion.com**: motion videos made with Claude and their prompts. Useful for techniques the
   engine can do in code.
