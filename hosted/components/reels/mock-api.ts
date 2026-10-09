@@ -1,5 +1,5 @@
 import { parseBrief } from "@/lib/reel-brief";
-import { imagesToMake, type ReelBuildVersion, type ReelVoiceTake, type ReelAction, type ReelDocument, type ReelJobView, type ReelLook, type ReelScene, type ReelStep, type ReelUpload, type ReelView, type ScriptLine } from "@/lib/reels";
+import { earlierLooks, imagesToMake, type ReelBuildVersion, type ReelVoiceTake, type ReelAction, type ReelDocument, type ReelJobView, type ReelLook, type ReelScene, type ReelStep, type ReelUpload, type ReelView, type ScriptLine } from "@/lib/reels";
 import type { ReelsApi } from "./api";
 
 /** Sample data for the development preview: a stand-in runner answers each job a few seconds after it is queued. */
@@ -145,7 +145,9 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
     const board = latest.storyboard;
     if (reel.currentStep !== "storyboard" || board?.status !== "needs_review" || !board.result) return;
     if (board.result.phase === "look" && reel.document.look?.fromJob !== board.id) {
-      reel.document = { ...reel.document, look: { options: board.result.looks as ReelLook[], rejected: reel.document.look?.rejected ?? [], fromJob: board.id } };
+      const options = board.result.looks as ReelLook[];
+      const earlier = earlierLooks([...(reel.document.look?.options ?? []), ...(reel.document.look?.earlier ?? [])], options);
+      reel.document = { ...reel.document, look: { options, rejected: reel.document.look?.rejected ?? [], fromJob: board.id, earlier } };
     }
     if (board.result.phase === "scenes" && reel.document.storyboard?.fromJob !== board.id) {
       const previous = reel.document.storyboard;
@@ -281,24 +283,24 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
           reel.currentStep = "script";
           break;
         case "choose_look": {
-          const chosen = doc.look?.options[action.index];
+          const chosen = (action.earlier ? doc.look?.earlier : doc.look?.options)?.[action.index];
           if (!chosen || !doc.look) break;
-          reel.document = { ...doc, look: { ...doc.look, chosen } };
+          reel.document = { ...doc, look: { ...doc.look, chosen, earlier: earlierLooks([doc.look.chosen, ...(doc.look.earlier ?? [])], [chosen]) } };
           queue(reel, "storyboard", "draft", { phase: "scenes", scenes: sampleScenes(chosen), notes: "One image to make; the clock is reused from reel 01." });
           break;
         }
         case "revise_look":
-          reel.document = { ...doc, look: { options: doc.look?.options ?? [], rejected: doc.look?.rejected ?? [] } };
+          reel.document = { ...doc, look: { options: doc.look?.options ?? [], rejected: doc.look?.rejected ?? [], earlier: earlierLooks([doc.look?.chosen, ...(doc.look?.earlier ?? [])]) } };
           queue(reel, "storyboard", "revise", looks(doc, 1, `Changed: ${action.comments}`));
           break;
         case "more_looks": {
           const rejected = [...new Set([...(doc.look?.rejected ?? []), ...(doc.look?.options ?? []).map((look) => look.name)])];
-          reel.document = { ...doc, look: { options: doc.look?.options ?? [], rejected } };
+          reel.document = { ...doc, look: { options: doc.look?.options ?? [], rejected, earlier: earlierLooks([doc.look?.chosen, ...(doc.look?.earlier ?? [])]) } };
           queue(reel, "storyboard", "draft", looks(reel.document, 3));
           break;
         }
         case "own_look":
-          reel.document = { ...doc, look: { options: [], rejected: doc.look?.rejected ?? [] } };
+          reel.document = { ...doc, look: { options: doc.look?.options ?? [], rejected: doc.look?.rejected ?? [], earlier: earlierLooks([doc.look?.chosen, ...(doc.look?.earlier ?? [])]) } };
           queue(reel, "storyboard", "draft", { phase: "look", looks: [{ ...SAMPLE_LOOKS[0], name: "Your look", treatment: action.description }] });
           break;
         case "revise_storyboard":
