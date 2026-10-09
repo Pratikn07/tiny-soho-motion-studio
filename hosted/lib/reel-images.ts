@@ -31,6 +31,7 @@ type StorageClient = {
     from: (bucket: string) => {
       createSignedUploadUrl: (path: string, options?: { upsert?: boolean }) => Promise<{ data: { signedUrl: string } | null; error: unknown }>;
       createSignedUrls: (paths: string[], seconds: number) => Promise<{ data: Array<{ path: string | null; signedUrl: string }> | null; error: unknown }>;
+      createSignedUrl: (path: string, seconds: number, options?: { download?: string }) => Promise<{ data: { signedUrl: string } | null; error: unknown }>;
       list: (folder: string, options: { search: string; limit: number }) => Promise<{ data: Array<{ name: string }> | null; error: unknown }>;
       download: (path: string) => Promise<{ data: Blob | null; error: unknown }>;
       remove: (paths: string[]) => Promise<{ error: unknown }>;
@@ -160,8 +161,13 @@ export class ReelImageStore {
   async withUrls(view: ReelView): Promise<ReelView> {
     const uploads = Object.values(view.document.images ?? {});
     const takes = view.document.voice?.takes ?? [];
-    if (!uploads.length && !takes.length) return view;
-    const paths = [...uploads.map((upload) => upload.objectPath), ...takes.map((take) => take.objectPath)];
+    const latest = view.document.build?.versions.at(-1);
+    const sound = view.document.sound?.versions.at(-1);
+    const exported = view.document.export?.versions.at(-1);
+    if (!uploads.length && !takes.length && !latest) return view;
+    const paths = [...uploads.map((upload) => upload.objectPath), ...takes.map((take) => take.objectPath),
+      ...(latest ? [latest.preview, ...latest.stills.map((still) => still.objectPath)] : []),
+      ...(sound ? [sound.preview] : []), ...(exported ? [exported.final, exported.cover] : [])];
     const { data } = await this.bucket.createSignedUrls(paths, VIEW_SECONDS);
     const byPath = new Map((data ?? []).map((item) => [item.path, item.signedUrl]));
     const imageUrls: Record<string, string> = {};
@@ -174,6 +180,19 @@ export class ReelImageStore {
       const url = byPath.get(take.objectPath);
       if (url) voiceUrls[take.id] = url;
     }
-    return { ...view, imageUrls, voiceUrls };
+    const buildUrls = latest ? {
+      preview: byPath.get(latest.preview),
+      stills: Object.fromEntries(latest.stills.map((still) => [still.n, byPath.get(still.objectPath) ?? ""])),
+    } : undefined;
+    let download: string | undefined;
+    if (exported) {
+      const name = `tiny-soho-reel${String(view.document.build?.reelNo ?? "").padStart(2, "0")}-v${exported.version}.mp4`;
+      download = (await this.bucket.createSignedUrl(exported.final, VIEW_SECONDS, { download: name })).data?.signedUrl;
+    }
+    return {
+      ...view, imageUrls, voiceUrls, buildUrls,
+      soundUrl: sound ? byPath.get(sound.preview) : undefined,
+      exportUrls: exported ? { video: byPath.get(exported.final), download, cover: byPath.get(exported.cover) } : undefined,
+    };
   }
 }

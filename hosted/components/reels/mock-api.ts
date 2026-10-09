@@ -1,5 +1,5 @@
 import { parseBrief } from "@/lib/reel-brief";
-import { imagesToMake, type ReelVoiceTake, type ReelAction, type ReelDocument, type ReelJobView, type ReelLook, type ReelScene, type ReelStep, type ReelUpload, type ReelView, type ScriptLine } from "@/lib/reels";
+import { imagesToMake, type ReelBuildVersion, type ReelVoiceTake, type ReelAction, type ReelDocument, type ReelJobView, type ReelLook, type ReelScene, type ReelStep, type ReelUpload, type ReelView, type ScriptLine } from "@/lib/reels";
 import type { ReelsApi } from "./api";
 
 /** Sample data for the development preview: a stand-in runner answers each job a few seconds after it is queued. */
@@ -82,6 +82,24 @@ const sampleTake = (id: string, label: string, gap: number, lines: string[], not
     cueCheck: { ok: true, spokenCues: [], heard: 0.97, transcript: "" } };
 };
 
+/** A sample build: one still per storyboard scene (its sample sketch stands in for the render). */
+const sampleBuild = (doc: ReelDocument, version: number, change?: string) => ({
+  phase: "build", reelNo: 3, version, seconds: 21, preview: `sample/build/v${version}.mp4`, commit: `abc${version}def`,
+  notes: change ? `Sample build: changed as asked (${change}).` : "Sample build: eight scenes on cream paper, the hook lands on frame 0.",
+  stills: (doc.storyboard?.scenes ?? []).map((scene, index) => ({ n: scene.n, t: index * 3 + 1.5, objectPath: `sample/build/v${version}-scene-${scene.n}.jpg` })),
+});
+
+const sampleSound = (doc: ReelDocument, version: number, musicDb: number) => ({
+  phase: "sound", version, preview: `sample/sound/v${version}.mp4`, musicDb, commit: null, seconds: 21, characters: 120,
+  musicPrompt: "Instrumental bed for a 21-second calm, warm story reel. Plucked strings and celesta, ending on a music box.",
+  cues: (doc.storyboard?.scenes ?? []).slice(0, 4).map((scene, index) => ({ scene: scene.n, t: index * 3 + 1.2, name: ["pin", "stamp", "paper", "chime"][index], prompt: "a soft paper tap", gainDb: -5 })),
+});
+const sampleExport = (version: number) => ({
+  phase: "export", version, final: `sample/export/v${version}.mp4`, cover: `sample/export/v${version}.jpg`, seconds: 21, bytes: 52_400_000,
+  caption: "That Halloween meltdown? It's probably not the sugar.\nMore at mycuratedhaven.com · link in bio\nSave this for Halloween night.",
+  hashtags: ["#toddlermom", "#halloweenwithkids", "#gentleparenting"],
+});
+
 type MockJob = ReelJobView & { readyAt: number; output: Record<string, unknown> };
 type MockReel = Omit<ReelView, "jobs"> & { jobs: MockJob[] };
 
@@ -98,6 +116,18 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
       sketches: storyboard.scenes.filter((scene) => only.includes(scene.n)).map((scene) => ({ n: scene.n, svg: sampleSketch(scene) })) });
   };
   const absorb = (reel: MockReel, latest: ReelView["jobs"]) => {
+    for (const key of ["sound", "export"] as const) {
+      const done = latest[key];
+      const current = reel.document[key] ?? { versions: [] };
+      if (reel.currentStep === key && done?.status === "needs_review" && done.result && !current.versions.some((item) => item.jobId === done.id)) {
+        reel.document = { ...reel.document, [key]: { ...current, versions: [...current.versions, { ...(done.result as never as object), jobId: done.id }] } };
+      }
+    }
+    const buildJob = latest.build;
+    const build = reel.document.build;
+    if (reel.currentStep === "build" && build && buildJob?.status === "needs_review" && buildJob.result && !build.versions.some((item) => item.jobId === buildJob.id)) {
+      reel.document = { ...reel.document, build: { ...build, approved: false, versions: [...build.versions, { ...(buildJob.result as unknown as ReelBuildVersion), jobId: buildJob.id }] } };
+    }
     const voiceJob = latest.voice;
     if (reel.currentStep === "voice" && voiceJob?.status === "needs_review" && voiceJob.result && reel.document.voice?.fromJob !== voiceJob.id) {
       const takes = voiceJob.result.takes as ReelVoiceTake[];
@@ -159,7 +189,11 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
       }
     }
     return structuredClone({ ...reel, jobs, imageJobs, imageUrls: Object.fromEntries(Object.keys(reel.document.images ?? {}).map((file) => [file, previews.get(`${id}/${file}`) ?? ""])),
-      voiceUrls: Object.fromEntries((reel.document.voice?.takes ?? []).map((take) => [take.id, silentWav()])) });
+      voiceUrls: Object.fromEntries((reel.document.voice?.takes ?? []).map((take) => [take.id, silentWav()])),
+      soundUrl: reel.document.sound?.versions.length ? "" : undefined,
+      exportUrls: reel.document.export?.versions.length ? { cover: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sampleSketch((reel.document.storyboard?.scenes ?? [])[0] ?? { n: 1, line: "", paper: "", codeDraws: "Cover", move: "", transition: "", images: [] }))}` } : undefined,
+      buildUrls: reel.document.build?.versions.length ? { stills: Object.fromEntries((reel.document.storyboard?.scenes ?? []).map((scene) =>
+        [scene.n, `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sampleSketch(scene))}`])) } : undefined });
   };
   const looks = (doc: ReelDocument, count: number, note?: string) => ({ phase: "look", looks: (doc.brief?.treatment && count === 1
     ? [{ ...SAMPLE_LOOKS[0], name: "Your treatment", treatment: doc.brief.treatment }]
@@ -318,7 +352,40 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
           break;
         }
         case "approve_voice":
-          if (doc.voice?.chosen) { reel.document = { ...doc, voice: { ...doc.voice, approved: true } }; reel.currentStep = "build"; }
+          if (doc.voice?.chosen) {
+            reel.document = { ...doc, voice: { ...doc.voice, approved: true }, build: { reelNo: 3, versions: [] } };
+            reel.currentStep = "build";
+            queue(reel, "build", "draft", sampleBuild(reel.document, 1));
+          }
+          break;
+        case "revise_build":
+        case "rebuild":
+          if (doc.build) queue(reel, "build", action.action === "rebuild" ? "draft" : "revise",
+            sampleBuild(doc, doc.build.versions.length + 1, action.action === "revise_build" ? action.comments : undefined));
+          break;
+        case "approve_build":
+          if (doc.build?.versions.length) {
+            reel.document = { ...doc, build: { ...doc.build, approved: true } };
+            reel.currentStep = "sound";
+            queue(reel, "sound", "draft", sampleSound(reel.document, 1, -9));
+          }
+          break;
+        case "new_music":
+        case "change_sounds":
+        case "music_level": {
+          const latestSound = doc.sound?.versions.at(-1);
+          queue(reel, "sound", "revise", sampleSound(doc, (doc.sound?.versions.length ?? 0) + 1, action.action === "music_level" ? action.db : latestSound?.musicDb ?? -9));
+          break;
+        }
+        case "approve_sound":
+          if (doc.sound?.versions.length) {
+            reel.document = { ...doc, sound: { ...doc.sound, approved: true } };
+            reel.currentStep = "export";
+            queue(reel, "export", "render", sampleExport(1));
+          }
+          break;
+        case "export_again":
+          queue(reel, "export", "render", sampleExport((doc.export?.versions.length ?? 0) + 1));
           break;
         case "add_reference":
           reel.document = { ...doc, references: [...new Set([...(doc.references ?? []), action.url])] };

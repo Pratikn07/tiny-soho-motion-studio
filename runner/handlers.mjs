@@ -6,6 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { pullBoards, splitReferences } from "./arena.mjs";
+import { buildJob } from "./build.mjs";
+import { exportJob } from "./export.mjs";
+import { soundJob } from "./sound.mjs";
 import { voiceJob } from "./voice.mjs";
 
 function stepError(code, message) {
@@ -17,11 +20,11 @@ function stepError(code, message) {
  * the only built-in tools it may use (for example "Read" to look at frames in `cwd`, "WebFetch" to open a link).
  * `effort` ("low" … "max") trades thinking for speed; sketches use "low".
  */
-export function askClaude(prompt, { timeoutMs = 180_000, tools = [], maxTurns, cwd, effort } = {}) {
+export function askClaude(prompt, { timeoutMs = 180_000, tools = [], allowedTools, maxTurns, cwd, effort } = {}) {
   return new Promise((resolve, reject) => {
     const dir = cwd ?? mkdtempSync(join(tmpdir(), "tiny-soho-runner-"));
     const toolArgs = tools.length
-      ? ["--tools", tools.join(","), "--allowedTools", tools.join(","), "--max-turns", String(maxTurns ?? 12)]
+      ? ["--tools", tools.join(","), "--allowedTools", (allowedTools ?? tools).join(","), "--max-turns", String(maxTurns ?? 12)]
       : ["--max-turns", "1", "--allowedTools", ""];
     const effortArgs = effort ? ["--effort", effort] : [];
     const child = spawn("claude", ["-p", prompt, "--output-format", "json", ...toolArgs, ...effortArgs], { cwd: dir });
@@ -43,9 +46,9 @@ export function askClaude(prompt, { timeoutMs = 180_000, tools = [], maxTurns, c
 }
 
 /** Runs a command and resolves with its stdout and stderr; rejects with `code` when it fails. */
-function run(command, args, { cwd, timeoutMs = 120_000, code = "tool_failed" } = {}) {
+export function run(command, args, { cwd, env, timeoutMs = 120_000, code = "tool_failed" } = {}) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { cwd, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
+    execFile(command, args, { cwd, env: env ?? process.env, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) return reject(stepError(code, `${command}: ${(stderr || error.message).trim().slice(-180)}`));
       resolve({ stdout, stderr });
     });
@@ -520,6 +523,11 @@ handlers["images/draft"] = async (job, reel, { progress }) => {
 };
 
 handlers["voice/draft"] = (job, reel, tools) => voiceJob(job, reel, tools, { askClaude, run, transcribe });
+handlers["build/draft"] = (job, reel, tools) => buildJob(job, reel, tools, { askClaude });
+handlers["build/revise"] = handlers["build/draft"];
+handlers["sound/draft"] = (job, reel, tools) => soundJob(job, reel, tools, { askClaude, run });
+handlers["sound/revise"] = handlers["sound/draft"];
+handlers["export/render"] = (job, reel, tools) => exportJob(job, reel, tools, { askClaude, run });
 handlers["voice/revise"] = handlers["voice/draft"];
 
 export async function handle(job, reel, tools) {

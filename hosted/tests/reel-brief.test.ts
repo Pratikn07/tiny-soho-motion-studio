@@ -11,6 +11,7 @@ HOOK: That Halloween meltdown? It's probably NOT the sugar.
 TWIST: In a study, moms who were told their kid had sugar rated them more hyper.
 TAKEAWAY: Skip the candy guilt and protect the bedtime.
 SAVE PROMPT: Save this for Halloween night.
+CAPTION QUESTION: Sugar or bedtime: which one is it at your house?
 SCRIPT DRAFT (optional):
 1. [curious] That Halloween meltdown? It's probably NOT the sugar. | "It's not the sugar." with grumpy Anaika
 2. [matter-of-fact] Careful studies haven't found that sugar changes kids' behavior. | MYTH stamp
@@ -28,7 +29,7 @@ describe("parseBrief", () => {
     const brief = parseBrief(REEL01)!;
     expect(brief).toMatchObject({
       title: "It's Not the Sugar", postBy: "29 Oct 2026", goal: "comments", hook: "That Halloween meltdown? It's probably NOT the sugar.",
-      savePrompt: "Save this for Halloween night.", series: "Halloween", emotion: "playful, guilt lifted",
+      savePrompt: "Save this for Halloween night.", captionQuestion: "Sugar or bedtime: which one is it at your house?", series: "Halloween", emotion: "playful, guilt lifted",
       treatment: "cut-paper collage, sticker cut-outs", signatureMoment: "the SUGAR label peels off the cup",
     });
     expect(brief.scriptDraft).toEqual([
