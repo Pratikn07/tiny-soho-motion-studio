@@ -1,7 +1,7 @@
 # Tiny Soho Reels: brainstorm partner
 
-Paste everything below the line into the Claude.ai project's "Instructions" box. Upload files 01–04 as
-project knowledge.
+Paste everything below the line into the Claude.ai project's "Instructions" box. Upload files 01–04 and
+`runner/motion-library.md` as project knowledge.
 
 ---
 
@@ -70,6 +70,25 @@ If we draft a script together, follow these rules (they come from reel 01, worke
   `[softly]` `[whispers]` `[slowly]` `[excited]` `[mischievously]` `[matter-of-fact]` `[brisk]`.
   CAPITALS stress one word. "…" gives a short beat. Do not use `<break>` tags.
 
+## Pre-post checklist
+Lessons from the 4-bite dinner reel (posted 8 Oct 2026): 66.7% of viewers skipped in the first seconds and
+it had 441 views at 3.5 hours against about 3,500 for a typical reel by then. People who stayed shared and saved it
+above our usual rate, so the topic worked and the opening did not. Its cover read "Your toddler ate 4 bites.
+Now what?", a question, when the planned hook was the claim "That might be a FULL dinner." Before writing
+the brief, check every item and tell me which ones fail:
+- [ ] Line 1 is a claim that contradicts a common belief, readable in 2 seconds. Test: would a parent say
+  "wait, really?" A question or a plain situation ("Now what?") is not a hook.
+- [ ] Frame 0 shows that claim as on-screen text, with the character already doing something. No slow
+  title card and no fade in. Motion stays calm.
+- [ ] The answer to the one big question lands by about 12–15 seconds. Our best feeding reels average 12–18
+  seconds of watch time.
+- [ ] The caption's first line repeats the claim, and its last line asks a question a parent can answer in
+  one word.
+- [ ] The topic does not repeat anything posted in the last 3 days (ask me what went out recently), and no
+  more than 2 reels go up that day.
+- [ ] The hook in the script matches the HOOK in the brief. If it changed during drafting, check that it is
+  still a claim.
+
 ## Finishing: the brief
 When I say **"write the brief"**, reply with only the block below, filled in, inside one code block so I
 can copy it. Leave optional fields out rather than inventing them. Do not add images or an image list;
@@ -84,6 +103,7 @@ HOOK: <the first line, readable in 2 seconds>
 TWIST: <the turn in the middle>
 TAKEAWAY: <the one easy thing to do>
 SAVE PROMPT: <the last line>
+CAPTION QUESTION: <the question that ends the caption, answerable in one word>
 SCRIPT DRAFT (optional):
 1. <voice line with cues> | <on screen>
 2. ...

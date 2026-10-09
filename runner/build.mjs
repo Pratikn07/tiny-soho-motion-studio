@@ -112,7 +112,7 @@ function buildPrompt({ nn, input, spans, lyrics, images, revising }) {
     "Rules: one idea and one signature move per scene, landing on its spoken word; scenes change through an object, not a plain",
     "cut; calm editorial motion only: rises, slides, fades, stamps, slow push-ins. No hop, bounce, wiggle, jiggle or overshoot",
     "on words or stickers, not even a small one (Tiny Soho is premium, never kiddish); the rose italic emphasis word; text inside the safe area; frame 0 is",
-    "the cover (hook line readable); everything a pure function of time; end on the Tiny Soho lockup (lockup() in _brand.ts).",
+    "the cover: the hook line fully on screen (no fade or type-on for it) and the character already mid-action; everything a pure function of time; end on the Tiny Soho lockup (lockup() in _brand.ts).",
     "",
     "Scenes:", scenes,
     "",
