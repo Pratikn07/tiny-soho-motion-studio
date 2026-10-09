@@ -37,8 +37,13 @@ sleeps, jobs wait in the queue and start when it wakes.
     `analysis/mix_studio.py` to -14 LUFS and muxed onto the build preview. "Music level" only remixes (no credits).
   - **Export** (`export.mjs`): the final render (30 fps, motion blur, reel 01's settings), the mix added, the cover
     (opening frame) and a caption, uploaded for download. Usually 10–25 minutes.
-- **Are.na boards:** an Are.na channel link among a reel's references makes look and storyboard jobs download up to
-  12 of its images (with the `arena` CLI, signed in on this Mac: `arena login`) for Claude to read. See `arena.mjs`.
+- **Are.na boards:** the Mac keeps them itself with the `arena` CLI (signed in on this Mac: `arena login`). Each series
+  has a private channel "Tiny Soho · <Series>" ("Tiny Soho · Standalone" for the rest), found on the account or created.
+  On a reel's first look job the Mac finds public channels that fit the brief (Are.na's public channel search, plus
+  channels the board's pins already sit in), shows Claude up to 48 candidates on numbered contact sheets, and connects
+  the 8-12 it picks to the board tagged `studio_reel=<reel>`. It adds more when you turn down every look. Look and
+  storyboard jobs then read up to 12 of the board's images, this reel's first, plus any channel you link. Delete a pin
+  on Are.na and it is never used again. `TINY_SOHO_ARENA_BOARDS=off` stops it. See `arena-board.mjs` and `arena.mjs`.
 - **Reference reels need** `yt-dlp`, `ffmpeg` and `uv` on this Mac (`brew install yt-dlp ffmpeg uv`). The voice is
   transcribed with faster-whisper through uv; the first run downloads the model. If transcription fails, the
   breakdown still runs from the frames. Downloads are deleted when the job ends.

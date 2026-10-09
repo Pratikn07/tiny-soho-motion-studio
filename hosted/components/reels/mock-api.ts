@@ -1,5 +1,5 @@
 import { parseBrief } from "@/lib/reel-brief";
-import { imagesToMake, type ReelBuildVersion, type ReelVoiceTake, type ReelAction, type ReelDocument, type ReelJobView, type ReelLook, type ReelScene, type ReelStep, type ReelUpload, type ReelView, type ScriptLine } from "@/lib/reels";
+import { imagesToMake, type ReelBoard, type ReelBuildVersion, type ReelVoiceTake, type ReelAction, type ReelDocument, type ReelJobView, type ReelLook, type ReelScene, type ReelStep, type ReelUpload, type ReelView, type ScriptLine } from "@/lib/reels";
 import type { ReelsApi } from "./api";
 
 /** Sample data for the development preview: a stand-in runner answers each job a few seconds after it is queued. */
@@ -38,6 +38,12 @@ const SAMPLE_LOOKS: ReelLook[] = [
 ];
 /** A simple sample sketch: the paper, the scene's words, an image slot and a pencil-blue note. */
 const escapeXml = (text: string) => text.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
+
+/** Sample mode's Are.na board: what the Studio Mac reports after keeping the series' board. */
+const SAMPLE_BOARD: ReelBoard = {
+  title: "Tiny Soho · Halloween", url: "https://www.are.na/sample/tiny-soho-halloween", created: true, added: 10, total: 10,
+  sources: ["risograph-printing", "paper-collage"], note: "Warm orange riso inks, torn kraft paper, soft night blues.",
+};
 export const sampleSketch = (scene: ReelScene) => [
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">',
   `<rect width="1080" height="1920" fill="${scene.n % 2 ? "#1F2340" : "#F4EADC"}"/>`,
@@ -145,7 +151,8 @@ export function createMockReelsApi(delayMs = 2500): ReelsApi {
     const board = latest.storyboard;
     if (reel.currentStep !== "storyboard" || board?.status !== "needs_review" || !board.result) return;
     if (board.result.phase === "look" && reel.document.look?.fromJob !== board.id) {
-      reel.document = { ...reel.document, look: { options: board.result.looks as ReelLook[], rejected: reel.document.look?.rejected ?? [], fromJob: board.id } };
+      reel.document = { ...reel.document, board: reel.document.board ?? SAMPLE_BOARD,
+        look: { options: board.result.looks as ReelLook[], rejected: reel.document.look?.rejected ?? [], fromJob: board.id } };
     }
     if (board.result.phase === "scenes" && reel.document.storyboard?.fromJob !== board.id) {
       const previous = reel.document.storyboard;

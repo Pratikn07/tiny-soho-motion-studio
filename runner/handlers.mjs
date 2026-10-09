@@ -5,6 +5,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { keepBoard } from "./arena-board.mjs";
 import { pullBoards, splitReferences } from "./arena.mjs";
 import { buildJob } from "./build.mjs";
 import { exportJob } from "./export.mjs";
@@ -325,7 +326,7 @@ function storyContext(input, refs) {
     input.brief ? `Brief:\n${briefText(input.brief)}` : `Idea: ${input.idea?.title ?? ""}: ${input.idea?.hook ?? ""}`,
     "Approved script:", ...lines,
     ...(refs.other.length ? [`Reference links from the creator (open them with WebFetch if useful): ${refs.other.join(" ")}`] : []),
-    ...(refs.boardText ? ["The creator's Are.na moodboard, downloaded into this folder (read every image with Read before deciding; take mood,",
+    ...(refs.boardText ? ["The reel's Are.na moodboard, downloaded into this folder (read every image with Read before deciding; take mood,",
       "colour, texture and composition from it, never copy a picture):", refs.boardText] : []),
   ].join("\n");
 }
@@ -336,15 +337,26 @@ function referenceLinks(input) {
   return splitReferences([...list(input.references), ...typed]);
 }
 
-/** Look and storyboard jobs. Are.na boards among the references are downloaded first so Claude can look at them. */
+/**
+ * Look and storyboard jobs. The Studio Mac first keeps the series' Are.na board (finds or creates it and adds pins for
+ * this reel, see arena-board.mjs), then downloads that board and any boards the creator linked so Claude can look at
+ * them. Are.na trouble never stops the storyboard; Studio shows what happened with the board.
+ */
 async function storyboardJob(job, reel, tools) {
   const { boards, other } = referenceLinks(job.input);
-  if (!boards.length) return storyboardWork(job, tools, { other, boardText: "", files: [], dir: undefined });
+  const keeping = tools.env?.arenaBoards !== "off";
+  if (!boards.length && !keeping) return storyboardWork(job, tools, { other, boardText: "", files: [], dir: undefined });
   const dir = mkdtempSync(join(tmpdir(), "tiny-soho-board-"));
   try {
-    await tools.progress(`Reading your Are.na board${boards.length > 1 ? "s" : ""}`);
-    const board = await pullBoards(boards, dir, { run });
-    return await storyboardWork(job, tools, { other, boardText: board.text, files: board.files, dir });
+    const kept = keeping ? await keepBoard(job, tools, { run, askClaude }, mkdtempSync(join(dir, "pick-"))) : null;
+    const slugs = [...new Set([...(kept?.slug ? [kept.slug] : []), ...boards])].slice(0, 3);
+    let board = { text: "", files: [] };
+    if (slugs.length) {
+      await tools.progress(`Reading the Are.na board${slugs.length > 1 ? "s" : ""}`);
+      board = await pullBoards(slugs, dir, { run, prefer: kept?.slug ? { slug: kept.slug, tag: kept.tag, only: kept.standalone } : undefined });
+    }
+    const out = await storyboardWork(job, tools, { other, boardText: board.text, files: board.files, dir });
+    return kept ? { ...out, result: { ...out.result, board: kept.summary } } : out;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

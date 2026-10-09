@@ -93,6 +93,6 @@ SERIES: <series name from 04-series-and-looks.md, or "standalone">
 EMOTION: <2–4 words, e.g. "exhausted but in on the joke">
 TREATMENT: <the fresh look for this reel, e.g. "a tired mum's diary: lined paper, two-colour riso print">
 SIGNATURE MOMENT: <the one image people remember, e.g. "the calendar circles 31 Oct harder each time">
-REFERENCES (optional): <links: an Are.na channel for the series or this reel (Studio's Mac looks at its images), Savee, prompt-motion>
+REFERENCES (optional): <links Studio should also look at: Savee, prompt-motion, or an extra Are.na channel; Studio keeps the series' Are.na board itself>
 NOTES FOR STUDIO (optional): <anything Studio should know, e.g. "reuse the reel 01 clock">
 ```

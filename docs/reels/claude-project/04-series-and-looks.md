@@ -73,9 +73,11 @@ the target; recombining earlier ones is cheaper.
 | Film photo album, Polaroids | Nostalgic | Then-and-now, milestones |
 
 ## Where references come from
-- **Are.na** channels, one per series (for example "Halloween at Anaika's"), as the standing moodboard. The owner finds
-  pins (often on Pinterest) and saves them into the channel; a channel link in the brief's REFERENCES or in Studio's
-  References box makes the Studio Mac look at up to 12 of its images when it shapes the look and scenes.
+- **Are.na** boards are kept by Studio, not by hand. Each series has a private channel "Tiny Soho · <Series>" (standalone
+  reels share "Tiny Soho · Standalone"). For every reel the Studio Mac finds public Are.na channels that fit the brief's
+  series, emotion and treatment, picks 8-12 pins and adds them to the board, then reads the board when it shapes the
+  look and scenes. A clear SERIES, EMOTION and TREATMENT in the brief are what steer it. The owner only deletes pins
+  they don't want. A channel link in REFERENCES is still read as an extra board.
 - **savee.com** moodboards for mood and emotion. The owner browses and attaches screenshots.
 - **prompt-motion.com**: motion videos made with Claude and their prompts. Useful for techniques the
   engine can do in code.

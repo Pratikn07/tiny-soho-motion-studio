@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { storyboardImages, type ReelAction, type ReelImage, type ReelLook, type ReelScene, type ReelView } from "@/lib/reels";
+import { storyboardImages, type ReelAction, type ReelBoard, type ReelImage, type ReelLook, type ReelScene, type ReelView } from "@/lib/reels";
 import type { MacState } from "@/components/shell/ShellBar";
 import { active, CommentBox, CopyButton, JobState } from "./job-state";
 import { Animatic, SketchFrame, StoryboardSheet } from "./sketches";
@@ -213,6 +213,22 @@ function ScenesPart({ reel, macState, act, onRetry }: { reel: ReelView; macState
   );
 }
 
+/** What the Studio Mac did with the series' Are.na board on its last look or storyboard job. */
+function BoardNote({ board }: { board?: ReelBoard }) {
+  if (!board) return null;
+  if (board.error) return <p className={r.muted} role="status">Are.na board {board.title}: not used this time ({board.error}). The storyboard used your links only.</p>;
+  const what = board.added ? `${board.created ? "Created it and added" : "Added"} ${board.added} pin${board.added === 1 ? "" : "s"} for this reel (${board.total ?? board.added} in all).`
+    : `${board.total ?? 0} pins, read as they are.`;
+  return (
+    <div className={r.boardNote}>
+      <p><span className={r.tag}>Are.na board</span>{" "}
+        {board.url ? <a href={board.url} target="_blank" rel="noreferrer">{board.title}</a> : board.title} · {what}</p>
+      {board.note && <p className={r.muted}>{board.note}</p>}
+      <p className={r.muted}>Delete any pin there you don&apos;t want used; the next look or storyboard skips it.</p>
+    </div>
+  );
+}
+
 function References({ reel, act }: { reel: ReelView; act: Act }) {
   const [link, setLink] = useState("");
   const links = reel.document.references ?? [];
@@ -221,7 +237,8 @@ function References({ reel, act }: { reel: ReelView; act: Act }) {
   return (
     <section className={r.panel} aria-labelledby="refs-title">
       <h2 id="refs-title" className={r.subtitle}>References <span className={r.muted}>(optional)</span></h2>
-      <p className={r.lede}>The Studio Mac already draws on its motion library (styles, treatments and moves gathered from prompt-motion and motionin). Paste an Are.na channel to give it your moodboard (it looks at up to 12 of its images), or a link when you want one exact thing.</p>
+      <p className={r.lede}>The Studio Mac draws on its motion library (styles, treatments and moves gathered from prompt-motion and motionin) and keeps an Are.na board for each series, adding pins that fit this reel. Paste another Are.na channel or a link only when you want one exact thing.</p>
+      <BoardNote board={reel.document.board} />
       {links.length > 0 && (
         <>
           <ul className={r.refs}>{links.map((item) => (

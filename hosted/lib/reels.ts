@@ -56,6 +56,19 @@ export const lookSchema = z.object({
 });
 export type ReelLook = z.infer<typeof lookSchema>;
 
+/** The Are.na board the Studio Mac keeps for the reel's series (runner/arena-board.mjs), as of its last look or storyboard job. */
+export const boardSchema = z.object({
+  title: z.string().min(1).max(120),
+  url: z.string().max(300).regex(/^https:\/\/www\.are\.na\//).optional(),
+  created: z.boolean().optional(),
+  added: z.number().int().min(0).max(100).optional(),
+  total: z.number().int().min(0).max(100_000).optional(),
+  sources: z.array(z.string().max(120)).max(8).optional(),
+  note: z.string().max(300).optional(),
+  error: z.string().max(200).optional(),
+});
+export type ReelBoard = z.infer<typeof boardSchema>;
+
 export const imageSchema = z.object({
   file: z.string().min(1).max(80),
   purpose: z.string().max(200),
@@ -213,6 +226,8 @@ export type ReelDocument = {
   storyboardHistory?: ReelStoryboard[];
   /** Links the creator added for mood or motion (Savee, prompt-motion, motionin). */
   references?: string[];
+  /** The series' Are.na board the Studio Mac keeps and adds this reel's pins to. */
+  board?: ReelBoard;
   /** Images the creator uploaded at the Images step, by storyboard filename. */
   images?: Record<string, ReelUpload>;
   /** Voice takes from the Studio Mac (ElevenLabs), the chosen one, and whether it is approved. */
@@ -790,7 +805,15 @@ export class ReelsRepository {
     return { ...view.document, script: { lines: parsed.data, notes, approved: false } };
   }
 
+  /** Storyboard results, plus the Are.na board summary any look or storyboard job carries. */
   private absorbStoryboard(doc: ReelDocument, job?: ReelJobView): ReelDocument | null {
+    const next = this.absorbStoryboardResult(doc, job);
+    const board = boardSchema.safeParse(job?.status === "needs_review" ? job.result?.board : undefined);
+    if (!board.success || JSON.stringify(doc.board) === JSON.stringify(board.data)) return next;
+    return { ...(next ?? doc), board: board.data };
+  }
+
+  private absorbStoryboardResult(doc: ReelDocument, job?: ReelJobView): ReelDocument | null {
     if (job?.status !== "needs_review" || !job.result) return null;
     if (job.result.phase === "look") {
       if (doc.look?.fromJob === job.id) return null;

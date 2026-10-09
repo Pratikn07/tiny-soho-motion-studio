@@ -47,16 +47,27 @@ export function boardItems(blocks, limit = BOARD_IMAGES) {
 }
 
 /**
+ * On the board Studio keeps, this reel's pins come first, then the newest; a standalone reel reads only its own pins
+ * (other standalone reels' moods don't belong to it).
+ */
+export function preferred(blocks, { tag, only }) {
+  const mine = (block) => block?.connection?.metadata?.studio_reel === tag;
+  const list = (Array.isArray(blocks) ? blocks : []).filter((block) => !only || mine(block) || block?.type === "Text");
+  return list.sort((a, b) => Number(mine(b)) - Number(mine(a)) || String(b?.connection?.connected_at ?? "").localeCompare(String(a?.connection?.connected_at ?? "")));
+}
+
+/**
  * Downloads the boards' images into `dir` as board1_01.jpg… and returns a description for the prompt. A board the
  * Mac can't read (CLI signed out, private channel of someone else) is reported, not fatal.
  */
-export async function pullBoards(slugs, dir, { run }) {
+export async function pullBoards(slugs, dir, { run, prefer }) {
   const lines = [], files = [];
   for (const [index, slug] of slugs.entries()) {
     let blocks;
     try {
-      const { stdout } = await run("arena", ["channel", "contents", slug, "--json", "--quiet"], { timeoutMs: 60_000, code: "arena_failed" });
+      const { stdout } = await run("arena", ["channel", "contents", slug, "--per", "100", "--json", "--quiet"], { timeoutMs: 60_000, code: "arena_failed" });
       blocks = JSON.parse(stdout)?.data;
+      if (prefer?.slug === slug) blocks = preferred(blocks, prefer);
     } catch {
       lines.push(`Are.na board "${slug}": couldn't be read on the Studio Mac (signed out, or not shared with this account).`);
       continue;

@@ -190,6 +190,19 @@ describe("ReelsRepository: briefs, references, looks and storyboards", () => {
     expect(second.document.storyboardHistory).toEqual([first]);
   });
 
+  it("keeps the Are.na board the Studio Mac reports, and drops a board link that isn't Are.na", async () => {
+    const client = fakeClient({ creative_studio_reels: [{ data: null, error: null }, { data: null, error: null }] });
+    const repo = new ReelsRepository(client as never, OWNER);
+    const base = { id: REEL, title: "T", status: "in_progress", currentStep: "storyboard" as const, updatedAt: "" };
+    const board = { title: "Tiny Soho · Halloween", url: "https://www.are.na/me/tiny-soho-halloween", created: true, added: 9, total: 9 };
+    const kept = await repo.absorb({ ...base, document: {}, jobs: { storyboard: job("j1", "storyboard", { phase: "look", looks: [LOOK], board }) } });
+    expect(kept.document).toMatchObject({ board, look: { fromJob: "j1" } });
+    await repo.absorb(kept);
+    expect(client.writes).toHaveLength(1);
+    const odd = await repo.absorb({ ...base, document: {}, jobs: { storyboard: job("j2", "storyboard", { phase: "look", looks: [LOOK], board: { ...board, url: "https://evil.example/x" } }) } });
+    expect(odd.document.board).toBeUndefined();
+  });
+
   it("ignores storyboard results once the reel went back to the script", async () => {
     const client = fakeClient({});
     const view = { id: REEL, title: "T", status: "in_progress", currentStep: "script" as const, updatedAt: "", document: {},
