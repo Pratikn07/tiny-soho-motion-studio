@@ -23,11 +23,14 @@ function stepError(code, message) {
 export function askClaude(prompt, { timeoutMs = 180_000, tools = [], allowedTools, maxTurns, cwd, effort } = {}) {
   return new Promise((resolve, reject) => {
     const dir = cwd ?? mkdtempSync(join(tmpdir(), "tiny-soho-runner-"));
+    // With no tools, "--tools ''" removes them all (an empty allow list alone still let Claude call Bash and run out of
+    // turns). --strict-mcp-config keeps this Mac's MCP servers out of runner jobs. stdin is closed so the CLI doesn't wait.
     const toolArgs = tools.length
       ? ["--tools", tools.join(","), "--allowedTools", (allowedTools ?? tools).join(","), "--max-turns", String(maxTurns ?? 12)]
-      : ["--max-turns", "1", "--allowedTools", ""];
+      : ["--tools", "", "--max-turns", "1"];
     const effortArgs = effort ? ["--effort", effort] : [];
-    const child = spawn("claude", ["-p", prompt, "--output-format", "json", ...toolArgs, ...effortArgs], { cwd: dir });
+    const child = spawn("claude", ["-p", prompt, "--output-format", "json", "--strict-mcp-config", ...toolArgs, ...effortArgs],
+      { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = "";
     const minutes = Math.round(timeoutMs / 60_000);
     const timer = setTimeout(() => {
@@ -39,10 +42,20 @@ export function askClaude(prompt, { timeoutMs = 180_000, tools = [], allowedTool
     child.on("error", (error) => { clearTimeout(timer); reject(stepError("claude_unavailable", `Could not start Claude Code: ${error.message}`)); });
     child.on("close", (code) => {
       clearTimeout(timer);
-      if (code !== 0) return reject(stepError("claude_failed", (err || out).trim().slice(0, 200) || `claude exited with ${code}`));
+      if (code !== 0) return reject(stepError("claude_failed", claudeFailure(out, err, code)));
       try { resolve(JSON.parse(out).result ?? ""); } catch { resolve(out); }
     });
   });
+}
+
+/** Why Claude Code stopped, from its JSON answer when there is one, without the CLI's stdin warning. */
+export function claudeFailure(out, err, code) {
+  let data = null;
+  try { data = JSON.parse(out); } catch { /* not JSON */ }
+  if (data?.subtype === "error_max_turns") return "Claude Code ran out of turns before answering. Try again.";
+  const said = typeof data?.result === "string" && data.result.trim() ? data.result
+    : String(data ? err : err || out).split("\n").filter((line) => line.trim() && !/no stdin data received/i.test(line)).join(" ");
+  return said.trim().slice(0, 200) || (data?.subtype ? `Claude Code stopped (${data.subtype}).` : `claude exited with ${code}`);
 }
 
 /** Runs a command and resolves with its stdout and stderr; rejects with `code` when it fails. */

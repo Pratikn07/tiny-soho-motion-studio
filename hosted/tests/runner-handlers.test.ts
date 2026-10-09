@@ -66,3 +66,15 @@ describe("runner parsers", () => {
     expect(() => handlers.parseLooks("[not json]")).toThrow(expect.objectContaining({ code: "claude_bad_output" }));
   });
 });
+
+describe("Claude Code failures", () => {
+  it("says why Claude stopped, without the CLI's stdin warning", () => {
+    const failure = handlers.claudeFailure as unknown as (out: string, err: string, code: number) => string;
+    expect(failure('{"subtype":"error_max_turns","result":""}', "Warning: no stdin data received in 3s, proceeding without it.", 1))
+      .toBe("Claude Code ran out of turns before answering. Try again.");
+    expect(failure("", "Warning: no stdin data received in 3s, proceeding without it.\nNot logged in", 1)).toBe("Not logged in");
+    expect(failure('{"subtype":"error_during_execution"}', "", 1)).toBe("Claude Code stopped (error_during_execution).");
+    expect(failure("", "", 2)).toBe("claude exited with 2");
+  });
+});
+
