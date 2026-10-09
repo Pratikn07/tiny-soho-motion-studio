@@ -305,7 +305,9 @@ export class ReelsRepository {
     }
     if (brief) {
       const idea = { title: brief.title || brief.hook?.slice(0, 80) || "New reel", hook: brief.hook ?? "", why: brief.angle?.slice(0, 300) ?? "" };
-      const reel = await this.insert(input.title || idea.title, "script", { brief, idea });
+      // Links in the brief's REFERENCES line (Are.na boards, Savee, prompt-motion) carry into the reel's references.
+      const references = [...new Set(brief.references?.match(/https?:\/\/[^\s,;)]+/g) ?? [])].slice(0, 10);
+      const reel = await this.insert(input.title || idea.title, "script", { brief, idea, ...(references.length ? { references } : {}) });
       await this.queue(reel.id, "script", "draft", { brief, idea, keepScript: Boolean(brief.scriptDraft?.length) });
       return this.get(reel.id);
     }

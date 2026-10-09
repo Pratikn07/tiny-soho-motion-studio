@@ -5,6 +5,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { pullBoards, splitReferences } from "./arena.mjs";
 import { voiceJob } from "./voice.mjs";
 
 function stepError(code, message) {
@@ -315,19 +316,43 @@ export function parseStoryboard(text) {
   return { scenes, notes: str(data.notes, 600) };
 }
 
-function storyContext(input) {
+function storyContext(input, refs) {
   const lines = list(input.script).map((line, i) => `${i + 1}. [${line.time}] ${line.voice} | ${line.onScreen}`);
   return [
     input.brief ? `Brief:\n${briefText(input.brief)}` : `Idea: ${input.idea?.title ?? ""}: ${input.idea?.hook ?? ""}`,
     "Approved script:", ...lines,
-    ...(list(input.references).length ? [`Reference links from the creator (open them with WebFetch if useful): ${list(input.references).join(" ")}`] : []),
+    ...(refs.other.length ? [`Reference links from the creator (open them with WebFetch if useful): ${refs.other.join(" ")}`] : []),
+    ...(refs.boardText ? ["The creator's Are.na moodboard, downloaded into this folder (read every image with Read before deciding; take mood,",
+      "colour, texture and composition from it, never copy a picture):", refs.boardText] : []),
   ].join("\n");
 }
 
-const webTools = (input) => (list(input.references).length || /https?:\/\//.test(String(input.own ?? input.comments ?? "")) ? ["WebFetch"] : []);
+/** Links the creator gave: reference links, plus any link in a described look or a comment. */
+function referenceLinks(input) {
+  const typed = `${input.own ?? ""} ${input.comments ?? ""}`.match(/https?:\/\/[^\s)]+/g) ?? [];
+  return splitReferences([...list(input.references), ...typed]);
+}
 
-async function storyboardJob(job, reel, { progress }) {
+/** Look and storyboard jobs. Are.na boards among the references are downloaded first so Claude can look at them. */
+async function storyboardJob(job, reel, tools) {
+  const { boards, other } = referenceLinks(job.input);
+  if (!boards.length) return storyboardWork(job, tools, { other, boardText: "", files: [], dir: undefined });
+  const dir = mkdtempSync(join(tmpdir(), "tiny-soho-board-"));
+  try {
+    await tools.progress(`Reading your Are.na board${boards.length > 1 ? "s" : ""}`);
+    const board = await pullBoards(boards, dir, { run });
+    return await storyboardWork(job, tools, { other, boardText: board.text, files: board.files, dir });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+async function storyboardWork(job, { progress }, refs) {
   const input = job.input;
+  const options = (timeoutMs) => ({
+    cwd: refs.dir, timeoutMs, maxTurns: refs.files.length ? 8 + refs.files.length : 8,
+    tools: [...(refs.files.length ? ["Read"] : []), ...(refs.other.length ? ["WebFetch"] : [])],
+  });
   if (input.phase === "look") {
     const count = Math.min(Math.max(Number(input.count) || 3, 1), 3);
     await progress(count > 1 ? "Claude is suggesting looks (usually about a minute)" : "Claude is shaping the look (usually about a minute)");
@@ -335,21 +360,21 @@ async function storyboardJob(job, reel, { progress }) {
       : input.current ? `Current look (JSON): ${JSON.stringify(input.current)}\nThe creator asks: ${str(input.comments, 1000)}. Change only what they ask.`
         : input.brief?.treatment ? `The brief already names the treatment. Turn it into one full look and keep its idea.`
           : `Suggest ${count} looks that differ from each other and suit the story's emotion.`;
-    const text = await askClaude([LOOK_RULES, "", MOTION_LIBRARY, "", storyContext(input), "",
+    const text = await askClaude([LOOK_RULES, "", MOTION_LIBRARY, "", storyContext(input, refs), "",
       `Series: ${input.series || "standalone (or infer it from the story)"}.`,
       `Treatments already used in this series (do not repeat): ${list(input.seriesUsed).join("; ") || "none"}.`,
       `Looks the creator rejected for this reel (do not suggest again): ${list(input.avoid).join("; ") || "none"}.`,
-      "", ask, lookAnswer(count)].join("\n"), { tools: webTools(input), maxTurns: 8, timeoutMs: LOOK_TIMEOUT_MS });
+      "", ask, lookAnswer(count)].join("\n"), options(LOOK_TIMEOUT_MS));
     return { status: "needs_review", result: { phase: "look", looks: parseLooks(text) }, progress: count > 1 ? "Looks ready to choose from" : "Look ready" };
   }
   const revising = job.kind === "revise";
   await progress(revising ? "Claude is changing the storyboard (usually 2–5 minutes)" : "Claude is writing the storyboard (usually 3–6 minutes)");
   const target = input.image ? `Change only the image ${str(input.image, 80)}.` : input.scene ? `Change only scene ${input.scene}.` : "Change only what they ask.";
-  const text = await askClaude([LOOK_RULES, "", MOTION_LIBRARY, "", STORYBOARD_RULES, "", storyContext(input), "",
+  const text = await askClaude([LOOK_RULES, "", MOTION_LIBRARY, "", STORYBOARD_RULES, "", storyContext(input, refs), "",
     `The approved look (JSON): ${JSON.stringify(input.look)}. Every scene and image prompt follows this treatment.`,
     ...(revising ? ["", `Current storyboard (JSON): ${JSON.stringify(input.storyboard)}`, `The creator asks: ${str(input.comments, 1000)}`,
       `${target} Keep everything else exactly as it is.`] : ["", "Write the storyboard."]),
-    storyboardAnswer].join("\n"), { tools: webTools(input), maxTurns: 8, timeoutMs: STORYBOARD_TIMEOUT_MS });
+    storyboardAnswer].join("\n"), options(STORYBOARD_TIMEOUT_MS));
   return { status: "needs_review", result: { phase: "scenes", ...parseStoryboard(text) }, progress: "Storyboard ready for review" };
 }
 handlers["storyboard/draft"] = storyboardJob;

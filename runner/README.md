@@ -23,6 +23,8 @@ sleeps, jobs wait in the queue and start when it wakes.
 - **Voice needs** `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` in `runner.env` (see `runner.env.example`). Takes
   are uploaded to the reel's storage folder through a one-time link from the Studio. Line recordings stay in
   `~/.cache/tiny-soho/voice/<reel>/<take>/`, so redoing a line re-voices only that line.
+- **Are.na boards:** an Are.na channel link among a reel's references makes look and storyboard jobs download up to
+  12 of its images (with the `arena` CLI, signed in on this Mac: `arena login`) for Claude to read. See `arena.mjs`.
 - **Reference reels need** `yt-dlp`, `ffmpeg` and `uv` on this Mac (`brew install yt-dlp ffmpeg uv`). The voice is
   transcribed with faster-whisper through uv; the first run downloads the model. If transcription fails, the
   breakdown still runs from the frames. Downloads are deleted when the job ends.

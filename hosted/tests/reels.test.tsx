@@ -507,3 +507,12 @@ describe("Reels screens: voice", () => {
     await waitFor(() => expect(within(rail).getByRole("button", { name: /Voice/ })).toHaveTextContent("Done"));
   });
 });
+
+describe("ReelsRepository: brief references", () => {
+  it("carries links from the brief's REFERENCES line into the reel", async () => {
+    const client = fakeClient({ creative_studio_reels: [reelRow({}, "script"), reelRow({}, "script")], creative_studio_reel_jobs: [{ data: null, error: null }, { data: [], error: null }] });
+    await new ReelsRepository(client as never, OWNER).create({ topic: "", brief: "HOOK: A hook\nREFERENCES: https://www.are.na/pratik-nandoskar/halloween, https://prompt-motion.com/x4b47x-9cc84f" });
+    const reel = client.writes.find((write) => write.table === "creative_studio_reels")!.value as Record<string, any>;
+    expect(reel.document.references).toEqual(["https://www.are.na/pratik-nandoskar/halloween", "https://prompt-motion.com/x4b47x-9cc84f"]);
+  });
+});
