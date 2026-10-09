@@ -34,6 +34,15 @@ function ReviewLine({ upload, job, macState, onRecheck }: {
   upload: ReelUpload; job?: NonNullable<ReelView["imageJobs"]>[string]; macState: MacState; onRecheck: () => void;
 }) {
   const { status, notes } = upload.review;
+  if (status === "pending" && !job) {
+    // An image saved without its check job (an earlier bug lost them); one click queues it.
+    return (
+      <div className={r.buttons}>
+        <p className={r.muted} role="status">Not checked yet.</p>
+        <button type="button" className={r.link} onClick={onRecheck}>Check again</button>
+      </div>
+    );
+  }
   if (status === "pending") {
     const waiting = job?.status === "queued" && macState !== "online";
     return <p className={r.muted} role="status">{waiting ? "Waiting for the Studio Mac to look at it." : job?.status === "running" ? "The Studio Mac is looking at it…" : "Queued for the Studio Mac to look at."}</p>;
