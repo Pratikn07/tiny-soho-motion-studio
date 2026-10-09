@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createMockReelsApi } from "@/components/reels/mock-api";
 import { ReelsStudio } from "@/components/reels/ReelsStudio";
-import { earlierLooks, lookSchema, reelActionSchema, ReelsRepository, safeSketch } from "@/lib/reels";
+import { earlierLooks, jobKey, lookSchema, reelActionSchema, ReelsRepository, safeSketch } from "@/lib/reels";
 
 afterEach(() => cleanup());
 
@@ -163,6 +163,16 @@ describe("ReelsRepository: briefs, references, looks and storyboards", () => {
     expect(saved.document.look.chosen).toEqual(LOOK);
     const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
     expect(queued).toMatchObject({ step: "storyboard", input: { phase: "scenes", look: LOOK } });
+  });
+
+  it("turns readable job keys into stable uuids the database accepts", async () => {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    const key = await jobKey("review-c867b3f1-f8e4-4e38-9b45-61059967ca96-x");
+    expect(key).toMatch(uuid);
+    expect(await jobKey("review-c867b3f1-f8e4-4e38-9b45-61059967ca96-x")).toBe(key);
+    expect(await jobKey("sketches-j1-v1-1")).not.toBe(key);
+    expect(await jobKey("C867B3F1-F8E4-4E38-9B45-61059967CA96")).toBe("c867b3f1-f8e4-4e38-9b45-61059967ca96");
+    expect(await jobKey()).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("keeps looks shown earlier, newest first, without repeats", () => {
@@ -360,6 +370,8 @@ describe("Storyboard sketches", () => {
     await repo.absorb(view);
     const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
     expect(queued).toMatchObject({ step: "storyboard", kind: "render", input: { phase: "sketches", version: 1, only: [1] } });
+    // The database column is a uuid: a readable key like "sketches-j1-v1-1" would be rejected.
+    expect(queued.idempotency_key).toBe(await jobKey("sketches-j1-v1-1"));
     expect(queued.input.scenes[0].sketch).toBeUndefined();
     const saved = (client.writes.find((write) => write.op === "update")!.value as Record<string, any>).document;
     expect(saved.storyboard.sketchesQueued).toBe("j1-v1");

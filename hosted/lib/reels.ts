@@ -56,6 +56,21 @@ export const lookSchema = z.object({
 });
 export type ReelLook = z.infer<typeof lookSchema>;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A job's idempotency key, which the database stores as a uuid. A readable key ("sketches-<job>-v2-1.3") becomes a
+ * stable uuid made from its SHA-256, so asking twice still finds the same job; no key gets a random one.
+ */
+export async function jobKey(key?: string): Promise<string> {
+  if (!key) return crypto.randomUUID();
+  if (UUID.test(key)) return key.toLowerCase();
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key)));
+  const hex = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const variant = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 /** How many looks shown earlier for a reel stay on the page to compare and pick from. */
 export const EARLIER_LOOKS = 12;
 
@@ -886,9 +901,12 @@ export class ReelsRepository {
 
   private async queue(reelId: string, step: ReelStep, kind: "draft" | "revise" | "render" | "mix", input: Record<string, unknown>, key?: string) {
     const { error } = await this.client.from("creative_studio_reel_jobs").insert({
-      owner_user_id: this.ownerId, reel_id: reelId, idempotency_key: (key ?? crypto.randomUUID()).slice(0, 200), step, kind, input,
+      owner_user_id: this.ownerId, reel_id: reelId, idempotency_key: await jobKey(key), step, kind, input,
     });
     // 23505: the same keyed job is already queued (two reads absorbed at once). That's the outcome we wanted.
-    if (error && error.code !== "23505") throw unavailable();
+    if (error && error.code !== "23505") {
+      console.error("reel job not queued", { step, kind, code: error.code, message: error.message });
+      throw unavailable();
+    }
   }
 }
