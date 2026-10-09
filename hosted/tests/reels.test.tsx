@@ -516,3 +516,133 @@ describe("ReelsRepository: brief references", () => {
     expect(reel.document.references).toEqual(["https://www.are.na/pratik-nandoskar/halloween", "https://prompt-motion.com/x4b47x-9cc84f"]);
   });
 });
+
+const BUILD = (version: number) => ({ phase: "build", reelNo: 3, version, seconds: 21.4, preview: `owners/o/reels/r/build/v${version}.mp4`,
+  stills: [{ n: 1, t: 1.5, objectPath: `owners/o/reels/r/build/v${version}-1.jpg` }], commit: "abc1234", notes: "Built." });
+
+describe("ReelsRepository: build", () => {
+  const voiced = { script: { lines: [{ time: "0:00", voice: "Hook", onScreen: "H" }], approved: true }, look: { options: [LOOK], rejected: [], chosen: LOOK },
+    storyboard: { version: 1, scenes: [{ ...SCENE, sketch: "<svg></svg>" }], approved: true },
+    images: { "r01.png": { file: "r01.png", objectPath: "owners/o/reels/r/images/r01.png" } } as never,
+    voice: { takes: [TAKE("a", 0.3)], chosen: "a" } };
+
+  it("approving the voice queues the first build as reel 03, with links to the take and images", async () => {
+    const client = fakeClient({
+      creative_studio_reels: [reelRow(voiced, "voice"), { data: null, error: null }, { data: [{ id: "x", document: {} }], error: null }, { data: null, error: null }, reelRow({}, "build")],
+      creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }],
+    });
+    await new ReelsRepository(client as never, OWNER).act(REEL, { action: "approve_voice" });
+    const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
+    expect(queued).toMatchObject({ step: "build", kind: "draft", input: { reelNo: 3, version: 1, sources: { "voiceover.mp3": "owners/o/reels/r/voice/a.mp3", "r01.png": "owners/o/reels/r/images/r01.png" } } });
+    expect(queued.input.scenes[0].sketch).toBeUndefined();
+  });
+
+  it("numbers the next reel after the highest taken", async () => {
+    const client = fakeClient({
+      creative_studio_reels: [reelRow({ ...voiced, voice: { ...voiced.voice, approved: true } }, "build"), { data: [{ id: "x", document: { build: { reelNo: 7 } } }], error: null }, { data: null, error: null }, reelRow({}, "build")],
+      creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }],
+    });
+    await new ReelsRepository(client as never, OWNER).act(REEL, { action: "rebuild" });
+    expect((client.writes.find((write) => write.op === "insert")!.value as Record<string, any>).input.reelNo).toBe(8);
+  });
+
+  it("folds each finished build in as a new version", async () => {
+    const client = fakeClient({ creative_studio_reels: [{ data: null, error: null }, { data: null, error: null }] });
+    const repo = new ReelsRepository(client as never, OWNER);
+    const base = { id: REEL, title: "T", status: "in_progress", currentStep: "build" as const, updatedAt: "" };
+    const doc = { ...voiced, build: { reelNo: 3, versions: [] } };
+    const first = await repo.absorb({ ...base, document: doc, jobs: { build: { ...job("b1", "storyboard", BUILD(1)), step: "build" as const } } });
+    expect(first.document.build?.versions).toHaveLength(1);
+    const again = await repo.absorb({ ...base, document: first.document, jobs: { build: { ...job("b1", "storyboard", BUILD(1)), step: "build" as const } } });
+    expect(again.document.build?.versions).toHaveLength(1);
+    const second = await repo.absorb({ ...base, document: first.document, jobs: { build: { ...job("b2", "storyboard", BUILD(2)), step: "build" as const } } });
+    expect(second.document.build?.versions.map((item) => item.version)).toEqual([1, 2]);
+  });
+});
+
+describe("Reels screens: build", () => {
+  it("builds after the voice is approved, rebuilds one scene and approves", { timeout: 30_000 }, async () => {
+    render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
+    fireEvent.change(await screen.findByLabelText("Paste your brief"), { target: { value: "TITLE: Build test\nHOOK: A hook" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve script" }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Use this look" }))[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Approve storyboard" }));
+    fireEvent.change(await screen.findByLabelText("Upload r02_01_anaika_yawn.png"), { target: { files: [new File(["x"], "a.png", { type: "image/png" })] } });
+    await screen.findByText(/Looks good\./);
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Voice" }));
+    fireEvent.click(within(await screen.findByRole("article", { name: "Natural take" })).getByRole("button", { name: "Use this take" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Approve voice" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Approve voice" }));
+
+    expect(await screen.findByRole("heading", { name: "Approve the build" })).toBeInTheDocument();
+    expect(screen.getByText(/Reel 03 · version 1/)).toBeInTheDocument();
+    const scenes = screen.getByRole("list", { name: "Scenes in this build" });
+    expect(within(scenes).getAllByRole("img")).toHaveLength(7);
+    fireEvent.click(within(scenes).getAllByRole("button", { name: "Change this scene" })[0]);
+    fireEvent.change(within(scenes).getByLabelText("Change this scene"), { target: { value: "hold longer" } });
+    fireEvent.click(within(scenes).getByRole("button", { name: "Rebuild scene" }));
+    expect(await screen.findByText(/Reel 03 · version 2/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve build" }));
+    const rail = screen.getByRole("navigation", { name: "Reel steps" });
+    await waitFor(() => expect(within(rail).getByRole("button", { name: /Build/ })).toHaveTextContent("Done"));
+  });
+});
+
+describe("ReelsRepository: sound and export", () => {
+  const built = { script: { lines: [{ time: "0:00", voice: "Hook", onScreen: "H" }], approved: true }, look: { options: [LOOK], rejected: [], chosen: LOOK },
+    brief: { raw: "x", title: "Four bites", hook: "Hook", series: "Myths" }, storyboard: { version: 1, scenes: [SCENE], approved: true },
+    voice: { takes: [TAKE("a", 0.3)], chosen: "a", approved: true }, build: { reelNo: 3, versions: [{ ...BUILD(1), jobId: "b1" }], approved: true } };
+
+  it("approving the build queues the full sound pass for reel 03", async () => {
+    const doc = { ...built, build: { ...built.build, approved: false } };
+    const client = fakeClient({ creative_studio_reels: [reelRow(doc, "build"), { data: null, error: null }, reelRow({}, "sound")], creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }] });
+    await new ReelsRepository(client as never, OWNER).act(REEL, { action: "approve_build" });
+    const queued = client.writes.find((write) => write.op === "insert")!.value as Record<string, any>;
+    expect(queued).toMatchObject({ step: "sound", kind: "draft", input: { phase: "full", reelNo: 3, version: 1, seconds: 21.4, series: "Myths" } });
+  });
+
+  it("changing the music level remixes only, and approving the sound queues the export", async () => {
+    const doc = { ...built, sound: { versions: [{ version: 1, preview: "p", musicPrompt: "m", musicDb: -9, cues: [], commit: null, seconds: 21, characters: 0 }] } };
+    const client = fakeClient({
+      creative_studio_reels: [reelRow(doc, "sound"), reelRow({}, "sound"), reelRow(doc, "sound"), { data: null, error: null }, reelRow({}, "export")],
+      creative_studio_reel_jobs: [{ data: [], error: null }, { data: null, error: null }, { data: [], error: null }, { data: [], error: null }, { data: null, error: null }, { data: [], error: null }],
+    });
+    const repo = new ReelsRepository(client as never, OWNER);
+    await repo.act(REEL, { action: "music_level", db: -12 });
+    const level = client.writes.filter((write) => write.op === "insert")[0].value as Record<string, any>;
+    expect(level).toMatchObject({ step: "sound", kind: "revise", input: { phase: "level", musicDb: -12 } });
+    await repo.act(REEL, { action: "approve_sound" });
+    const exportJob = client.writes.filter((write) => write.op === "insert")[1].value as Record<string, any>;
+    expect(exportJob).toMatchObject({ step: "export", kind: "render", input: { reelNo: 3, version: 1, title: "Four bites", lines: ["Hook"] } });
+  });
+});
+
+describe("Reels screens: brief to download", () => {
+  it("goes all the way from a pasted brief to a downloadable video", { timeout: 45_000 }, async () => {
+    render(<ReelsStudio api={createMockReelsApi(-10)} macState="online" />);
+    fireEvent.change(await screen.findByLabelText("Paste your brief"), { target: { value: "TITLE: End to end\nHOOK: A hook" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start a reel" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve script" }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Use this look" }))[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Approve storyboard" }));
+    fireEvent.change(await screen.findByLabelText("Upload r02_01_anaika_yawn.png"), { target: { files: [new File(["x"], "a.png", { type: "image/png" })] } });
+    await screen.findByText(/Looks good\./);
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Voice" }));
+    fireEvent.click(within(await screen.findByRole("article", { name: "Natural take" })).getByRole("button", { name: "Use this take" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Approve voice" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Approve voice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve build" }));
+
+    expect(await screen.findByRole("heading", { name: "Approve the sound" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Music level under the voice/), { target: { value: "-12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply level" }));
+    expect(await screen.findByText(/music -12 dB under the voice/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve sound" }));
+
+    expect(await screen.findByRole("heading", { name: "Your reel is ready" })).toBeInTheDocument();
+    expect(screen.getByText(/52.4 MB · 1080×1920 · 30 fps/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy caption" })).toBeInTheDocument();
+    expect(screen.getByText("#toddlermom #halloweenwithkids #gentleparenting")).toBeInTheDocument();
+  });
+});

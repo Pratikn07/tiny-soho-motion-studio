@@ -8,6 +8,8 @@ import type { MacState } from "@/components/shell/ShellBar";
 import type { NewReelInput, ReelsApi } from "./api";
 import { active, CopyButton, JobState } from "./job-state";
 import { ImagesStep } from "./images";
+import { BuildStep } from "./build";
+import { ExportStep, SoundStep } from "./sound";
 import { StoryboardStep } from "./storyboard";
 import { VoiceStep } from "./voice";
 import r from "./reels.module.css";
@@ -17,7 +19,7 @@ const STEPS: Array<{ id: ReelStep; label: string }> = [
   { id: "images", label: "Images" }, { id: "voice", label: "Voice" }, { id: "build", label: "Build" },
   { id: "sound", label: "Sound" }, { id: "export", label: "Export" },
 ];
-const BUILT: ReelStep[] = ["idea", "script", "storyboard", "images", "voice"];
+const BUILT: ReelStep[] = ["idea", "script", "storyboard", "images", "voice", "build", "sound", "export"];
 const POLL_MS = 4000;
 
 /** The Reels section: start a reel from a brief, a reference reel or a topic, then work through its steps with the Studio Mac. */
@@ -165,12 +167,15 @@ function ReelWorkspace({ api, id, macState, onBack }: { api: ReelsApi; id: strin
         {shown === "script" && <ScriptStep reel={reel} macState={macState} onRevise={(comments) => act({ action: "revise_script", comments })}
           onApprove={() => void act({ action: "approve_script" })} onRetry={() => void act({ action: "retry" })} />}
         {shown === "storyboard" && <StoryboardStep reel={reel} macState={macState} act={act} onRetry={() => void act({ action: "retry" })} />}
+        {shown === "sound" && <SoundStep reel={reel} macState={macState} act={act} onRetry={() => void act({ action: "retry" })} />}
+        {shown === "export" && <ExportStep reel={reel} macState={macState} act={act} onRetry={() => void act({ action: "retry" })} />}
+        {shown === "build" && <BuildStep reel={reel} macState={macState} act={act} onRetry={() => void act({ action: "retry" })} />}
         {shown === "voice" && <VoiceStep reel={reel} macState={macState} act={act} onRetry={() => void act({ action: "retry" })} />}
         {shown === "images" && <ImagesStep reel={reel} api={api} act={act} onReel={(next) => setReel(next)} macState={macState} />}
         {!BUILT.includes(shown) && (
           <div className={r.panel}>
             <h1 className={r.title}>{STEPS.find((item) => item.id === shown)?.label}</h1>
-            <p className={r.lede}>This step is being built next. Your approved voice take is saved and will carry straight into it.</p>
+            <p className={r.lede}>This step is being built next. Your approved build is saved and will carry straight into it.</p>
           </div>
         )}
       </section>
@@ -220,7 +225,7 @@ function BreakdownCard({ breakdown }: { breakdown: Breakdown }) {
 
 function BriefCard({ brief }: { brief: ReelBrief }) {
   const rows: Array<[string, string | undefined]> = [["Post by", brief.postBy], ["Goal", brief.goal], ["Angle", brief.angle], ["Hook", brief.hook],
-    ["Twist", brief.twist], ["Takeaway", brief.takeaway], ["Save prompt", brief.savePrompt], ["Series", brief.series], ["Emotion", brief.emotion],
+    ["Twist", brief.twist], ["Takeaway", brief.takeaway], ["Save prompt", brief.savePrompt], ["Caption question", brief.captionQuestion], ["Series", brief.series], ["Emotion", brief.emotion],
     ["Treatment", brief.treatment], ["Signature moment", brief.signatureMoment], ["References", brief.references], ["Notes", brief.notes]];
   return (
     <section className={r.card} aria-labelledby="brief-title">

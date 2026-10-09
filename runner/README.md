@@ -23,6 +23,20 @@ sleeps, jobs wait in the queue and start when it wakes.
 - **Voice needs** `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` in `runner.env` (see `runner.env.example`). Takes
   are uploaded to the reel's storage folder through a one-time link from the Studio. Line recordings stay in
   `~/.cache/tiny-soho/voice/<reel>/<take>/`, so redoing a line re-voices only that line.
+- **Build, Sound and Export** work in Studio's own copy of the motion engine: a git worktree of
+  `~/Documents/working/mch/tiny-soho-reels` on branch `studio`, at `~/Documents/working/mch/tiny-soho-reels-studio`
+  (or `TINY_SOHO_ENGINE_DIR`). A reel gets a number from 03 up and only ever writes its own files
+  (`timelines/rNN.ts`, `scenes/rNN_*.ts`, `data/reelNN`, `audio/reelNN`, `public/hf/reelNN`, plus new `rNN_*` effects in
+  `audio/library`); each build and sound pass is committed on `studio`, never pushed, and never touches `main`.
+  - **Build** (`build.mjs`): sets up the reel's voice, word timings (`lyrics.json` from the take, `audio.json` via
+    `analysis/audio_vo.py`) and images; Claude Code writes the timeline and scenes (tools limited to reading,
+    writing, and `bun app/scripts/render.ts`); every scene must render without errors; a quick 30 fps preview is
+    rendered, shrunk to 540×960 and uploaded with one still per scene. Usually 10–30 minutes; the Mac is kept awake.
+  - **Sound** (`sound.mjs`): ElevenLabs Music for a new instrumental bed, Claude places one effect per on-screen action
+    on its word, each generated with ElevenLabs sound effects and recorded in `audio/library/index.json`; mixed by
+    `analysis/mix_studio.py` to -14 LUFS and muxed onto the build preview. "Music level" only remixes (no credits).
+  - **Export** (`export.mjs`): the final render (30 fps, motion blur, reel 01's settings), the mix added, the cover
+    (opening frame) and a caption, uploaded for download. Usually 10–25 minutes.
 - **Are.na boards:** an Are.na channel link among a reel's references makes look and storyboard jobs download up to
   12 of its images (with the `arena` CLI, signed in on this Mac: `arena login`) for Claude to read. See `arena.mjs`.
 - **Reference reels need** `yt-dlp`, `ffmpeg` and `uv` on this Mac (`brew install yt-dlp ffmpeg uv`). The voice is

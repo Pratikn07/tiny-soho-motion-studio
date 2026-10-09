@@ -100,6 +100,41 @@ export type ReelVoice = {
   credits?: { used: number; remaining: number | null; limit: number | null };
 };
 
+export const buildVersionSchema = z.object({
+  version: z.number().int().min(1).max(200),
+  reelNo: z.number().int().min(3).max(999),
+  seconds: timing,
+  preview: z.string().max(400),
+  stills: z.array(z.object({ n: z.number().int().min(1).max(20), t: timing, objectPath: z.string().max(400) })).max(20),
+  commit: z.string().max(40).nullable(),
+  notes: z.string().max(800),
+});
+export type ReelBuildVersion = z.infer<typeof buildVersionSchema> & { jobId?: string };
+/** Builds of the reel in Studio's engine copy: its reel number there, every version, and whether one is approved. */
+export type ReelBuild = { reelNo: number; versions: ReelBuildVersion[]; approved?: boolean };
+
+export const soundVersionSchema = z.object({
+  version: z.number().int().min(1).max(200),
+  preview: z.string().max(400),
+  musicPrompt: z.string().max(2000),
+  musicDb: z.number().min(-30).max(0),
+  cues: z.array(z.object({ scene: z.number().int().nullable(), t: timing, name: z.string().max(40), prompt: z.string().max(300), gainDb: z.number().min(-30).max(6) })).max(20),
+  commit: z.string().max(40).nullable(),
+  seconds: timing,
+  characters: z.number().int().min(0).max(100_000),
+});
+export type ReelSoundVersion = z.infer<typeof soundVersionSchema> & { jobId?: string };
+export const exportVersionSchema = z.object({
+  version: z.number().int().min(1).max(200),
+  final: z.string().max(400),
+  cover: z.string().max(400),
+  caption: z.string().max(2200),
+  hashtags: z.array(z.string().max(60)).max(10),
+  seconds: timing,
+  bytes: z.number().int().min(0),
+});
+export type ReelExportVersion = z.infer<typeof exportVersionSchema> & { jobId?: string };
+
 export type ReelStoryboard = {
   version: number; scenes: ReelScene[]; notes?: string; approved?: boolean; fromJob?: string;
   /** Which job's sketches were last folded in, and which version a sketch job was queued for, so each happens once. */
@@ -139,6 +174,14 @@ export const reelActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("redo_line"), take: z.string().min(1).max(20), n: z.number().int().min(1).max(20), note: z.string().trim().min(1).max(300) }),
   z.object({ action: z.literal("new_takes") }),
   z.object({ action: z.literal("approve_voice") }),
+  z.object({ action: z.literal("revise_build"), comments, scene: z.number().int().min(1).max(20).optional() }),
+  z.object({ action: z.literal("rebuild") }),
+  z.object({ action: z.literal("approve_build") }),
+  z.object({ action: z.literal("new_music") }),
+  z.object({ action: z.literal("music_level"), db: z.number().min(-24).max(-3) }),
+  z.object({ action: z.literal("change_sounds"), comments }),
+  z.object({ action: z.literal("approve_sound") }),
+  z.object({ action: z.literal("export_again") }),
   z.object({ action: z.literal("add_reference"), url }),
   z.object({ action: z.literal("remove_reference"), url: z.string().max(500) }),
   z.object({ action: z.literal("retry") }),
@@ -174,6 +217,12 @@ export type ReelDocument = {
   images?: Record<string, ReelUpload>;
   /** Voice takes from the Studio Mac (ElevenLabs), the chosen one, and whether it is approved. */
   voice?: ReelVoice;
+  /** The animated reel: Claude Code's builds in the motion engine, newest last. */
+  build?: ReelBuild;
+  /** Music, effects and the mix, newest last. */
+  sound?: { versions: ReelSoundVersion[]; approved?: boolean };
+  /** Final videos to download, newest last. */
+  export?: { versions: ReelExportVersion[] };
 };
 
 /** One instant check on an uploaded image. "fail" means it won't work as it is. */
@@ -199,6 +248,12 @@ export type ReelView = {
   imageUrls?: Record<string, string>;
   /** Short-lived links to the voice takes, by take id (added by the API, not stored). */
   voiceUrls?: Record<string, string>;
+  /** Short-lived links to the newest build's preview and stills (added by the API, not stored). */
+  buildUrls?: { preview?: string; stills: Record<number, string> };
+  /** Short-lived link to the newest sound preview (added by the API, not stored). */
+  soundUrl?: string;
+  /** Short-lived links to the newest export: watch, download (named file) and cover (added by the API, not stored). */
+  exportUrls?: { video?: string; download?: string; cover?: string };
   /** The newest image-check job for each uploaded file (several run one after another). */
   imageJobs?: Record<string, ReelJobView & { uploadId?: string }>;
 };
@@ -462,6 +517,39 @@ export class ReelsRepository {
       case "approve_voice":
         if (!doc.voice?.chosen) throw conflict("no_take", "Choose a take first.");
         await this.save(reelId, { ...doc, voice: { ...doc.voice, approved: true } }, { current_step: "build" });
+        if (!doc.build?.versions.length) await this.queueBuild(reelId, { ...doc, voice: { ...doc.voice, approved: true } }, "draft", {});
+        break;
+      case "revise_build":
+        if (!doc.build?.versions.length) throw conflict("no_build", "There is no build to change yet.");
+        await this.save(reelId, { ...doc, build: { ...doc.build, approved: false } }, {});
+        await this.queueBuild(reelId, doc, "revise", { comments: action.comments, scene: action.scene ?? null });
+        break;
+      case "rebuild":
+        if (!doc.voice?.approved) throw conflict("no_voice", "Approve a voice take first.");
+        await this.queueBuild(reelId, doc, "draft", {});
+        break;
+      case "approve_build":
+        if (!doc.build?.versions.length) throw conflict("no_build", "There is no build to approve yet.");
+        await this.save(reelId, { ...doc, build: { ...doc.build, approved: true } }, { current_step: "sound" });
+        if (!doc.sound?.versions.length) await this.queueSound(reelId, { ...doc, build: { ...doc.build, approved: true } }, "draft", { phase: "full" });
+        break;
+      case "new_music":
+        await this.queueSound(reelId, doc, "revise", { phase: "music" });
+        break;
+      case "music_level":
+        await this.queueSound(reelId, doc, "revise", { phase: "level", musicDb: action.db });
+        break;
+      case "change_sounds":
+        await this.queueSound(reelId, doc, "revise", { phase: "cues", comments: action.comments });
+        break;
+      case "approve_sound":
+        if (!doc.sound?.versions.length) throw conflict("no_sound", "There is no sound to approve yet.");
+        await this.save(reelId, { ...doc, sound: { ...doc.sound, approved: true } }, { current_step: "export" });
+        if (!doc.export?.versions.length) await this.queueExport(reelId, doc);
+        break;
+      case "export_again":
+        if (!doc.sound?.approved) throw conflict("no_sound", "Approve the sound first.");
+        await this.queueExport(reelId, doc);
         break;
       case "add_reference":
         await this.save(reelId, { ...doc, references: [...new Set([...(doc.references ?? []), action.url])].slice(-10) }, {});
@@ -498,7 +586,11 @@ export class ReelsRepository {
     const sketchesLater = view.currentStep !== "storyboard" && view.jobs.storyboard?.result?.phase === "sketches";
     const storyboard = view.currentStep === "storyboard" || sketchesLater ? this.absorbStoryboard(script ?? view.document, view.jobs.storyboard) : null;
     const voice = view.currentStep === "voice" ? this.absorbVoice(storyboard ?? script ?? view.document, view.jobs.voice) : null;
-    let document = voice ?? storyboard ?? script;
+    const build = view.currentStep === "build" ? this.absorbBuild(voice ?? storyboard ?? script ?? view.document, view.jobs.build) : null;
+    const before = build ?? voice ?? storyboard ?? script ?? view.document;
+    const sound = view.currentStep === "sound" ? this.absorbVersion(before, "sound", view.jobs.sound, soundVersionSchema) : null;
+    const exported = view.currentStep === "export" ? this.absorbVersion(sound ?? before, "export", view.jobs.export, exportVersionSchema) : null;
+    let document = exported ?? sound ?? build ?? voice ?? storyboard ?? script;
     if (!document) return view;
     const queueFor = view.currentStep === "storyboard" ? sketchesToQueue(document) : null;
     if (queueFor) document = { ...document, storyboard: { ...document.storyboard!, sketchesQueued: queueFor } };
@@ -509,6 +601,69 @@ export class ReelsRepository {
       return this.get(view.id);
     }
     return { ...view, document };
+  }
+
+  /** Folds a finished sound or export job in as the newest version of that step. */
+  private absorbVersion(doc: ReelDocument, key: "sound" | "export", job: ReelJobView | undefined, schema: z.ZodTypeAny): ReelDocument | null {
+    const current = doc[key] ?? { versions: [] };
+    if (job?.status !== "needs_review" || !job.result || current.versions.some((item: { jobId?: string }) => item.jobId === job.id)) return null;
+    const parsed = schema.safeParse(job.result);
+    if (!parsed.success) return null;
+    const versions = [...current.versions, { ...parsed.data, jobId: job.id }].slice(-10);
+    return { ...doc, [key]: { ...current, versions, ...(key === "sound" ? { approved: false } : {}) } };
+  }
+
+  private async queueSound(reelId: string, doc: ReelDocument, kind: "draft" | "revise", extra: Record<string, unknown>) {
+    const latest = doc.build?.versions.at(-1);
+    const take = doc.voice?.takes.find((item) => item.id === doc.voice?.chosen);
+    if (!latest || !doc.build?.approved || !take) throw conflict("no_build", "Approve the build first.");
+    await this.queue(reelId, "sound", kind, {
+      ...extra, reelNo: doc.build.reelNo, version: (doc.sound?.versions.length ?? 0) + 1, seconds: latest.seconds,
+      look: doc.look?.chosen ?? null, series: doc.brief?.series ?? null, scenes: (doc.storyboard?.scenes ?? []).map(sceneText),
+      take: { words: take.words },
+    });
+  }
+
+  private async queueExport(reelId: string, doc: ReelDocument) {
+    if (!doc.build?.reelNo) throw conflict("no_build", "Build the reel first.");
+    await this.queue(reelId, "export", "render", {
+      reelNo: doc.build.reelNo, version: (doc.export?.versions.length ?? 0) + 1, title: doc.brief?.title ?? doc.idea?.title ?? "",
+      brief: doc.brief ? { title: doc.brief.title, hook: doc.brief.hook, takeaway: doc.brief.takeaway, savePrompt: doc.brief.savePrompt, captionQuestion: doc.brief.captionQuestion, facts: doc.brief.facts } : null,
+      lines: (doc.script?.lines ?? []).map((line) => line.voice),
+    });
+  }
+
+  /** Folds a finished build in as the newest version. */
+  private absorbBuild(doc: ReelDocument, job?: ReelJobView): ReelDocument | null {
+    if (job?.status !== "needs_review" || !job.result || !doc.build || doc.build.versions.some((item) => item.jobId === job.id)) return null;
+    const parsed = buildVersionSchema.safeParse(job.result);
+    if (!parsed.success) return null;
+    const versions = [...doc.build.versions, { ...parsed.data, jobId: job.id }].slice(-10);
+    return { ...doc, build: { ...doc.build, versions, approved: false } };
+  }
+
+  /**
+   * Queues a build. The reel keeps one number in Studio's engine copy (03, 04…), given on its first build: one more
+   * than the highest any of the owner's reels has, and never below 3 (reels 01 and 02 were made by hand).
+   */
+  private async queueBuild(reelId: string, doc: ReelDocument, kind: "draft" | "revise", extra: Record<string, unknown>) {
+    const take = doc.voice?.takes.find((item) => item.id === doc.voice?.chosen);
+    if (!take || !doc.voice?.approved) throw conflict("no_voice", "Approve a voice take first.");
+    let reelNo = doc.build?.reelNo;
+    if (!reelNo) {
+      const { data, error } = await this.client.from("creative_studio_reels").select("id,document").eq("owner_user_id", this.ownerId).limit(500);
+      if (error) throw unavailable();
+      const taken = (data ?? []).map((row: any) => Number(row.document?.build?.reelNo) || 0);
+      reelNo = Math.max(2, ...taken) + 1;
+      await this.save(reelId, { ...doc, build: { reelNo, versions: [] } }, {});
+    }
+    const sources: Record<string, string> = { "voiceover.mp3": take.objectPath };
+    for (const upload of Object.values(doc.images ?? {})) sources[upload.file] = upload.objectPath;
+    await this.queue(reelId, "build", kind, {
+      ...extra, reelNo, version: (doc.build?.versions.length ?? 0) + 1, title: doc.brief?.title ?? doc.idea?.title ?? "",
+      look: doc.look?.chosen ?? null, scenes: (doc.storyboard?.scenes ?? []).map(sceneText), sources,
+      take: { id: take.id, seconds: take.seconds, lines: take.lines, words: take.words },
+    });
   }
 
   /** Folds finished voice takes in: new takes replace the set; a redone line replaces that one take. */

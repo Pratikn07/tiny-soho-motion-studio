@@ -7,7 +7,7 @@ import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { handle } from "./handlers.mjs";
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 const HEARTBEAT_MS = 20_000;
 const IDLE_POLL_MS = 10_000;
 const RENEW_MS = 45_000;
@@ -27,6 +27,8 @@ function loadConfig() {
     claudeAuth: values.TINY_SOHO_CLAUDE_AUTH === "api_key" ? "api_key" : "subscription",
     // The Voice step: the owner's ElevenLabs key and cloned voice. Never logged.
     elevenlabs: { key: values.ELEVENLABS_API_KEY ?? "", voiceId: values.ELEVENLABS_VOICE_ID ?? "" },
+    // The Build step's copy of the motion engine (a git worktree on branch `studio`); empty means the default path.
+    engineDir: values.TINY_SOHO_ENGINE_DIR ?? "",
   };
   if (!config.url || config.token.length < 32) throw new Error(`Set TINY_SOHO_STUDIO_URL and TINY_SOHO_RUNNER_TOKEN in ${file}`);
   return config;
@@ -64,7 +66,7 @@ async function runJob({ job, reel }) {
       return link.objectPath;
     };
     const outcome = await handle(job, reel, {
-      progress: (text) => update({ status: "running", progress: text.slice(0, 200) }), upload, env: config.elevenlabs,
+      progress: (text) => update({ status: "running", progress: text.slice(0, 200) }), upload, env: { ...config.elevenlabs, engineDir: config.engineDir },
     });
     await update({ status: outcome.status, result: outcome.result, progress: outcome.progress ?? "Done" });
     log(`job ${job.id} -> ${outcome.status}`);

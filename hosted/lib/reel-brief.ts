@@ -19,6 +19,7 @@ export const reelBriefSchema = z.object({
   twist: z.string().max(400).optional(),
   takeaway: z.string().max(300).optional(),
   savePrompt: z.string().max(200).optional(),
+  captionQuestion: z.string().max(200).optional(),
   scriptDraft: z.array(briefLineSchema).max(20).optional(),
   facts: z.array(briefFactSchema).max(12).optional(),
   series: z.string().max(80).optional(),
@@ -36,6 +37,7 @@ const LIMITS = reelBriefSchema.shape;
 const LABELS: Array<[RegExp, TextField | "scriptDraft" | "facts"]> = [
   [/^title$/, "title"], [/^post by$/, "postBy"], [/^goal$/, "goal"], [/^angle$/, "angle"], [/^hook$/, "hook"],
   [/^twist$/, "twist"], [/^takeaway$/, "takeaway"], [/^save prompt$/, "savePrompt"],
+  [/^caption question$/, "captionQuestion"],
   [/^script draft/, "scriptDraft"], [/^facts?$/, "facts"], [/^series$/, "series"], [/^emotion$/, "emotion"],
   [/^treatment$/, "treatment"], [/^signature moment$/, "signatureMoment"],
   [/^(feel \/ )?references?/, "references"], [/^feel$/, "references"], [/^notes for studio/, "notes"],

@@ -12,8 +12,8 @@ type DataClient = {
   } };
 };
 
-/** How long the Studio Mac's link to an uploaded image works; it is made when the job is claimed. */
-const IMAGE_LINK_SECONDS = 15 * 60;
+/** How long the Studio Mac's links to uploaded images (and a build's voice take) work; made when the job is claimed. */
+const IMAGE_LINK_SECONDS = 30 * 60;
 
 export type RunnerConfig = { token: string; ownerId: string };
 
@@ -51,7 +51,7 @@ export const heartbeatSchema = z.object({
 export const jobFileSchema = z.object({
   leaseId: z.string().uuid(),
   name: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,60}$/i),
-  mime: z.enum(["audio/mpeg"]),
+  mime: z.enum(["audio/mpeg", "video/mp4", "image/jpeg"]),
 });
 
 export const claimSchema = z.object({ runnerId: heartbeatSchema.shape.runnerId });
@@ -108,10 +108,26 @@ export class RunnerRepository {
 
   /** An image check gets a fresh link to the uploaded image, only for a file in this owner's reel folder. */
   private async withImageLink(job: ReturnType<typeof publicJob>) {
-    const path = job.step === "images" ? job.input?.objectPath : null;
-    if (typeof path !== "string" || !path.startsWith(`owners/${this.ownerId}/reels/${job.reelId}/images/`) || !this.client.storage) return job;
-    const { data } = await this.client.storage.from("creative-studio").createSignedUrl(path, IMAGE_LINK_SECONDS);
-    return data?.signedUrl ? { ...job, input: { ...job.input, imageUrl: data.signedUrl } } : job;
+    const folder = `owners/${this.ownerId}/reels/${job.reelId}/`;
+    const sign = async (path: unknown) => {
+      if (typeof path !== "string" || !path.startsWith(folder) || !this.client.storage) return null;
+      const { data } = await this.client.storage.from("creative-studio").createSignedUrl(path, IMAGE_LINK_SECONDS);
+      return data?.signedUrl ?? null;
+    };
+    if (job.step === "images") {
+      const url = await sign(job.input?.objectPath);
+      return url ? { ...job, input: { ...job.input, imageUrl: url } } : job;
+    }
+    // A build gets links to the chosen voice take and every uploaded image, made when it is claimed.
+    if (job.step === "build" && job.input?.sources && typeof job.input.sources === "object") {
+      const files: Record<string, string> = {};
+      for (const [name, path] of Object.entries(job.input.sources as Record<string, unknown>)) {
+        const url = await sign(path);
+        if (url) files[name] = url;
+      }
+      return { ...job, input: { ...job.input, files } };
+    }
+    return job;
   }
 
   /** A one-time upload link for a file the job made, only while the runner holds the job, into that reel's folder. */
@@ -122,8 +138,9 @@ export class RunnerRepository {
     if (!job || job.status !== "running" || job.worker_lease_id !== input.leaseId) {
       throw new StudioError(409, "lease_lost", "This job is no longer held by this runner.");
     }
-    if (job.step !== "voice" || !this.client.storage) throw new StudioError(400, "no_files", "This step doesn't upload files.");
-    const objectPath = `owners/${this.ownerId}/reels/${job.reel_id}/voice/${job.id}-${input.name}`;
+    const folders: Record<string, string[]> = { voice: ["audio/mpeg"], build: ["video/mp4", "image/jpeg"], sound: ["video/mp4"], export: ["video/mp4", "image/jpeg"] };
+    if (!folders[job.step]?.includes(input.mime) || !this.client.storage) throw new StudioError(400, "no_files", "This step doesn't upload files of that type.");
+    const objectPath = `owners/${this.ownerId}/reels/${job.reel_id}/${job.step}/${job.id}-${input.name}`;
     const { data, error: signError } = await this.client.storage.from("creative-studio").createSignedUploadUrl(objectPath, { upsert: false });
     if (signError || !data?.signedUrl) throw new StudioError(502, "upload_unavailable", "Uploads are temporarily unavailable.");
     return { uploadUrl: data.signedUrl, objectPath };
